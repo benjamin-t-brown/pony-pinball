@@ -5,7 +5,7 @@ import {
   createSvgElement,
   setStyle,
 } from '../dom';
-import type { Ball } from '../model/ball';
+import type { Ball } from '../model/Ball';
 import { UiElement } from './UiElement';
 
 export class BallElement extends UiElement {
@@ -44,7 +44,7 @@ export class BallElement extends UiElement {
       'pointer-events': 'none',
     });
 
-    const host = this.parent && this.parent.el;
+    const host = this.parent && this.parent.getChildHostEl();
     if (host) {
       appendChild(host, svg as unknown as HTMLElement);
     }

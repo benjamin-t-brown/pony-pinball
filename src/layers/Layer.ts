@@ -30,11 +30,12 @@ export abstract class Layer {
           y: p.clientY - r.top,
           b: p.button || 0,
           d: p.deltaY || 0,
+          s: p.shiftKey,
         };
       };
       domAddEventListener(host, 'pointerdown', e => {
         const p = pos(e);
-        this.onMouseDown(p.x, p.y, p.b);
+        this.onMouseDown(p.x, p.y, p.b, p.s);
       });
       domAddEventListener(host, 'pointerup', e => {
         const p = pos(e);
@@ -44,25 +45,36 @@ export abstract class Layer {
         const p = pos(e);
         this.onMouseHover(p.x, p.y);
       });
-      domAddEventListener(host, 'wheel', e => {
-        const p = pos(e);
-        this.onMouseWheel(p.x, p.y, p.d);
-      });
       addEventListener('keydown', e => {
         this.onKeyDown(e.code, e.keyCode);
       });
       addEventListener('keyup', e => {
         this.onKeyUp(e.code, e.keyCode);
       });
+      addEventListener('resize', () => {
+        this.onResize(
+          host.clientWidth || innerWidth,
+          host.clientHeight || innerHeight
+        );
+      });
+      host.addEventListener(
+        'wheel',
+        e => {
+          e.preventDefault();
+          const p = pos(e);
+          this.onMouseWheel(p.x, p.y, p.d);
+        },
+        { passive: false }
+      );
     }
   }
 
-  onMouseDown(x: number, y: number, button: number) {
+  onMouseDown(x: number, y: number, button: number, shift = false) {
     if (this.layerState !== LAYER_ON) {
       return;
     }
     for (let i = this.uiElements.length - 1; i >= 0; i--) {
-      if (this.uiElements[i].checkMouseDownEvent(x, y, button)) {
+      if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
         return;
       }
     }
@@ -98,6 +110,15 @@ export abstract class Layer {
       if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
         return;
       }
+    }
+  }
+
+  onResize(width: number, height: number) {
+    if (this.layerState === LAYER_OFF) {
+      return;
+    }
+    for (const elem of this.uiElements) {
+      elem.checkResizeEvent(width, height);
     }
   }
 

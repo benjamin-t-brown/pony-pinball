@@ -11,6 +11,7 @@ export type Circle = {
 export type Line = {
   a: Vec;
   b: Vec;
+  rest: number;
 };
 
 export const vecCreate = (x = 0, y = 0): Vec => ({ x, y });
@@ -54,10 +55,12 @@ export const lineCreate = (
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  rest = 0.5
 ): Line => ({
   a: vecCreate(x1, y1),
   b: vecCreate(x2, y2),
+  rest,
 });
 
 export const lineSet = (
@@ -85,7 +88,6 @@ export const lineClosestPoint = (l: Line, p: Vec): Vec => {
 export const resolveCircleLine = (
   c: Circle,
   l: Line,
-  restitution = 0.75,
   surfaceVel?: Vec
 ): boolean => {
   const cp = lineClosestPoint(l, c.pos);
@@ -102,7 +104,7 @@ export const resolveCircleLine = (
   const relVel = surfaceVel ? vecSub(c.vel, surfaceVel) : c.vel;
   const vn = vecDot(relVel, n);
   if (vn < 0) {
-    c.vel = vecSub(c.vel, vecMul(n, (1 + restitution) * vn));
+    c.vel = vecSub(c.vel, vecMul(n, (1 + l.rest) * vn));
     if (surfaceVel) {
       c.vel = vecAdd(c.vel, vecMul(surfaceVel, 0.35));
     }

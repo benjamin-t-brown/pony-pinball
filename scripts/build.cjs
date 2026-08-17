@@ -39,6 +39,8 @@ const MANGLE_PROPS_RESERVED = [
   'right',
   'stroke',
   'top',
+  'transform',
+  'transform-origin',
   'type',
   'viewBox',
   'width',

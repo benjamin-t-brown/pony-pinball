@@ -9,7 +9,7 @@
     "dist": "http-server dist",
     "tscompile": "tsc -p ./tsconfig.json",
     "clean": "npm run clean:js && rm -rf dist *.zip index.concat.js",
-    "clean:js": "rm -rf src/*.js src/**/*.js src/**/*.js.map"
+    "clean:js": "node scripts/clean-js.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

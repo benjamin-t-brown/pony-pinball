@@ -72,6 +72,10 @@ export abstract class UiElement {
     return this.parent;
   }
 
+  getChildHostEl(): HTMLElement | null {
+    return this.el;
+  }
+
   removeChildAtIndex(index: number) {
     if (index < 0 || index >= this.children.length) {
       return;
@@ -98,10 +102,17 @@ export abstract class UiElement {
     );
   }
 
-  checkMouseDownEvent(mouseX: number, mouseY: number, button: number) {
+  checkMouseDownEvent(
+    mouseX: number,
+    mouseY: number,
+    button: number,
+    shift = false
+  ) {
     if (this.shouldPropagateEventsToChildren) {
       for (let i = this.children.length - 1; i >= 0; i--) {
-        if (this.children[i].checkMouseDownEvent(mouseX, mouseY, button)) {
+        if (
+          this.children[i].checkMouseDownEvent(mouseX, mouseY, button, shift)
+        ) {
           return true;
         }
       }
@@ -110,7 +121,7 @@ export abstract class UiElement {
       return false;
     }
     this.isClicked = true;
-    this.onMouseDown(mouseX, mouseY, button);
+    this.onMouseDown(mouseX, mouseY, button, shift);
     return true;
   }
 
@@ -171,7 +182,7 @@ export abstract class UiElement {
     }
   }
 
-  onMouseDown(_x: number, _y: number, _button: number) {}
+  onMouseDown(_x: number, _y: number, _button: number, _shift = false) {}
   onMouseUp(_x: number, _y: number, _button: number) {}
   onClick(_x: number, _y: number, _button: number) {}
   onMouseWheel(_x: number, _y: number, _delta: number) {}

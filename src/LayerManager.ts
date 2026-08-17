@@ -1,7 +1,9 @@
 import { LAYER_OFF, LAYER_ON, Layer } from './layers/Layer';
 import type { StateManager } from './state/StateManager';
 
-const DT = 1000 / 60;
+// the smaller this is, the smaller the physics step and
+// less chance the ball phases through walls, but more cpu power used
+const PHYSICS_DT_MS = 4;
 
 export class LayerManager {
   last = performance.now();
@@ -48,9 +50,9 @@ export class LayerManager {
     const dt = Math.min(33, t - this.last);
     this.last = t;
     this.acc += dt;
-    while (this.acc >= DT) {
-      this.integrate(DT);
-      this.acc -= DT;
+    while (this.acc >= PHYSICS_DT_MS) {
+      this.integrate(PHYSICS_DT_MS);
+      this.acc -= PHYSICS_DT_MS;
     }
     this.updateRender(dt);
     requestAnimationFrame(this.loop);

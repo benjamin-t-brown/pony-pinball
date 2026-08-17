@@ -1,5 +1,6 @@
 import { getGameRoot } from './dom';
 import { LayerManager } from './LayerManager';
+import { DebugLayer } from './layers/DebugLayer';
 import { SimLayer } from './layers/SimLayer';
 import { SimUiLayer } from './layers/SimUiLayer';
 import { createState } from './state/State';
@@ -19,7 +20,7 @@ export const startGame = () => {
   StateManagerInterface.setStateManager(stateManager);
 
   new LayerManager(
-    [new SimLayer(), new SimUiLayer(root)],
+    [new SimLayer(), new SimUiLayer(root), new DebugLayer()],
     stateManager
   ).start();
 };

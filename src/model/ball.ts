@@ -1,5 +1,6 @@
 import { type Circle, circleCreate } from '../sim/physics';
 import { BALL_R } from './constants';
+import { type Section, isPointInAnySection } from './Section';
 
 export interface Ball extends Circle {
   color: string;
@@ -10,6 +11,6 @@ export const ballCreate = (x = 0, y = 0): Ball => {
   return { ...b, color: 'red' };
 };
 
-export const ballIsOutOfBounds = (ball: Ball, w: number, h: number) => {
-  return ball.pos.y > h + 40 || ball.pos.x < -40 || ball.pos.x > w + 40;
+export const ballIsOutOfBounds = (ball: Ball, sections: Section[]) => {
+  return !isPointInAnySection(sections, ball.pos.x, ball.pos.y, 40);
 };

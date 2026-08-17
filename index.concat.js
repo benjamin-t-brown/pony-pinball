@@ -99,7 +99,9 @@ let timeoutPromise = (ms) => {
 function copyObject(obj) {
     return structuredClone(obj);
 }
-let DT = 1000 / 60;
+// the smaller this is, the smaller the physics step and
+// less chance the ball phases through walls, but more cpu power used
+let PHYSICS_DT_MS = 4;
 class LayerManager {
     last = performance.now();
     acc = 0;
@@ -140,13 +142,96 @@ class LayerManager {
         let dt = Math.min(33, t - this.last);
         this.last = t;
         this.acc += dt;
-        while (this.acc >= DT) {
-            this.integrate(DT);
-            this.acc -= DT;
+        while (this.acc >= PHYSICS_DT_MS) {
+            this.integrate(PHYSICS_DT_MS);
+            this.acc -= PHYSICS_DT_MS;
         }
         this.updateRender(dt);
         requestAnimationFrame(this.loop);
     };
+}
+let DEBUG_N = 60;
+let rollCreate = () => {
+    let hist = [];
+    for (let i = 0; i < DEBUG_N; i++) {
+        hist.push(0);
+    }
+    return { hist, i: 0, sum: 0, filled: 0 };
+};
+let rollPush = (roll, value) => {
+    roll.sum -= roll.hist[roll.i];
+    roll.hist[roll.i] = value;
+    roll.sum += value;
+    roll.i = (roll.i + 1) % DEBUG_N;
+    if (roll.filled < DEBUG_N) {
+        roll.filled++;
+    }
+    return roll.sum / roll.filled;
+};
+class DebugLayer extends Layer {
+    el = null;
+    stepsThisFrame = 0;
+    stepRoll = rollCreate();
+    fpsRoll = rollCreate();
+    fps = 0;
+    avgSteps = 0;
+    constructor() {
+        super(null, 'debug');
+        let root = getGameRoot();
+        if (!root) {
+            return;
+        }
+        let el = createElement(DIV);
+        setStyle(el, {
+            position: 'absolute',
+            left: '8px',
+            top: '8px',
+            padding: '6px',
+            color: '#0f0',
+            background: 'rgba(0,0,0,0.55)',
+            'z-index': '9',
+            'pointer-events': 'none',
+            'white-space': 'pre',
+            'font-family': 'monospace',
+            'font-size': '12px',
+        });
+        appendChild(root, el);
+        this.el = el;
+    }
+    update(_dt) {
+        this.stepsThisFrame++;
+    }
+    render(dt) {
+        this.avgSteps = rollPush(this.stepRoll, this.stepsThisFrame);
+        this.stepsThisFrame = 0;
+        this.fps = rollPush(this.fpsRoll, dt > 0 ? 1000 / dt : 0);
+        if (!this.el) {
+            return;
+        }
+        let state = getStateGlobal();
+        let ball = state.balls[0];
+        let speed = 0;
+        let zone = 'none';
+        if (ball) {
+            speed = vecLen(ball.vel);
+            let section = findSectionAt(state.sections, ball.pos.x, ball.pos.y, null);
+            if (section) {
+                zone = section.id;
+            }
+        }
+        this.el[INNER_HTML] =
+            'fps ' +
+                this.fps.toFixed(0) +
+                BR +
+                'int ' +
+                this.avgSteps.toFixed(2) +
+                BR +
+                'spd ' +
+                speed.toFixed(0) +
+                BR +
+                'zone ' +
+                zone;
+    }
 }
 let LAYER_ON = 0;
 let LAYER_OFF = 1;
@@ -176,11 +261,12 @@ class Layer {
                     y: p.clientY - r.top,
                     b: p.button || 0,
                     d: p.deltaY || 0,
+                    s: p.shiftKey,
                 };
             };
             domAddEventListener(host, 'pointerdown', e => {
                 let p = pos(e);
-                this.onMouseDown(p.x, p.y, p.b);
+                this.onMouseDown(p.x, p.y, p.b, p.s);
             });
             domAddEventListener(host, 'pointerup', e => {
                 let p = pos(e);
@@ -190,24 +276,28 @@ class Layer {
                 let p = pos(e);
                 this.onMouseHover(p.x, p.y);
             });
-            domAddEventListener(host, 'wheel', e => {
-                let p = pos(e);
-                this.onMouseWheel(p.x, p.y, p.d);
-            });
             addEventListener('keydown', e => {
                 this.onKeyDown(e.code, e.keyCode);
             });
             addEventListener('keyup', e => {
                 this.onKeyUp(e.code, e.keyCode);
             });
+            addEventListener('resize', () => {
+                this.onResize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
+            });
+            host.addEventListener('wheel', e => {
+                e.preventDefault();
+                let p = pos(e);
+                this.onMouseWheel(p.x, p.y, p.d);
+            }, { passive: false });
         }
     }
-    onMouseDown(x, y, button) {
+    onMouseDown(x, y, button, shift = false) {
         if (this.layerState !== LAYER_ON) {
             return;
         }
         for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseDownEvent(x, y, button)) {
+            if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
                 return;
             }
         }
@@ -240,6 +330,14 @@ class Layer {
             if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
                 return;
             }
+        }
+    }
+    onResize(width, height) {
+        if (this.layerState === LAYER_OFF) {
+            return;
+        }
+        for (let elem of this.uiElements) {
+            elem.checkResizeEvent(width, height);
         }
     }
     onKeyDown(_key, _keyCode) { }
@@ -311,6 +409,25 @@ class SimUiLayer extends Layer {
     constructor(parent) {
         super(parent, 'ui');
         this.addUiElement(new Board());
+        this.onResize(parent.clientWidth || innerWidth, parent.clientHeight || innerHeight);
+    }
+    setControl(key, down) {
+        let state = getStateGlobal();
+        if (key === 'KeyZ' || key === 'ArrowLeft') {
+            state.input[CONTROL_LEFT] = down;
+        }
+        else if (key === 'Slash' || key === 'ArrowRight') {
+            state.input[CONTROL_RIGHT] = down;
+        }
+        else if (key === 'Space' || key === 'Enter') {
+            state.input[CONTROL_START] = down;
+        }
+    }
+    onKeyDown(key, _keyCode) {
+        this.setControl(key, true);
+    }
+    onKeyUp(key, _keyCode) {
+        this.setControl(key, false);
     }
 }
 let startGame = () => {
@@ -323,15 +440,15 @@ let startGame = () => {
     let state = createState();
     let stateManager = new StateManager(state);
     StateManagerInterface.setStateManager(stateManager);
-    new LayerManager([new SimLayer(), new SimUiLayer(root)], stateManager).start();
+    new LayerManager([new SimLayer(), new SimUiLayer(root), new DebugLayer()], stateManager).start();
 };
 addEventListener('load', startGame);
 let ballCreate = (x = 0, y = 0) => {
     let b = circleCreate(x, y, BALL_R, 1);
     return { ...b, color: 'red' };
 };
-let ballIsOutOfBounds = (ball, w, h) => {
-    return ball.pos.y > h + 40 || ball.pos.x < -40 || ball.pos.x > w + 40;
+let ballIsOutOfBounds = (ball, sections) => {
+    return !isPointInAnySection(sections, ball.pos.x, ball.pos.y, 40);
 };
 let W = 400;
 let H = 600;
@@ -346,6 +463,152 @@ let LEFT_REST = 0.45;
 let LEFT_UP = -0.55;
 let RIGHT_REST = Math.PI - 0.45;
 let RIGHT_UP = Math.PI + 0.55;
+let sectionCreate = (id, x, y, w, h, walls, bg, widgets = []) => ({
+    id,
+    x,
+    y,
+    w,
+    h,
+    walls,
+    widgets,
+    bg,
+});
+let placeAdjacent = (anchor, side, w, h) => {
+    if (side === 'above') {
+        return { x: anchor.x, y: anchor.y - h };
+    }
+    if (side === 'below') {
+        return { x: anchor.x, y: anchor.y + anchor.h };
+    }
+    if (side === 'left') {
+        return { x: anchor.x - w, y: anchor.y };
+    }
+    return { x: anchor.x + anchor.w, y: anchor.y };
+};
+let sectionContains = (section, x, y) => {
+    return (x >= section.x &&
+        x <= section.x + section.w &&
+        y >= section.y &&
+        y <= section.y + section.h);
+};
+let findSectionAt = (sections, x, y, current) => {
+    if (current && sectionContains(current, x, y)) {
+        return current;
+    }
+    for (let i = 0; i < sections.length; i++) {
+        if (sectionContains(sections[i], x, y)) {
+            return sections[i];
+        }
+    }
+    return current;
+};
+let getSection = (sections, id) => {
+    for (let i = 0; i < sections.length; i++) {
+        if (sections[i].id === id) {
+            return sections[i];
+        }
+    }
+    return sections[0];
+};
+let isPointInAnySection = (sections, x, y, margin) => {
+    for (let i = 0; i < sections.length; i++) {
+        let s = sections[i];
+        if (x >= s.x - margin &&
+            x <= s.x + s.w + margin &&
+            y >= s.y - margin &&
+            y <= s.y + s.h + margin) {
+            return true;
+        }
+    }
+    return false;
+};
+let forEachWidget = (sections, fn) => {
+    for (let i = 0; i < sections.length; i++) {
+        let s = sections[i];
+        for (let j = 0; j < s.widgets.length; j++) {
+            fn(s.widgets[j], s);
+        }
+    }
+};
+let flattenSectionWalls = (sections) => {
+    let walls = [];
+    for (let i = 0; i < sections.length; i++) {
+        let s = sections[i];
+        for (let j = 0; j < s.walls.length; j++) {
+            let wall = s.walls[j];
+            walls.push(lineCreate(wall.a.x + s.x, wall.a.y + s.y, wall.b.x + s.x, wall.b.y + s.y));
+        }
+    }
+    return walls;
+};
+class Paddle extends Widget {
+    angle = 0;
+    restAngle = 0;
+    upAngle = 0;
+    len = PADDLE_LEN;
+    omega = 0;
+    line;
+    constructor(x, y, control, restAngle, upAngle) {
+        super(x, y, WIDGET_PADDLE, control);
+        this.restAngle = restAngle;
+        this.upAngle = upAngle;
+        this.angle = restAngle;
+        this.line = lineCreate(x, y, x, y);
+        this.syncLine();
+    }
+    syncLine() {
+        lineSet(this.line, this.x, this.y, this.x + this.len * Math.cos(this.angle), this.y + this.len * Math.sin(this.angle));
+    }
+    getLine() {
+        return this.line;
+    }
+    getSurfaceVel(p) {
+        let rx = p.x - this.x;
+        let ry = p.y - this.y;
+        return vecCreate(-this.omega * ry, this.omega * rx);
+    }
+    update(dt) {
+        let dtSeconds = dt / 1000;
+        let target = this.active ? this.upAngle : this.restAngle;
+        let speed = this.active ? PADDLE_SPEED : PADDLE_RETURN;
+        let maxStep = speed * dtSeconds;
+        let diff = target - this.angle;
+        if (Math.abs(diff) <= maxStep) {
+            this.omega = dtSeconds > 0 ? diff / dtSeconds : 0;
+            this.angle = target;
+        }
+        else {
+            let dir = diff < 0 ? -1 : 1;
+            this.omega = dir * speed;
+            this.angle += dir * maxStep;
+        }
+        this.syncLine();
+    }
+}
+let CONTROL_LEFT = 0;
+let CONTROL_RIGHT = 1;
+let CONTROL_START = 2;
+let WIDGET_PADDLE = 0;
+class Widget {
+    x = 0;
+    y = 0;
+    type = WIDGET_PADDLE;
+    control = CONTROL_LEFT;
+    active = false;
+    constructor(x, y, type, control) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.control = control;
+    }
+    activate() {
+        this.active = true;
+    }
+    unactivate() {
+        this.active = false;
+    }
+    update(_dt) { }
+}
 let vecCreate = (x = 0, y = 0) => ({ x, y });
 let vecAdd = (a, b) => vecCreate(a.x + b.x, a.y + b.y);
 let vecSub = (a, b) => vecCreate(a.x - b.x, a.y - b.y);
@@ -442,15 +705,41 @@ let resolveBallWalls = (ball, walls) => {
         resolveCircleLine(ball, wall, 0.7);
     }
 };
+let updateWidgets = (state, dt) => {
+    forEachWidget(state.sections, widget => {
+        if (state.input[widget.control]) {
+            widget.activate();
+        }
+        else {
+            widget.unactivate();
+        }
+        widget.update(dt);
+    });
+};
+let resolveBallWidgets = (ball, state) => {
+    forEachWidget(state.sections, (widget, section) => {
+        if (widget.type !== WIDGET_PADDLE) {
+            return;
+        }
+        let paddle = widget;
+        let line = paddle.getLine();
+        let worldLine = lineCreate(line.a.x + section.x, line.a.y + section.y, line.b.x + section.x, line.b.y + section.y);
+        let cp = lineClosestPoint(worldLine, ball.pos);
+        resolveCircleLine(ball, worldLine, 0.7, paddle.getSurfaceVel({ x: cp.x - section.x, y: cp.y - section.y }));
+    });
+};
 let updateSimulation = (state, dt) => {
     let dtSeconds = dt / 1000;
+    updateWidgets(state, dt);
     for (let i = 0; i < state.balls.length; i++) {
         let ball = state.balls[i];
         updateBallMotion(ball, dtSeconds);
         resolveBallWalls(ball, state.walls);
+        resolveBallWidgets(ball, state);
         clampBallSpeed(ball);
-        if (ballIsOutOfBounds(ball, state.width, state.height)) {
-            state.balls[i] = ballCreate(230, 100);
+        if (ballIsOutOfBounds(ball, state.sections)) {
+            let start = getSection(state.sections, 'start');
+            state.balls[i] = ballCreate(start.x + 130, start.y + 100);
         }
     }
 };
@@ -481,18 +770,30 @@ class AbstractAction {
         this.stateManager.enqueueAction(this.stateManager.getActionData(), action, ms);
     }
 }
-let createState = () => ({
-    balls: [ballCreate(130, 100)],
-    walls: createWalls(W, H),
-    input: { left: false, right: false },
-    width: 400,
-    height: 600,
-});
-let createWalls = (w, h) => {
+let createState = () => {
+    let start = sectionCreate('start', 0, 0, W, H, createStartWalls(W, H), '#555', [
+        new Paddle(LEFT_PIVOT.x, LEFT_PIVOT.y, CONTROL_LEFT, LEFT_REST, LEFT_UP),
+        new Paddle(RIGHT_PIVOT.x, RIGHT_PIVOT.y, CONTROL_RIGHT, RIGHT_REST, RIGHT_UP),
+    ]);
+    let upperPos = placeAdjacent(start, 'above', 400, 400);
+    let upper = sectionCreate('upper', upperPos.x, upperPos.y, 400, 400, createUpperWalls(400, 400), '#466');
+    let sidePos = placeAdjacent(upper, 'right', 640, 400);
+    let side = sectionCreate('side', sidePos.x, sidePos.y, 640, 400, createSideWalls(640, 400), '#645');
+    let sections = [start, upper, side];
+    return {
+        balls: [ballCreate(130, 100)],
+        sections,
+        walls: flattenSectionWalls(sections),
+        input: [false, false, false],
+    };
+};
+let createStartWalls = (w, h) => {
     return [
-        lineCreate(20, 20, 20, h - 20),
-        lineCreate(w - 20, 20, w - 20, h - 20),
-        lineCreate(20, 20, w - 20, 20),
+        lineCreate(0, 0, 0, h),
+        lineCreate(w, 0, w, h),
+        lineCreate(0, h, w, h),
+        lineCreate(0, 0, 150, 0),
+        lineCreate(250, 0, w, 0),
         lineCreate(20, 140, 90, 280),
         lineCreate(w - 20, 140, w - 90, 280),
         lineCreate(90, 280, 130, 430),
@@ -500,6 +801,25 @@ let createWalls = (w, h) => {
         lineCreate(20, 470, 110, 510),
         lineCreate(w - 20, 470, w - 110, 510),
         lineCreate(150, 405, 250, 455),
+    ];
+};
+let createUpperWalls = (w, h) => {
+    return [
+        lineCreate(0, 0, w, 0),
+        lineCreate(0, 0, 0, h),
+        lineCreate(0, h, 150, h),
+        lineCreate(250, h, w, h),
+        lineCreate(w, 0, w, 150),
+        lineCreate(w, 250, w, h),
+    ];
+};
+let createSideWalls = (w, h) => {
+    return [
+        lineCreate(0, 0, w, 0),
+        lineCreate(w, 0, w, h),
+        lineCreate(0, h, w, h),
+        lineCreate(0, 0, 0, 150),
+        lineCreate(0, 250, 0, h),
     ];
 };
 class StateManager {
@@ -615,7 +935,7 @@ class BallElement extends UiElement {
             top: '0px',
             'pointer-events': 'none',
         });
-        let host = this.parent && this.parent.el;
+        let host = this.parent && this.parent.getChildHostEl();
         if (host) {
             appendChild(host, svg);
         }
@@ -639,17 +959,26 @@ class BallElement extends UiElement {
     }
 }
 class Board extends UiElement {
-    el = null;
-    svg = null;
+    worldEl = null;
     balls = [];
+    section = null;
+    camX = 0;
+    camY = 0;
+    camScale = 1;
+    targetX = 0;
+    targetY = 0;
     constructor() {
         super();
         this.setId('board');
+        this.shouldPropagateEventsToChildren = false;
+    }
+    getChildHostEl() {
+        return this.worldEl;
     }
     addBall(ball) {
         let el = new BallElement(ball);
         this.addChild(el);
-        if (this.el) {
+        if (this.worldEl) {
             el.build();
         }
         return el;
@@ -667,7 +996,9 @@ class Board extends UiElement {
     syncBalls() {
         let state = getStateGlobal();
         for (let ball of state.balls) {
-            if (!this.balls.some(el => el.ball === ball)) {
+            if (!this.balls.some(el => {
+                return el.ball === ball;
+            })) {
                 this.addBall(ball);
             }
         }
@@ -691,38 +1022,171 @@ class Board extends UiElement {
                 this.balls.splice(i, 1);
             }
         }
-        if (child && child.el && this.el) {
-            removeChild(this.el, child.el);
+        let host = this.getChildHostEl();
+        if (child && child.el && host) {
+            removeChild(host, child.el);
         }
         super.removeChildAtIndex(index);
     }
+    readViewSize() {
+        let root = getGameRoot();
+        let w = (root && root.clientWidth) || innerWidth;
+        let h = (root && root.clientHeight) || innerHeight;
+        this.width = w;
+        this.height = h;
+    }
+    setPanTarget(section, snap) {
+        let pan = getCamPan(section, this.width, this.height, this.camScale);
+        this.targetX = pan.x;
+        this.targetY = pan.y;
+        if (snap) {
+            this.camX = pan.x;
+            this.camY = pan.y;
+        }
+    }
+    applyCamera() {
+        if (!this.worldEl) {
+            return;
+        }
+        setStyle(this.worldEl, {
+            'transform-origin': '0 0',
+            [TRANSFORM]: 'scale(' +
+                this.camScale +
+                ') translate(' +
+                -this.camX +
+                'px,' +
+                -this.camY +
+                'px)',
+        });
+    }
     build() {
         let state = getStateGlobal();
-        this.width = state.width;
-        this.height = state.height;
         let root = getGameRoot();
         if (!root) {
             return;
         }
+        this.readViewSize();
         let el = createElement(DIV);
         setStyle(el, {
-            position: 'relative',
-            width: state.width + 'px',
-            height: state.height + 'px',
-            background: '#555',
+            position: 'absolute',
+            inset: '0',
+            overflow: 'hidden',
+            background: '#222',
         });
         appendChild(root, el);
+        let worldEl = createElement(DIV);
+        setStyle(worldEl, {
+            position: 'absolute',
+            left: '0px',
+            top: '0px',
+        });
+        appendChild(el, worldEl);
+        this.el = el;
+        this.worldEl = worldEl;
+        for (let section of state.sections) {
+            let room = new BoardSection(section);
+            this.addChild(room);
+            room.build();
+        }
+        this.syncBalls();
+        this.section = state.sections[0];
+        if (this.section) {
+            this.setPanTarget(this.section, true);
+        }
+        this.applyCamera();
+    }
+    checkResizeEvent(width, height) {
+        this.width = width;
+        this.height = height;
+        if (this.section) {
+            this.setPanTarget(this.section, true);
+            this.applyCamera();
+        }
+        super.checkResizeEvent(width, height);
+    }
+    onMouseWheel(_x, _y, delta) {
+        if (delta > 0) {
+            this.camScale = clampCamScale(this.camScale / CAM_SCALE_STEP);
+        }
+        else {
+            this.camScale = clampCamScale(this.camScale * CAM_SCALE_STEP);
+        }
+        if (this.section) {
+            this.setPanTarget(this.section, true);
+        }
+        this.applyCamera();
+    }
+    onMouseDown(x, y, _button, shift = false) {
+        if (!shift) {
+            return;
+        }
+        let wx = this.camX + x / this.camScale;
+        let wy = this.camY + y / this.camScale;
+        let state = getStateGlobal();
+        let section = findSectionAt(state.sections, wx, wy, null);
+        if (!section) {
+            return;
+        }
+        let ball = state.balls[0];
+        if (!ball) {
+            return;
+        }
+        ball.pos.x = wx;
+        ball.pos.y = wy;
+        ball.vel.x = 0;
+        ball.vel.y = 0;
+    }
+    update(dt) {
+        this.syncBalls();
+        let state = getStateGlobal();
+        let ball = state.balls[0];
+        if (ball) {
+            let next = findSectionAt(state.sections, ball.pos.x, ball.pos.y, this.section);
+            if (next && next !== this.section) {
+                this.section = next;
+                this.setPanTarget(next, false);
+            }
+        }
+        this.camX = lerpCam(this.camX, this.targetX, dt);
+        this.camY = lerpCam(this.camY, this.targetY, dt);
+        this.applyCamera();
+        super.update(dt);
+    }
+    render(dt) {
+        super.render(dt);
+    }
+}
+class BoardSection extends UiElement {
+    section;
+    constructor(section, parent) {
+        super(parent);
+        this.section = section;
+        this.setId(section.id);
+        this.setPos(section.x, section.y);
+        this.width = section.w;
+        this.height = section.h;
+    }
+    build() {
+        let section = this.section;
+        let el = createElement(DIV);
+        setStyle(el, {
+            position: 'absolute',
+            left: section.x + 'px',
+            top: section.y + 'px',
+            width: section.w + 'px',
+            height: section.h + 'px',
+            background: section.bg,
+        });
         let svg = createSvgElement(SVG, {
-            width: String(state.width),
-            height: String(state.height),
-            viewBox: '0 0 ' + state.width + ' ' + state.height,
+            width: String(section.w),
+            height: String(section.h),
+            viewBox: '0 0 ' + section.w + ' ' + section.h,
         });
         setStyle(svg, {
             position: 'absolute',
             inset: '0',
         });
-        appendChild(el, svg);
-        for (let wall of state.walls) {
+        for (let wall of section.walls) {
             svg.appendChild(createSvgElement(LINE, {
                 x1: String(wall.a.x),
                 y1: String(wall.a.y),
@@ -733,16 +1197,45 @@ class Board extends UiElement {
                 'stroke-linecap': 'round',
             }));
         }
+        appendChild(el, svg);
+        let host = this.parent && this.parent.getChildHostEl();
+        if (host) {
+            appendChild(host, el);
+        }
         this.el = el;
-        this.svg = svg;
-        this.syncBalls();
+        for (let i = 0; i < section.widgets.length; i++) {
+            let child = new WidgetElement(section.widgets[i]);
+            this.addChild(child);
+            child.build();
+        }
     }
-    update(dt) {
-        this.syncBalls();
-        super.update(dt);
+    render(dt) {
+        super.render(dt);
     }
-    render(_dt) { }
 }
+let CAM_SCALE_MIN = 0.25;
+let CAM_SCALE_MAX = 4;
+let CAM_SCALE_STEP = 1.1;
+let CAM_PAN_MS = 300;
+let getCamPan = (section, viewW, viewH, scale) => {
+    return {
+        x: section.x + section.w / 2 - viewW / (2 * scale),
+        y: section.y + section.h / 2 - viewH / (2 * scale),
+    };
+};
+let clampCamScale = (scale) => {
+    if (scale < CAM_SCALE_MIN) {
+        return CAM_SCALE_MIN;
+    }
+    if (scale > CAM_SCALE_MAX) {
+        return CAM_SCALE_MAX;
+    }
+    return scale;
+};
+let lerpCam = (cur, target, dt) => {
+    let t = Math.min(1, dt / CAM_PAN_MS);
+    return cur + (target - cur) * t;
+};
 class UiElement {
     parent = null;
     children = [];
@@ -805,6 +1298,9 @@ class UiElement {
     getParent() {
         return this.parent;
     }
+    getChildHostEl() {
+        return this.el;
+    }
     removeChildAtIndex(index) {
         if (index < 0 || index >= this.children.length) {
             return;
@@ -826,10 +1322,10 @@ class UiElement {
             mouseX <= this.x + width &&
             mouseY <= this.y + height);
     }
-    checkMouseDownEvent(mouseX, mouseY, button) {
+    checkMouseDownEvent(mouseX, mouseY, button, shift = false) {
         if (this.shouldPropagateEventsToChildren) {
             for (let i = this.children.length - 1; i >= 0; i--) {
-                if (this.children[i].checkMouseDownEvent(mouseX, mouseY, button)) {
+                if (this.children[i].checkMouseDownEvent(mouseX, mouseY, button, shift)) {
                     return true;
                 }
             }
@@ -838,7 +1334,7 @@ class UiElement {
             return false;
         }
         this.isClicked = true;
-        this.onMouseDown(mouseX, mouseY, button);
+        this.onMouseDown(mouseX, mouseY, button, shift);
         return true;
     }
     checkMouseUpEvent(mouseX, mouseY, button) {
@@ -894,7 +1390,7 @@ class UiElement {
             child.checkResizeEvent(width, height);
         }
     }
-    onMouseDown(_x, _y, _button) { }
+    onMouseDown(_x, _y, _button, _shift = false) { }
     onMouseUp(_x, _y, _button) { }
     onClick(_x, _y, _button) { }
     onMouseWheel(_x, _y, _delta) { }
@@ -912,5 +1408,66 @@ class UiElement {
         for (let child of this.children) {
             child.render(dt);
         }
+    }
+}
+class WidgetElement extends UiElement {
+    widget;
+    lineEl = null;
+    constructor(widget, parent) {
+        super(parent);
+        this.widget = widget;
+    }
+    build() {
+        if (this.widget.type === WIDGET_PADDLE) {
+            this.buildPaddle();
+        }
+    }
+    render(_dt) {
+        if (this.widget.type === WIDGET_PADDLE) {
+            this.renderPaddle();
+        }
+    }
+    buildPaddle() {
+        let widget = this.widget;
+        this.setPos(widget.x, widget.y);
+        let svg = createSvgElement(SVG, {
+            width: '1',
+            height: '1',
+        });
+        setStyle(svg, {
+            position: 'absolute',
+            left: widget.x + 'px',
+            top: widget.y + 'px',
+            overflow: 'visible',
+            'pointer-events': 'none',
+        });
+        let paddle = widget;
+        let line = paddle.getLine();
+        let lineEl = createSvgElement(LINE, {
+            x1: '0',
+            y1: '0',
+            x2: String(line.b.x - line.a.x),
+            y2: String(line.b.y - line.a.y),
+            stroke: '#ccc',
+            'stroke-width': '6',
+            'stroke-linecap': 'round',
+        });
+        svg.appendChild(lineEl);
+        let host = this.parent && this.parent.getChildHostEl();
+        if (host) {
+            appendChild(host, svg);
+        }
+        this.el = svg;
+        this.lineEl = lineEl;
+    }
+    renderPaddle() {
+        if (!this.lineEl) {
+            return;
+        }
+        let paddle = this.widget;
+        let line = paddle.getLine();
+        let el = this.lineEl;
+        setAttribute(el, 'x2', String(line.b.x - line.a.x));
+        setAttribute(el, 'y2', String(line.b.y - line.a.y));
     }
 }
