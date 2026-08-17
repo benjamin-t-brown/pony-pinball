@@ -1,4 +1,6 @@
 import { Line, lineCreate } from '../sim/physics';
+import type { Field } from './fields/Field';
+import type { Obstacle } from './obstacles/Obstacle';
 import type { Widget } from './widgets/Widget';
 
 export type Section = {
@@ -9,6 +11,8 @@ export type Section = {
   h: number;
   walls: Line[];
   widgets: Widget[];
+  obstacles: Obstacle[];
+  fields: Field[];
   bg: string;
 };
 
@@ -20,7 +24,9 @@ export const sectionCreate = (
   h: number,
   walls: Line[],
   bg: string,
-  widgets: Widget[] = []
+  widgets: Widget[] = [],
+  obstacles: Obstacle[] = [],
+  fields: Field[] = []
 ): Section => ({
   id,
   x,
@@ -29,6 +35,8 @@ export const sectionCreate = (
   h,
   walls,
   widgets,
+  obstacles,
+  fields,
   bg,
 });
 
@@ -113,6 +121,30 @@ export const forEachWidget = (
     const s = sections[i];
     for (let j = 0; j < s.widgets.length; j++) {
       fn(s.widgets[j], s);
+    }
+  }
+};
+
+export const forEachObstacle = (
+  sections: Section[],
+  fn: (obstacle: Obstacle, section: Section) => void
+) => {
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    for (let j = 0; j < s.obstacles.length; j++) {
+      fn(s.obstacles[j], s);
+    }
+  }
+};
+
+export const forEachField = (
+  sections: Section[],
+  fn: (field: Field, section: Section) => void
+) => {
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    for (let j = 0; j < s.fields.length; j++) {
+      fn(s.fields[j], s);
     }
   }
 };

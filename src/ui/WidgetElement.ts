@@ -32,14 +32,6 @@ export class WidgetElement extends UiElement {
     }
   }
 
-  render(_dt: number) {
-    if (this.widget.type === WIDGET_PADDLE) {
-      this.renderPaddle();
-    } else if (this.widget.type === WIDGET_LAUNCHER) {
-      this.renderLauncher();
-    }
-  }
-
   buildPaddle() {
     const widget = this.widget;
     this.setPos(widget.x, widget.y);
@@ -75,17 +67,6 @@ export class WidgetElement extends UiElement {
     }
     this.el = svg as unknown as HTMLElement;
     this.lineEl = lineEl;
-  }
-
-  renderPaddle() {
-    if (!this.lineEl) {
-      return;
-    }
-    const paddle = this.widget as Paddle;
-    const line = paddle.getLine();
-    const el = this.lineEl as unknown as HTMLElement;
-    setAttribute(el, 'x2', String(line.b.x - line.a.x));
-    setAttribute(el, 'y2', String(line.b.y - line.a.y));
   }
 
   buildLauncher() {
@@ -124,11 +105,30 @@ export class WidgetElement extends UiElement {
     this.lineEl = lineEl;
   }
 
-  renderLauncher() {
+  syncPaddle() {
+    if (!this.lineEl) {
+      return;
+    }
+    const paddle = this.widget as Paddle;
+    const line = paddle.getLine();
+    const el = this.lineEl as unknown as HTMLElement;
+    setAttribute(el, 'x2', String(line.b.x - line.a.x));
+    setAttribute(el, 'y2', String(line.b.y - line.a.y));
+  }
+
+  syncLauncher() {
     if (!this.lineEl) {
       return;
     }
     const el = this.lineEl as unknown as HTMLElement;
     setAttribute(el, 'stroke', this.widget.active ? '#fc8' : '#c84');
+  }
+
+  update(_dt: number) {
+    if (this.widget.type === WIDGET_PADDLE) {
+      this.syncPaddle();
+    } else if (this.widget.type === WIDGET_LAUNCHER) {
+      this.syncLauncher();
+    }
   }
 }

@@ -454,15 +454,101 @@ let W = 400;
 let H = 600;
 let BALL_R = 10;
 let PADDLE_LEN = 58;
-let PADDLE_SPEED = 14;
+let PADDLE_SPEED = 18;
 let PADDLE_RETURN = 10;
-let MAX_BALL_SPEED = 900;
+// Matches the rendered stroke, so the ball rides on the paddle's face rather
+// than sinking to its centre line.
+let PADDLE_HALF_WIDTH = 3;
+let PADDLE_REST = 0.35;
+let PADDLE_FRICTION = 0.25;
+// A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
+// the ball arrived with, so the cap has to clear that or the kick gets shaved.
+let MAX_BALL_SPEED = 1500;
+let LAUNCHER_X = 384;
+let LAUNCHER_Y = 582;
+let LAUNCHER_FORCE = 850;
+let LAUNCHER_RANGE = 36;
 let LEFT_PIVOT = { x: 118, y: 520 };
 let RIGHT_PIVOT = { x: 282, y: 520 };
 let LEFT_REST = 0.45;
 let LEFT_UP = -0.55;
 let RIGHT_REST = Math.PI - 0.45;
 let RIGHT_UP = Math.PI + 0.55;
+let makeCircleWalls = (r, n, rest = 1.2) => {
+    let walls = [];
+    for (let i = 0; i < n; i++) {
+        let a0 = (i / n) * Math.PI * 2;
+        let a1 = ((i + 1) / n) * Math.PI * 2;
+        walls.push(lineCreate(r * Math.cos(a0), r * Math.sin(a0), r * Math.cos(a1), r * Math.sin(a1), rest));
+    }
+    return walls;
+};
+class CircleObstacle extends Obstacle {
+    flash = 0;
+    constructor(x, y, r, n, rest = 1.2) {
+        super(x, y, makeCircleWalls(r, n, rest));
+    }
+    onHit() {
+        this.activate();
+        this.flash = 120;
+    }
+    update(dt) {
+        if (this.flash > 0) {
+            this.flash -= dt;
+            if (this.flash <= 0) {
+                this.unactivate();
+            }
+        }
+    }
+}
+class Obstacle {
+    x = 0;
+    y = 0;
+    walls = [];
+    worldWalls = [];
+    active = false;
+    alwaysSolid = true;
+    touching = false;
+    constructor(x, y, walls) {
+        this.x = x;
+        this.y = y;
+        this.walls = walls;
+        for (let i = 0; i < walls.length; i++) {
+            this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
+        }
+    }
+    activate() {
+        this.active = true;
+    }
+    unactivate() {
+        this.active = false;
+    }
+    onHit() {
+        this.activate();
+    }
+    update(_dt) { }
+    affectBall(ball, ox, oy) {
+        if (!this.active && !this.alwaysSolid) {
+            this.touching = false;
+            return;
+        }
+        let wx = this.x + ox;
+        let wy = this.y + oy;
+        let hit = false;
+        for (let i = 0; i < this.walls.length; i++) {
+            let w = this.walls[i];
+            let ww = this.worldWalls[i];
+            lineSet(ww, w.a.x + wx, w.a.y + wy, w.b.x + wx, w.b.y + wy);
+            if (resolveCircleLine(ball, ww)) {
+                hit = true;
+            }
+        }
+        if (hit && !this.touching) {
+            this.onHit();
+        }
+        this.touching = hit;
+    }
+}
 let sectionCreate = (id, x, y, w, h, walls, bg, widgets = []) => ({
     id,
     x,
@@ -536,24 +622,56 @@ let flattenSectionWalls = (sections) => {
         let s = sections[i];
         for (let j = 0; j < s.walls.length; j++) {
             let wall = s.walls[j];
-            walls.push(lineCreate(wall.a.x + s.x, wall.a.y + s.y, wall.b.x + s.x, wall.b.y + s.y));
+            walls.push(lineCreate(wall.a.x + s.x, wall.a.y + s.y, wall.b.x + s.x, wall.b.y + s.y, wall.rest));
         }
     }
     return walls;
 };
+class Launcher extends Widget {
+    dir;
+    force = 0;
+    range = 0;
+    fired = false;
+    constructor(x, y, control, dx, dy, force, range) {
+        super(x, y, WIDGET_LAUNCHER, control);
+        this.dir = vecNorm(vecCreate(dx, dy));
+        this.force = force;
+        this.range = range;
+    }
+    unactivate() {
+        this.active = false;
+        this.fired = false;
+    }
+    affectBall(ball, ox, oy) {
+        if (!this.active || this.fired) {
+            return;
+        }
+        let dx = ball.pos.x - (this.x + ox);
+        let dy = ball.pos.y - (this.y + oy);
+        if (dx * dx + dy * dy > this.range * this.range) {
+            return;
+        }
+        ball.vel = vecMul(this.dir, this.force);
+        this.fired = true;
+    }
+}
 class Paddle extends Widget {
     angle = 0;
+    prevAngle = 0;
     restAngle = 0;
     upAngle = 0;
     len = PADDLE_LEN;
     omega = 0;
     line;
+    worldLine;
     constructor(x, y, control, restAngle, upAngle) {
         super(x, y, WIDGET_PADDLE, control);
         this.restAngle = restAngle;
         this.upAngle = upAngle;
         this.angle = restAngle;
+        this.prevAngle = restAngle;
         this.line = lineCreate(x, y, x, y);
+        this.worldLine = lineCreate(x, y, x, y, PADDLE_REST);
         this.syncLine();
     }
     syncLine() {
@@ -562,13 +680,52 @@ class Paddle extends Widget {
     getLine() {
         return this.line;
     }
-    getSurfaceVel(p) {
-        let rx = p.x - this.x;
-        let ry = p.y - this.y;
-        return vecCreate(-this.omega * ry, this.omega * rx);
+    /** Velocity of the paddle's surface at a world point: omega cross r. */
+    getSurfaceVel(p, pivotX, pivotY) {
+        return vecCreate(-this.omega * (p.y - pivotY), this.omega * (p.x - pivotX));
+    }
+    /**
+     * Which face of the paddle a world point lies on, +1 or -1, measured against
+     * the paddle at `angle`.
+     */
+    sideOf(p, pivotX, pivotY, angle) {
+        let cross = Math.cos(angle) * (p.y - pivotY) - Math.sin(angle) * (p.x - pivotX);
+        return cross < 0 ? -1 : 1;
+    }
+    affectBall(ball, ox, oy) {
+        let pivotX = this.x + ox;
+        let pivotY = this.y + oy;
+        let dirX = Math.cos(this.angle);
+        let dirY = Math.sin(this.angle);
+        lineSet(this.worldLine, pivotX, pivotY, pivotX + this.len * dirX, pivotY + this.len * dirY);
+        let reach = ball.r + PADDLE_HALF_WIDTH;
+        let { point, t } = lineClosestPointT(this.worldLine, ball.pos);
+        let diff = vecSub(ball.pos, point);
+        let dist = vecLen(diff);
+        if (dist >= reach) {
+            return;
+        }
+        // Orient the normal by the face the ball was on *before* this step's sweep.
+        // Deriving it from the current position flips it the moment the paddle
+        // rotates past the ball's centre, and the correction then fires the ball
+        // back into the swept path to be hit again — the stick-and-drag artifact.
+        let side = this.sideOf(ball.pos, pivotX, pivotY, this.prevAngle);
+        let faceN = vecCreate(-dirY * side, dirX * side);
+        // Along the paddle's length the contact is against its flat face; past
+        // either end it is against a round cap, so the normal is radial there.
+        let n = t > 0 && t < 1
+            ? faceN
+            : dist > 1e-6
+                ? vecMul(diff, 1 / dist)
+                : faceN;
+        // Signed depth: negative dot means the sweep has already carried the paddle
+        // through the ball, so push it back out the side it entered from.
+        let depth = reach - (diff.x * n.x + diff.y * n.y);
+        resolveCircleSurface(ball, n, depth, PADDLE_REST, PADDLE_FRICTION, this.getSurfaceVel(point, pivotX, pivotY));
     }
     update(dt) {
         let dtSeconds = dt / 1000;
+        this.prevAngle = this.angle;
         let target = this.active ? this.upAngle : this.restAngle;
         let speed = this.active ? PADDLE_SPEED : PADDLE_RETURN;
         let maxStep = speed * dtSeconds;
@@ -589,6 +746,7 @@ let CONTROL_LEFT = 0;
 let CONTROL_RIGHT = 1;
 let CONTROL_START = 2;
 let WIDGET_PADDLE = 0;
+let WIDGET_LAUNCHER = 1;
 class Widget {
     x = 0;
     y = 0;
@@ -608,7 +766,15 @@ class Widget {
         this.active = false;
     }
     update(_dt) { }
+    affectBall(_ball, _ox, _oy) { }
 }
+// Extra distance the solver pushes a body past the surface, so the next step
+// starts outside instead of exactly on the boundary.
+let CONTACT_SLOP = 0.01;
+// A surface that is moving toward the body has to be outrun, or it overtakes
+// the body again on the next substep and applies a second impulse. This is the
+// minimum speed a body leaves such a surface with, relative to the surface.
+let MIN_SEPARATION_SPEED = 30;
 let vecCreate = (x = 0, y = 0) => ({ x, y });
 let vecAdd = (a, b) => vecCreate(a.x + b.x, a.y + b.y);
 let vecSub = (a, b) => vecCreate(a.x - b.x, a.y - b.y);
@@ -616,6 +782,7 @@ let vecMul = (v, s) => vecCreate(v.x * s, v.y * s);
 let vecDot = (a, b) => a.x * b.x + a.y * b.y;
 let vecLen = (v) => Math.hypot(v.x, v.y);
 let vecNorm = (v) => vecMul(v, 1 / (vecLen(v) || 1));
+let vecPerp = (v) => vecCreate(-v.y, v.x);
 let circleCreate = (x, y, r, m = 1) => ({
     pos: vecCreate(x, y),
     vel: vecCreate(),
@@ -632,9 +799,10 @@ let circleIntegrate = (c, dtSeconds, gravity = 900) => {
     c.pos = vecAdd(c.pos, vecMul(c.vel, dtSeconds));
     return c;
 };
-let lineCreate = (x1, y1, x2, y2) => ({
+let lineCreate = (x1, y1, x2, y2, rest = 0.5) => ({
     a: vecCreate(x1, y1),
     b: vecCreate(x2, y2),
+    rest,
 });
 let lineSet = (l, x1, y1, x2, y2) => {
     l.a.x = x1;
@@ -643,32 +811,71 @@ let lineSet = (l, x1, y1, x2, y2) => {
     l.b.y = y2;
     return l;
 };
-let lineClosestPoint = (l, p) => {
+// The closest point on the segment, plus the clamped parameter that produced
+// it. t of exactly 0 or 1 means the closest point is an endpoint cap, which
+// needs a radial normal rather than the segment's perpendicular.
+let lineClosestPointT = (l, p) => {
     let ab = vecSub(l.b, l.a);
     let abLen2 = vecDot(ab, ab) || 1;
     let t = vecDot(vecSub(p, l.a), ab) / abLen2;
     t = Math.max(0, Math.min(1, t));
-    return vecAdd(l.a, vecMul(ab, t));
+    return { point: vecAdd(l.a, vecMul(ab, t)), t };
 };
-let resolveCircleLine = (c, l, restitution = 0.75, surfaceVel) => {
+let lineClosestPoint = (l, p) => lineClosestPointT(l, p).point;
+/**
+ * Resolves one contact between a circle and a surface of infinite mass.
+ *
+ * `n` is a unit normal pointing from the surface toward the circle and `depth`
+ * is how far the circle has to travel along it to be clear. `surfaceVel` is the
+ * velocity of the surface at the contact point, or null for a static surface.
+ *
+ * All of the velocity work happens in the surface's frame of reference. That is
+ * what makes a moving surface behave: the bounce is computed against the
+ * relative velocity, then the surface velocity is added back once. Adding any
+ * fraction of the surface velocity on top of an already-resolved bounce injects
+ * energy on every substep of a sustained contact, which is what made the paddle
+ * drag the ball around instead of striking it.
+ */
+let resolveCircleSurface = (c, n, depth, rest, friction, surfaceVel) => {
+    if (depth <= 0) {
+        return false;
+    }
+    c.pos = vecAdd(c.pos, vecMul(n, depth + CONTACT_SLOP));
+    let rel = surfaceVel ? vecSub(c.vel, surfaceVel) : c.vel;
+    let vn = vecDot(rel, n);
+    if (vn >= 0) {
+        // Already separating in the surface's frame: this is a resting or trailing
+        // contact, so correcting the position is the whole job.
+        return true;
+    }
+    let relT = vecSub(rel, vecMul(n, vn));
+    let outN = -vn * rest;
+    if (surfaceVel && vecDot(surfaceVel, n) > 0 && outN < MIN_SEPARATION_SPEED) {
+        outN = MIN_SEPARATION_SPEED;
+    }
+    // Coulomb friction: the normal impulse can cancel at most `friction` times as
+    // much tangential slip.
+    let outT = relT;
+    let vt = vecLen(relT);
+    if (friction > 0 && vt > 1e-6) {
+        let maxDrop = friction * (1 + rest) * -vn;
+        outT = vecMul(relT, Math.max(0, vt - maxDrop) / vt);
+    }
+    let newRel = vecAdd(vecMul(n, outN), outT);
+    c.vel = surfaceVel ? vecAdd(newRel, surfaceVel) : newRel;
+    return true;
+};
+let resolveCircleLine = (c, l, friction = 0) => {
     let cp = lineClosestPoint(l, c.pos);
     let diff = vecSub(c.pos, cp);
     let dist = vecLen(diff);
-    if (dist >= c.r || dist === 0) {
+    if (dist >= c.r) {
         return false;
     }
-    let n = vecNorm(diff);
-    let penetration = c.r - dist;
-    c.pos = vecAdd(c.pos, vecMul(n, penetration + 0.01));
-    let relVel = surfaceVel ? vecSub(c.vel, surfaceVel) : c.vel;
-    let vn = vecDot(relVel, n);
-    if (vn < 0) {
-        c.vel = vecSub(c.vel, vecMul(n, (1 + restitution) * vn));
-        if (surfaceVel) {
-            c.vel = vecAdd(c.vel, vecMul(surfaceVel, 0.35));
-        }
-    }
-    return true;
+    // A centre sitting exactly on the segment has no direction to push along, so
+    // fall back to the segment's own perpendicular instead of skipping the hit.
+    let n = dist > 1e-6 ? vecMul(diff, 1 / dist) : vecNorm(vecPerp(vecSub(l.b, l.a)));
+    return resolveCircleSurface(c, n, c.r - dist, l.rest, friction, null);
 };
 let resolveCircleCircle = (a, b, restitution = 0.8) => {
     let diff = vecSub(b.pos, a.pos);
@@ -702,12 +909,20 @@ let clampBallSpeed = (ball, maxSpeed = MAX_BALL_SPEED) => {
 };
 let resolveBallWalls = (ball, walls) => {
     for (let wall of walls) {
-        resolveCircleLine(ball, wall, 0.7);
+        resolveCircleLine(ball, wall);
     }
 };
 let updateWidgets = (state, dt) => {
-    forEachWidget(state.sections, widget => {
-        if (state.input[widget.control]) {
+    forEachWidget(state.sections, (widget, section) => {
+        let inSection = false;
+        for (let i = 0; i < state.balls.length; i++) {
+            let p = state.balls[i].pos;
+            if (sectionContains(section, p.x, p.y)) {
+                inSection = true;
+                break;
+            }
+        }
+        if (state.input[widget.control] && inSection) {
             widget.activate();
         }
         else {
@@ -718,14 +933,7 @@ let updateWidgets = (state, dt) => {
 };
 let resolveBallWidgets = (ball, state) => {
     forEachWidget(state.sections, (widget, section) => {
-        if (widget.type !== WIDGET_PADDLE) {
-            return;
-        }
-        let paddle = widget;
-        let line = paddle.getLine();
-        let worldLine = lineCreate(line.a.x + section.x, line.a.y + section.y, line.b.x + section.x, line.b.y + section.y);
-        let cp = lineClosestPoint(worldLine, ball.pos);
-        resolveCircleLine(ball, worldLine, 0.7, paddle.getSurfaceVel({ x: cp.x - section.x, y: cp.y - section.y }));
+        widget.affectBall(ball, section.x, section.y);
     });
 };
 let updateSimulation = (state, dt) => {
@@ -736,10 +944,13 @@ let updateSimulation = (state, dt) => {
         updateBallMotion(ball, dtSeconds);
         resolveBallWalls(ball, state.walls);
         resolveBallWidgets(ball, state);
+        // A paddle sweeping into a ball can push it through a wall, so give the
+        // walls the last word on position.
+        resolveBallWalls(ball, state.walls);
         clampBallSpeed(ball);
         if (ballIsOutOfBounds(ball, state.sections)) {
             let start = getSection(state.sections, 'start');
-            state.balls[i] = ballCreate(start.x + 130, start.y + 100);
+            state.balls[i] = ballCreate(start.x + LAUNCHER_X, start.y + LAUNCHER_Y);
         }
     }
 };
@@ -774,6 +985,7 @@ let createState = () => {
     let start = sectionCreate('start', 0, 0, W, H, createStartWalls(W, H), '#555', [
         new Paddle(LEFT_PIVOT.x, LEFT_PIVOT.y, CONTROL_LEFT, LEFT_REST, LEFT_UP),
         new Paddle(RIGHT_PIVOT.x, RIGHT_PIVOT.y, CONTROL_RIGHT, RIGHT_REST, RIGHT_UP),
+        new Launcher(LAUNCHER_X, LAUNCHER_Y, CONTROL_START, -0.22, -1, LAUNCHER_FORCE, LAUNCHER_RANGE),
     ]);
     let upperPos = placeAdjacent(start, 'above', 400, 400);
     let upper = sectionCreate('upper', upperPos.x, upperPos.y, 400, 400, createUpperWalls(400, 400), '#466');
@@ -781,17 +993,17 @@ let createState = () => {
     let side = sectionCreate('side', sidePos.x, sidePos.y, 640, 400, createSideWalls(640, 400), '#645');
     let sections = [start, upper, side];
     return {
-        balls: [ballCreate(130, 100)],
+        balls: [ballCreate(LAUNCHER_X, LAUNCHER_Y)],
         sections,
         walls: flattenSectionWalls(sections),
         input: [false, false, false],
     };
 };
 let createStartWalls = (w, h) => {
+    let lane = 372;
     return [
         lineCreate(0, 0, 0, h),
         lineCreate(w, 0, w, h),
-        lineCreate(0, h, w, h),
         lineCreate(0, 0, 150, 0),
         lineCreate(250, 0, w, 0),
         lineCreate(20, 140, 90, 280),
@@ -799,8 +1011,10 @@ let createStartWalls = (w, h) => {
         lineCreate(90, 280, 130, 430),
         lineCreate(w - 90, 280, w - 130, 430),
         lineCreate(20, 470, 110, 510),
-        lineCreate(w - 20, 470, w - 110, 510),
-        lineCreate(150, 405, 250, 455),
+        lineCreate(lane, 470, w - 110, 510),
+        lineCreate(lane, 470, lane, 568),
+        lineCreate(0, 560, lane, h - 4),
+        lineCreate(lane, h - 4, w, h - 4),
     ];
 };
 let createUpperWalls = (w, h) => {
@@ -1236,6 +1450,54 @@ let lerpCam = (cur, target, dt) => {
     let t = Math.min(1, dt / CAM_PAN_MS);
     return cur + (target - cur) * t;
 };
+class ObstacleElement extends UiElement {
+    obstacle;
+    lineEls = [];
+    constructor(obstacle, parent) {
+        super(parent);
+        this.obstacle = obstacle;
+    }
+    build() {
+        let obstacle = this.obstacle;
+        this.setPos(obstacle.x, obstacle.y);
+        let svg = createSvgElement(SVG, {
+            width: '1',
+            height: '1',
+        });
+        setStyle(svg, {
+            position: 'absolute',
+            left: obstacle.x + 'px',
+            top: obstacle.y + 'px',
+            overflow: 'visible',
+            'pointer-events': 'none',
+        });
+        for (let i = 0; i < obstacle.walls.length; i++) {
+            let w = obstacle.walls[i];
+            let lineEl = createSvgElement(LINE, {
+                x1: String(w.a.x),
+                y1: String(w.a.y),
+                x2: String(w.b.x),
+                y2: String(w.b.y),
+                stroke: '#888',
+                'stroke-width': '4',
+                'stroke-linecap': 'round',
+            });
+            svg.appendChild(lineEl);
+            this.lineEls.push(lineEl);
+        }
+        let host = this.parent && this.parent.getChildHostEl();
+        if (host) {
+            appendChild(host, svg);
+        }
+        this.el = svg;
+    }
+    render(_dt) {
+        let stroke = this.obstacle.active ? '#fc8' : '#888';
+        for (let i = 0; i < this.lineEls.length; i++) {
+            setAttribute(this.lineEls[i], 'stroke', stroke);
+        }
+    }
+}
 class UiElement {
     parent = null;
     children = [];
@@ -1421,10 +1683,16 @@ class WidgetElement extends UiElement {
         if (this.widget.type === WIDGET_PADDLE) {
             this.buildPaddle();
         }
+        else if (this.widget.type === WIDGET_LAUNCHER) {
+            this.buildLauncher();
+        }
     }
     render(_dt) {
         if (this.widget.type === WIDGET_PADDLE) {
             this.renderPaddle();
+        }
+        else if (this.widget.type === WIDGET_LAUNCHER) {
+            this.renderLauncher();
         }
     }
     buildPaddle() {
@@ -1469,5 +1737,44 @@ class WidgetElement extends UiElement {
         let el = this.lineEl;
         setAttribute(el, 'x2', String(line.b.x - line.a.x));
         setAttribute(el, 'y2', String(line.b.y - line.a.y));
+    }
+    buildLauncher() {
+        let launcher = this.widget;
+        this.setPos(launcher.x, launcher.y);
+        let svg = createSvgElement(SVG, {
+            width: '1',
+            height: '1',
+        });
+        setStyle(svg, {
+            position: 'absolute',
+            left: launcher.x + 'px',
+            top: launcher.y + 'px',
+            overflow: 'visible',
+            'pointer-events': 'none',
+        });
+        let len = 24;
+        let lineEl = createSvgElement(LINE, {
+            x1: '0',
+            y1: '0',
+            x2: String(-launcher.dir.x * len),
+            y2: String(-launcher.dir.y * len),
+            stroke: '#c84',
+            'stroke-width': '8',
+            'stroke-linecap': 'round',
+        });
+        svg.appendChild(lineEl);
+        let host = this.parent && this.parent.getChildHostEl();
+        if (host) {
+            appendChild(host, svg);
+        }
+        this.el = svg;
+        this.lineEl = lineEl;
+    }
+    renderLauncher() {
+        if (!this.lineEl) {
+            return;
+        }
+        let el = this.lineEl;
+        setAttribute(el, 'stroke', this.widget.active ? '#fc8' : '#c84');
     }
 }

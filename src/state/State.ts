@@ -19,6 +19,8 @@ import {
   placeAdjacent,
   sectionCreate,
 } from '../model/Section';
+import { Field } from '../model/fields/Field';
+import { CircleObstacle } from '../model/obstacles/CircleObstacle';
 import { Launcher } from '../model/widgets/Launcher';
 import { Paddle } from '../model/widgets/Paddle';
 import {
@@ -57,12 +59,14 @@ export const createState = (): State => {
         LAUNCHER_X,
         LAUNCHER_Y,
         CONTROL_START,
-        -0.22,
+        -0,
         -1,
         LAUNCHER_FORCE,
         LAUNCHER_RANGE
       ),
-    ]
+    ],
+    [new CircleObstacle(200, 200, 28, 12, 1.2, 20, 0, 2)],
+    [new Field(30, 40, 220, 180, 0.2, 0, -280)]
   );
   const upperPos = placeAdjacent(start, 'above', 400, 400);
   const upper = sectionCreate(
@@ -100,15 +104,17 @@ const createStartWalls = (w: number, h: number): Line[] => {
     lineCreate(w, 0, w, h),
     lineCreate(0, 0, 150, 0),
     lineCreate(250, 0, w, 0),
-    lineCreate(20, 140, 90, 280),
-    lineCreate(w - 20, 140, w - 90, 280),
-    lineCreate(90, 280, 130, 430),
-    lineCreate(w - 90, 280, w - 130, 430),
-    lineCreate(20, 470, 110, 510),
-    lineCreate(lane, 470, w - 110, 510),
-    lineCreate(lane, 470, lane, 568),
-    lineCreate(0, 560, lane, h - 4),
+    // lineCreate(20, 140, 90, 280),
+    // lineCreate(w - 20, 140, w - 90, 280),
+    // lineCreate(90, 280, 130, 430),
+    // lineCreate(w - 90, 280, w - 130, 430),
+    lineCreate(0, 400, 120, 450 - 10),
+    lineCreate(lane, 400, w - 110, 450 - 10),
+    lineCreate(lane, 540, lane, 600),
+    lineCreate(0, 500, lane, 530),
     lineCreate(lane, h - 4, w, h - 4),
+    lineCreate(350, 200, 400, 280),
+    lineCreate(350, 200, 400, 190),
   ];
 };
 

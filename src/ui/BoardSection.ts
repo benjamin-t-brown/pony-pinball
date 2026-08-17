@@ -8,6 +8,8 @@ import {
   setStyle,
 } from '../dom';
 import type { Section } from '../model/Section';
+import { FieldElement } from './FieldElement';
+import { ObstacleElement } from './ObstacleElement';
 import { UiElement } from './UiElement';
 import { WidgetElement } from './WidgetElement';
 
@@ -66,8 +68,18 @@ export class BoardSection extends UiElement {
     }
     this.el = el;
 
+    for (let i = 0; i < section.fields.length; i++) {
+      const child = new FieldElement(section.fields[i]);
+      this.addChild(child);
+      child.build();
+    }
     for (let i = 0; i < section.widgets.length; i++) {
       const child = new WidgetElement(section.widgets[i]);
+      this.addChild(child);
+      child.build();
+    }
+    for (let i = 0; i < section.obstacles.length; i++) {
+      const child = new ObstacleElement(section.obstacles[i]);
       this.addChild(child);
       child.build();
     }

@@ -4,8 +4,15 @@ import {
   LAUNCHER_Y,
   MAX_BALL_SPEED,
 } from '../model/constants';
-import { forEachWidget, getSection, sectionContains } from '../model/Section';
 import {
+  forEachField,
+  forEachObstacle,
+  forEachWidget,
+  getSection,
+  sectionContains,
+} from '../model/Section';
+import {
+  GRAVITY,
   circleIntegrate,
   resolveCircleLine,
   type Line,
@@ -14,8 +21,12 @@ import {
 } from './physics';
 import type { State } from '../state/State';
 
-export const updateBallMotion = (ball: Ball, dtSeconds: number) => {
-  circleIntegrate(ball, dtSeconds);
+export const updateBallMotion = (
+  ball: Ball,
+  dtSeconds: number,
+  gravity = GRAVITY
+) => {
+  circleIntegrate(ball, dtSeconds, gravity);
 };
 
 export const clampBallSpeed = (ball: Ball, maxSpeed = MAX_BALL_SPEED) => {
@@ -50,20 +61,56 @@ export const updateWidgets = (state: State, dt: number) => {
   });
 };
 
+export const updateObstacles = (state: State, dt: number) => {
+  forEachObstacle(state.sections, (obstacle, section) => {
+    obstacle.update(dt, section);
+  });
+};
+
 export const resolveBallWidgets = (ball: Ball, state: State) => {
   forEachWidget(state.sections, (widget, section) => {
     widget.affectBall(ball, section.x, section.y);
   });
 };
 
+export const resolveBallObstacles = (ball: Ball, state: State) => {
+  forEachObstacle(state.sections, (obstacle, section) => {
+    obstacle.affectBall(ball, section.x, section.y);
+  });
+};
+
+export const getBallGravity = (ball: Ball, state: State) => {
+  let g = GRAVITY;
+  forEachField(state.sections, (field, section) => {
+    g = field.scaleGravity(ball, section.x, section.y, g);
+  });
+  return g;
+};
+
+export const affectBallFields = (
+  ball: Ball,
+  state: State,
+  dtSeconds: number
+) => {
+  forEachField(state.sections, (field, section) => {
+    field.affectBall(ball, section.x, section.y, dtSeconds);
+  });
+};
+
 export const updateSimulation = (state: State, dt: number) => {
   const dtSeconds = dt / 1000;
   updateWidgets(state, dt);
+  updateObstacles(state, dt);
   for (let i = 0; i < state.balls.length; i++) {
     const ball = state.balls[i];
-    updateBallMotion(ball, dtSeconds);
+    affectBallFields(ball, state, dtSeconds);
+    updateBallMotion(ball, dtSeconds, getBallGravity(ball, state));
     resolveBallWalls(ball, state.walls);
+    resolveBallObstacles(ball, state);
     resolveBallWidgets(ball, state);
+    // A paddle sweeping into a ball can push it through a wall, so give the
+    // walls the last word on position.
+    resolveBallWalls(ball, state.walls);
     clampBallSpeed(ball);
 
     if (ballIsOutOfBounds(ball, state.sections)) {
