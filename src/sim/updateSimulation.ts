@@ -7,11 +7,10 @@ import {
   vecLen,
   vecMul,
 } from './physics';
-import { paddleSurfaceVel, updatePaddle } from './updatePaddle';
-import type { GameState } from '../model/gameState';
+import type { State } from '../state/State';
 
-export const updateBallMotion = (ball: Ball, dt: number) => {
-  circleIntegrate(ball, dt);
+export const updateBallMotion = (ball: Ball, dtSeconds: number) => {
+  circleIntegrate(ball, dtSeconds);
 };
 
 export const clampBallSpeed = (ball: Ball, maxSpeed = MAX_BALL_SPEED) => {
@@ -27,32 +26,16 @@ export const resolveBallWalls = (ball: Ball, walls: Line[]) => {
   }
 };
 
-export const updateSimulation = (state: GameState, dt: number) => {
-  state.leftPaddle.pressed = state.input.left;
-  state.rightPaddle.pressed = state.input.right;
+export const updateSimulation = (state: State, dt: number) => {
+  const dtSeconds = dt / 1000;
+  for (let i = 0; i < state.balls.length; i++) {
+    const ball = state.balls[i];
+    updateBallMotion(ball, dtSeconds);
+    resolveBallWalls(ball, state.walls);
+    clampBallSpeed(ball);
 
-  updatePaddle(state.leftPaddle, dt);
-  updatePaddle(state.rightPaddle, dt);
-
-  updateBallMotion(state.ball, dt);
-  resolveBallWalls(state.ball, state.walls);
-
-  resolveCircleLine(
-    state.ball,
-    state.leftPaddle.line,
-    0.55,
-    paddleSurfaceVel(state.leftPaddle, dt)
-  );
-  resolveCircleLine(
-    state.ball,
-    state.rightPaddle.line,
-    0.55,
-    paddleSurfaceVel(state.rightPaddle, dt)
-  );
-
-  clampBallSpeed(state.ball);
-
-  if (ballIsOutOfBounds(state.ball, state.width, state.height)) {
-    state.ball = ballCreate();
+    if (ballIsOutOfBounds(ball, state.width, state.height)) {
+      state.balls[i] = ballCreate(230, 100);
+    }
   }
 };

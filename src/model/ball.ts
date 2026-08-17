@@ -1,16 +1,15 @@
-import { type Circle, circleCreate, vecCreate } from '../sim/physics';
-import { BALL_R, W } from './constants';
+import { type Circle, circleCreate } from '../sim/physics';
+import { BALL_R } from './constants';
 
-export type Ball = Circle;
+export interface Ball extends Circle {
+  color: string;
+}
 
-export const ballCreate = (
-  x = W * 0.5 + (Math.random() - 0.5) * 40,
-  y = 50
-): Ball => {
+export const ballCreate = (x = 0, y = 0): Ball => {
   const b = circleCreate(x, y, BALL_R, 1);
-  b.vel = vecCreate((Math.random() - 0.5) * 40, 20);
-  return b;
+  return { ...b, color: 'red' };
 };
 
-export const ballIsOutOfBounds = (ball: Ball, w: number, h: number) =>
-  ball.pos.y > h + 40 || ball.pos.x < -40 || ball.pos.x > w + 40;
+export const ballIsOutOfBounds = (ball: Ball, w: number, h: number) => {
+  return ball.pos.y > h + 40 || ball.pos.x < -40 || ball.pos.x > w + 40;
+};

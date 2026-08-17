@@ -42,11 +42,11 @@ export const circleApplyImpulse = (c: Circle, j: Vec): Circle => {
 
 export const circleIntegrate = (
   c: Circle,
-  dt: number,
+  dtSeconds: number,
   gravity = 900
 ): Circle => {
-  c.vel = vecAdd(c.vel, vecMul(vecCreate(0, gravity), dt));
-  c.pos = vecAdd(c.pos, vecMul(c.vel, dt));
+  c.vel = vecAdd(c.vel, vecMul(vecCreate(0, gravity), dtSeconds));
+  c.pos = vecAdd(c.pos, vecMul(c.vel, dtSeconds));
   return c;
 };
 

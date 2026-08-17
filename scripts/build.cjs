@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { exec } = require('child_process');
 const fs = require('fs');
 const { minify: minifyHtml } = require('html-minifier');
@@ -5,16 +6,47 @@ const UglifyJS = require('uglify-js');
 const { minify: SWCMinify } = require('@swc/core');
 const path = require('path');
 const ect = require('ect-bin');
+const advzip = require('advzip-bin');
 const Terser = require('terser');
 const { execFileSync } = require('child_process');
 // const ClosureCompiler = require('google-closure-compiler').compiler;
 
-const USE_ROAD_ROLLER = true;
+const USE_ROAD_ROLLER = false;
 const USE_RR_CONFIG = true;
 const USE_DISABLE_THROW = true;
 
 // swap em out until you get the smallest size
 const MINIFIER = 'terser';
+
+// Unquoted CSS / SVG / HTML keys passed to setProperty / setAttribute.
+// Terser already skips DOM builtins when properties.builtins is false.
+const MANGLE_PROPS_RESERVED = [
+  'background',
+  'border',
+  'bottom',
+  'color',
+  'cursor',
+  'display',
+  'gap',
+  'height',
+  'innerHTML',
+  'inset',
+  'left',
+  'margin',
+  'overflow',
+  'padding',
+  'position',
+  'right',
+  'stroke',
+  'top',
+  'type',
+  'viewBox',
+  'width',
+  'x1',
+  'x2',
+  'y1',
+  'y2',
+];
 
 const execAsync = async command => {
   return new Promise((resolve, reject) => {
@@ -118,6 +150,14 @@ async function minifyFiles(filePaths) {
             ecma: 9,
             drop_console: true,
           },
+          mangle: {
+            toplevel: true,
+            properties: {
+              builtins: false,
+              keep_quoted: 'strict',
+              reserved: MANGLE_PROPS_RESERVED,
+            },
+          },
         })
       ).code;
     };
@@ -143,9 +183,12 @@ async function minifyFiles(filePaths) {
           drop_console: true,
         },
         mangle: {
-          properties: false,
           toplevel: true,
-          // except: ['exampleMap']
+          properties: {
+            builtins: false,
+            keep_quoted: true,
+            reserved: MANGLE_PROPS_RESERVED,
+          },
         },
       });
       if (obj.map) {
@@ -399,13 +442,7 @@ const build = async () => {
   ];
   const result = execFileSync(ect, args);
   await execAsync(`rm -rf ${srcDistDir}/public`);
-  // console.log('ECT result', result.toString().trim());
-  // console.log('advzip disabled');
-  try {
-    await execAsync(`advzip -z -4 ${srcDistDir + '/index.zip'}`);
-  } catch (e) {
-    console.log('failed adv zip', e);
-  }
+  execFileSync(advzip, ['-z', '-4', srcDistDir + '/index.zip']);
   try {
     const result = await execAsync(
       `stat -c '%n %s' ${srcDistDir + '/index.zip'}`

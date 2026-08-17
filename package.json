@@ -29,6 +29,7 @@
     "vite": "^7.1.2"
   },
   "dependencies": {
+    "advzip-bin": "^2.0.0",
     "http-server": "^14.1.1"
   }
 }
