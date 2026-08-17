@@ -1,0 +1,283 @@
+Basic Physics Engine: balls & lines
+Click on the black box to add balls
+
+A couple of years ago I wrote a silly physics experiment using the great Matter.js physics engine. Today let's try to create a similar contraption (admittedly simplified), without any external libraries.
+
+What it does: simulates moving balls (circles) under gravity, detects circle–circle and circle–line collisions, separates overlaps, and applies simple elastic impulses to change velocities.
+
+What it does NOT do: continuous collision detection (fast-moving tunneling may occur), rotational dynamics, and broad-phase optimization. These are serious limitations, but the solution is still fun if you think it's only about 100 lines of code.
+
+Core ideas: vector math, Euler integration, closest-point projection for line collisions, and impulse resolution for velocity changes. See algorithm references for the circle–line projection and collision math.
+
+How the code is organized
+Vec class — implements 2D vectors (add, subtract, scale, dot, length, normalize). All geometry uses these operations.
+Circle class — stores position, velocity, radius, mass; has integrate() to apply gravity and move the circle each frame.
+Line class — stores two endpoints and computes the closest point on the segment to any given point (used to detect circle–line overlap).
+Collision functions — resolveCircleCircle separates overlapping circles and applies impulses; resolveCircleLine projects the circle center to the segment, checks distance, separates, and reflects velocity along the collision normal.
+Main loop — integrate bodies, run pairwise collision resolution, then draw. Use a capped dt for stability.
+Scene setup — an array of lines rotated by trig functions plus a function to add a ball where the screen was clickes.
+How integrate() Works
+Purpose: The integrate() function moves objects forward in time by updating their velocity and position.
+
+What Integration Means
+Physics engines update motion in small time steps. Each frame:
+
+Acceleration changes velocity
+Velocity changes position
+This method is called Euler integration, the simplest numerical integration technique.
+
+In the Code
+integrate(dt) {
+  let gravity = new Vec(0, 300);
+  this.vel = this.vel.add(gravity.mul(dt));
+  this.pos = this.pos.add(this.vel.mul(dt));
+}
+Conceptual Breakdown
+gravity.mul(dt) computes how much velocity changes this frame.
+this.vel.add(...) applies that change to the velocity.
+this.pos.add(this.vel.mul(dt)) moves the object based on its updated velocity.
+This follows Newton’s laws: acceleration affects velocity, and velocity affects position.
+
+How Collision Resolution Works
+Your engine resolves two types of collisions:
+
+Circle–circle
+Circle–line
+Both follow the same three-step pattern.
+
+Step 1 — Detect Overlap
+Circle–circle: Check if the distance between centers is less than the sum of radii.
+Circle–line: Project the circle center onto the line segment and measure the distance to that point.
+Step 2 — Compute the Collision Normal
+The normal is a unit vector pointing from the surface into the object.
+
+Step 3 — Positional Correction
+Objects are pushed apart so they no longer overlap. This prevents jittering or sinking.
+
+let penetration = a.r + b.r - d;
+a.pos = a.pos.add(n.mul(-penetration * (a.invM / totalInv)));
+b.pos = b.pos.add(n.mul(penetration * (b.invM / totalInv)));
+Mass determines how much each object moves — lighter objects move more.
+
+How Impulses Work
+Impulses are instantaneous changes in velocity caused by collisions. They are not forces; they act immediately.
+
+Impulse Formula (Conceptual)
+impulse = -(1 + restitution)
+          * relativeVelocityAlongNormal
+          / totalInverseMass
+In the Code
+let rel = b.vel.sub(a.vel);
+let vn = rel.dot(n);
+if (vn > 0) return;
+
+let e = 0.8;
+let j = -(1 + e) * vn / totalInv;
+let impulse = n.mul(j);
+
+a.applyImpulse(impulse.mul(-1));
+b.applyImpulse(impulse);
+What This Does
+Measures how fast objects are moving toward each other.
+Reverses that component of velocity.
+Scales it by restitution (bounciness).
+Applies the change proportionally based on mass.
+The result is realistic bouncing and sliding behavior.
+
+Putting It All Together
+Each frame of the simulation:
+
+Integrate — apply gravity and move objects.
+Detect collisions — circle–circle and circle–line.
+Resolve collisions — separate objects and apply impulses.
+Render — draw updated positions.
+This loop creates smooth, believable motion and interactions.
+
+More JS tutorials:
+
+Goldmine - idle game (~200 lines)
+
+Tunnel run game (~170 lines)
+
+Tower game (84 lines)
+
+
+Full code:
+
+// Vector utilities
+class Vec {
+    constructor(x=0, y=0) {
+        this.x = x;
+        this.y = y;
+    }
+    add(v) {
+        return new Vec(this.x + v.x,this.y + v.y);
+    }
+    sub(v) {
+        return new Vec(this.x - v.x,this.y - v.y);
+    }
+    mul(s) {
+        return new Vec(this.x * s,this.y * s);
+    }
+    dot(v) {
+        return this.x * v.x + this.y * v.y;
+    }
+    len() {
+        return Math.hypot(this.x, this.y);
+    }
+    norm() {
+        let l = this.len() || 1;
+        return this.mul(1 / l);
+    }
+}
+
+// Circle body
+class Circle {
+    constructor(x, y, r, m=1) {
+        this.pos = new Vec(x,y);
+        this.vel = new Vec(0,0);
+        this.r = r;
+        this.m = m;
+        this.invM = 1 / m;
+    }
+    applyImpulse(j) {
+        this.vel = this.vel.add(j.mul(this.invM));
+    }
+    integrate(dt) {
+        let gravity = new Vec(0,300);
+        this.vel = this.vel.add(gravity.mul(dt));
+        this.pos = this.pos.add(this.vel.mul(dt));
+    }
+}
+
+// Line segment
+class Line {
+    constructor(x1, y1, x2, y2) {
+        this.a = new Vec(x1,y1);
+        this.b = new Vec(x2,y2);
+    }
+    closestPoint(p) {
+        let ab = this.b.sub(this.a);
+        let t = p.sub(this.a).dot(ab) / ab.dot(ab);
+        t = Math.max(0, Math.min(1, t));
+        return this.a.add(ab.mul(t));
+    }
+}
+
+// Collision and scene
+function resolveCircleLine(circle, line) {
+    let cp = line.closestPoint(circle.pos);
+    let diff = circle.pos.sub(cp);
+    let dist = diff.len();
+    if (dist < circle.r) {
+        let n = diff.norm();
+        let penetration = circle.r - dist;
+        circle.pos = circle.pos.add(n.mul(penetration + 0.01));
+        let vn = circle.vel.dot(n);
+        if (vn < 0) {
+            let e = 0.8;
+            circle.vel = circle.vel.sub(n.mul((1 + e) * vn));
+        }
+    }
+}
+
+function resolveCircleCircle(a, b) {
+    let diff = b.pos.sub(a.pos);
+    let d = diff.len();
+    if (d === 0) {
+        return;
+    }
+    if (d < a.r + b.r) {
+        let n = diff.mul(1 / d);
+        let penetration = a.r + b.r - d;
+        let totalInv = a.invM + b.invM;
+        a.pos = a.pos.add(n.mul(-penetration * (a.invM / totalInv)));
+        b.pos = b.pos.add(n.mul(penetration * (b.invM / totalInv)));
+        let rel = b.vel.sub(a.vel);
+        let vn = rel.dot(n);
+        if (vn > 0) {
+            return;
+        }
+        let e = 0.8;
+        let j = -(1 + e) * vn / totalInv;
+        let impulse = n.mul(j);
+        a.applyImpulse(impulse.mul(-1));
+        b.applyImpulse(impulse);
+    }
+}
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let counter = 0;
+let circles = [new Circle(250,150,20,1), new Circle(510,120,16,1), new Circle(170,120,10,1)];
+let lines = [];
+const lineCount = 16;
+
+for (let i = 0; i < lineCount; i++) {
+    lines.push(new Line(100,100,200,200));
+}
+
+function step(dt) {
+    for (let c of circles) {
+        c.integrate(dt);
+    }
+    for (let i = 0; i < circles.length; i++) {
+        for (let j = i + 1; j < circles.length; j++) {
+            resolveCircleCircle(circles[i], circles[j]);
+        }
+    }
+    for (let c of circles) {
+        for (let l of lines) {
+            resolveCircleLine(c, l);
+        }
+    }
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let l of lines) {
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(l.a.x, l.a.y);
+        ctx.lineTo(l.b.x, l.b.y);
+        ctx.stroke();
+    }
+    for (let c of circles) {
+        ctx.fillStyle = '#4af';
+        ctx.beginPath();
+        ctx.arc(c.pos.x, c.pos.y, c.r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+const armLength = 70;
+const speed = 0.009;
+let last = performance.now();
+function loop(t) {
+    let dt = Math.min(0.033, (t - last) / 1000);
+    step(dt);
+    draw();
+    last = t;
+
+    // Spinning crosses
+    for (let i = 0; i < lineCount / 2; i++) {
+        lines[i * 2].a.x = 100 * i + armLength * Math.sin(counter);
+        lines[i * 2].a.y = 350 + armLength * Math.cos(counter);
+        lines[i * 2].b.x = 100 * i - armLength * Math.sin(counter);
+        lines[i * 2].b.y = 350 - armLength * Math.cos(counter);
+
+        lines[i * 2 + 1].a.x = 100 * i - armLength * Math.cos(counter);
+        lines[i * 2 + 1].a.y = 350 + armLength * Math.sin(counter);
+        lines[i * 2 + 1].b.x = 100 * i + armLength * Math.cos(counter);
+        lines[i * 2 + 1].b.y = 350 - armLength * Math.sin(counter);
+    }
+
+    counter = counter + speed;
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+window.onpointerdown = function(e) {
+    circles.push(new Circle(e.offsetX,e.offsetY,20,1));
+}

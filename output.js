@@ -1,0 +1,1 @@
+document.write('<meta content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" name=viewport><title>Pony Pinball</title><style></style><div class=wh id=game-container><div class="wh btext" id=game></div></div>');addEventListener("load",async()=>{});

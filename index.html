@@ -1,14 +1,20 @@
-<!doctype html>
-<html lang="en">
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>isotest</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>Pony Pinball</title>
+    <style>
+      * { box-sizing: border-box; }
+      #game-container { display: flex; justify-content: center; }
+      button:active { filter: brightness(1.25); }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
-    <script src="https://unpkg.com/prefixfree@latest/prefixfree.min.js"></script>
-    <script type="module" src="/src/apps/main.ts"></script>
+    <div id="game-container" class="wh">
+      <div id="game" class="wh btext"></div>
+    </div>
+    <script src="src/main.ts" type="module"></script>
   </body>
 </html>
