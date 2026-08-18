@@ -117,6 +117,54 @@ async function embedJs(html, chunk) {
   return '';
 }
 
+/**
+ * The bundle is a plain concatenation with imports stripped, so `class A
+ * extends B` runs before B exists unless B's file was emitted first. Walk the
+ * relative imports and emit each file after everything it depends on.
+ */
+function sortByImports(filePaths) {
+  const key = p => path.resolve(p);
+  const known = new Map(filePaths.map(p => [key(p), p]));
+  const deps = new Map();
+
+  for (const p of filePaths) {
+    const src = fs.readFileSync(p, 'utf8');
+    const found = [];
+    const re = /from\s*['"](\.[^'"]+)['"]/g;
+    let m;
+    while ((m = re.exec(src))) {
+      const base = path.resolve(path.dirname(p), m[1]);
+      for (const cand of [base, base + '.js', base + '/index.js']) {
+        if (known.has(key(cand))) {
+          found.push(known.get(key(cand)));
+          break;
+        }
+      }
+    }
+    deps.set(p, found);
+  }
+
+  const out = [];
+  const mark = new Map();
+  const visit = p => {
+    // 1 = in progress. Re-entering means an import cycle; the emitted JS only
+    // cycles on things used lazily inside functions, so ordering is moot there.
+    if (mark.get(p)) {
+      return;
+    }
+    mark.set(p, 1);
+    for (const d of deps.get(p) || []) {
+      visit(d);
+    }
+    mark.set(p, 2);
+    out.push(p);
+  };
+  for (const p of filePaths) {
+    visit(p);
+  }
+  return out;
+}
+
 function getAllFilePaths(dirPath, arrayOfFiles) {
   const files = fs.readdirSync(dirPath);
 
@@ -331,50 +379,20 @@ const build = async () => {
 
 
   console.log('\nMinify code...');
-  const filePaths = getAllFilePaths(path.resolve(__dirname + '/../src'));
+  const filePaths = sortByImports(
+    getAllFilePaths(path.resolve(__dirname + '/../src'))
+  );
   console.log('files to concat and minify:\n', filePaths.join('\n '));
   
-  // First, add the events.js file content at the beginning
   let indexFile = '';
-  // const eventsJsPath = path.resolve(__dirname + '/../events.js');
-  // if (fs.existsSync(eventsJsPath)) {
-  //   console.log('Adding events.js to build...');
-  //   const eventsJsContent = fs.readFileSync(eventsJsPath, 'utf8');
-  //   // Remove the export statement and just keep the events array
-  //   const eventsArray = eventsJsContent.replace(/export const events = /, 'let events = ').replace(/;$/, ';');
-  //   indexFile += eventsArray + '\n';
-    
-  // } else {
-  //   throw new Error('events.js not found');
-  // }
   
-  // Then add all the source files
+  // add all the source files
   indexFile += filePaths.reduce((resultFile, currentFilePath) => {
     const currentFile = fs.readFileSync(currentFilePath).toString();
     resultFile += processCodeFile(currentFile, currentFilePath);
     return resultFile;
   }, '');
 
-  // Replace the events loading logic with direct events usage
-  console.log('Attempting to replace events loading logic...');
-  
-  const beforeReplace = indexFile.includes("let eventsTxt = await fetch('/events.wpe')");
-  console.log('Found eventsTxt fetch line:', beforeReplace);
-  
-  // Try multiline replacement first
-  const multilinePattern = /let eventsTxt = await fetch\('\/events\.wpe'\)\.then\(r => r\.text\(\)\);\s*\n\s*gameSetupEvents\(gameState, parseEvents\(eventsTxt\.replaceAll\('\\\\n', '<br>'\)\)\);/g;
-  indexFile = indexFile.replace(multilinePattern, 'gameSetupEvents(gameState, events);');
-  
-  // Try single line replacement as fallback
-  const singlelinePattern = /let eventsTxt = await fetch\('\/events\.wpe'\)\.then\(r => r\.text\(\)\);\s*gameSetupEvents\(gameState, parseEvents\(eventsTxt\.replaceAll\('\\\\n', '<br>'\)\)\);/g;
-  indexFile = indexFile.replace(singlelinePattern, 'gameSetupEvents(gameState, events);');
-  
-  // Try simpler patterns
-  indexFile = indexFile.replace(/let eventsTxt = await fetch\('\/events\.wpe'\)\.then\(r => r\.text\(\)\);/g, '');
-  indexFile = indexFile.replace(/gameSetupEvents\(gameState, parseEvents\(eventsTxt\.replaceAll\('\\\\n', '<br>'\)\)\);/g, 'gameSetupEvents(gameState, events);');
-  
-  const afterReplace = indexFile.includes("let eventsTxt = await fetch('/events.wpe')");
-  console.log('Events replacement successful:', !afterReplace);
 
   fs.writeFileSync(srcDistDir + '/index.js', indexFile);
   fs.writeFileSync(__dirname + '/../index.concat.js', indexFile);

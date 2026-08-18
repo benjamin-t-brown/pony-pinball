@@ -4,7 +4,7 @@ import {
   CONTROL_LEFT,
   CONTROL_RIGHT,
   CONTROL_START,
-} from '../model/widgets/Widget';
+} from '../model/Part';
 import { Layer } from './Layer';
 
 export class SimUiLayer extends Layer {

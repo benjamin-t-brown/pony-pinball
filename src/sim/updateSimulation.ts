@@ -1,21 +1,13 @@
 import { ballCreate, ballIsOutOfBounds, type Ball } from '../model/Ball';
-import {
-  LAUNCHER_X,
-  LAUNCHER_Y,
-  MAX_BALL_SPEED,
-} from '../model/constants';
-import {
-  forEachField,
-  forEachObstacle,
-  forEachWidget,
-  getSection,
-  sectionContains,
-} from '../model/Section';
+import { LAUNCHER_X, LAUNCHER_Y, MAX_BALL_SPEED } from '../model/constants';
+import { forEachPart, sectionContains } from '../model/Section';
 import {
   GRAVITY,
   circleIntegrate,
   resolveCircleLine,
+  type Circle,
   type Line,
+  type Vec,
   vecLen,
   vecMul,
 } from './physics';
@@ -36,89 +28,74 @@ export const clampBallSpeed = (ball: Ball, maxSpeed = MAX_BALL_SPEED) => {
   }
 };
 
-export const resolveBallWalls = (ball: Ball, walls: Line[]) => {
-  for (const wall of walls) {
-    resolveCircleLine(ball, wall);
+export const resolveBallWalls = (
+  ball: Circle,
+  walls: Line[],
+  surfaceVel: Vec | null = null
+) => {
+  let hit = false;
+  for (let i = 0; i < walls.length; i++) {
+    if (resolveCircleLine(ball, walls[i], 0, surfaceVel)) {
+      hit = true;
+    }
   }
+  return hit;
 };
 
-export const updateWidgets = (state: State, dt: number) => {
-  forEachWidget(state.sections, (widget, section) => {
-    let inSection = false;
-    for (let i = 0; i < state.balls.length; i++) {
-      const p = state.balls[i].pos;
-      if (sectionContains(section, p.x, p.y)) {
-        inSection = true;
-        break;
+export const updateParts = (state: State, dt: number) => {
+  forEachPart(state.sections, (part, section) => {
+    // Only player-driven parts follow the input; everything else owns its own
+    // active flag (bumper flash timers, permanent fields).
+    if (part.control >= 0) {
+      let inSection = false;
+      for (let i = 0; i < state.balls.length; i++) {
+        const p = state.balls[i].pos;
+        if (sectionContains(section, p.x, p.y)) {
+          inSection = true;
+          break;
+        }
+      }
+      if (state.input[part.control] && inSection) {
+        part.activate();
+      } else {
+        part.unactivate();
       }
     }
-    if (state.input[widget.control] && inSection) {
-      widget.activate();
-    } else {
-      widget.unactivate();
-    }
-    widget.update(dt);
+    part.update(dt, section);
   });
 };
 
-export const updateObstacles = (state: State, dt: number) => {
-  forEachObstacle(state.sections, (obstacle, section) => {
-    obstacle.update(dt, section);
-  });
-};
-
-export const resolveBallWidgets = (ball: Ball, state: State) => {
-  forEachWidget(state.sections, (widget, section) => {
-    widget.affectBall(ball, section.x, section.y);
-  });
-};
-
-export const resolveBallObstacles = (ball: Ball, state: State) => {
-  forEachObstacle(state.sections, (obstacle, section) => {
-    obstacle.affectBall(ball, section.x, section.y);
-  });
-};
-
-export const getBallGravity = (ball: Ball, state: State) => {
+/** Applies pre-integration forces and returns the gravity to integrate with. */
+export const preBallParts = (ball: Ball, state: State, dtSeconds: number) => {
   let g = GRAVITY;
-  forEachField(state.sections, (field, section) => {
-    g = field.scaleGravity(ball, section.x, section.y, g);
+  forEachPart(state.sections, (part, section) => {
+    g = part.preBall(ball, section.x, section.y, dtSeconds, g);
   });
   return g;
 };
 
-export const affectBallFields = (
-  ball: Ball,
-  state: State,
-  dtSeconds: number
-) => {
-  forEachField(state.sections, (field, section) => {
-    field.affectBall(ball, section.x, section.y, dtSeconds);
+export const resolveBallParts = (ball: Ball, state: State) => {
+  forEachPart(state.sections, (part, section) => {
+    part.affectBall(ball, section.x, section.y);
   });
 };
 
 export const updateSimulation = (state: State, dt: number) => {
   const dtSeconds = dt / 1000;
-  updateWidgets(state, dt);
-  updateObstacles(state, dt);
+  updateParts(state, dt);
   for (let i = 0; i < state.balls.length; i++) {
     const ball = state.balls[i];
-    affectBallFields(ball, state, dtSeconds);
-    updateBallMotion(ball, dtSeconds, getBallGravity(ball, state));
+    updateBallMotion(ball, dtSeconds, preBallParts(ball, state, dtSeconds));
     resolveBallWalls(ball, state.walls);
-    resolveBallObstacles(ball, state);
-    resolveBallWidgets(ball, state);
+    resolveBallParts(ball, state);
     // A paddle sweeping into a ball can push it through a wall, so give the
     // walls the last word on position.
     resolveBallWalls(ball, state.walls);
     clampBallSpeed(ball);
 
     if (ballIsOutOfBounds(ball, state.sections)) {
-      const start = getSection(state.sections, 'start');
-      state.balls[i] = ballCreate(
-        start.x + LAUNCHER_X,
-        start.y + LAUNCHER_Y
-      );
+      const start = state.sections[0];
+      state.balls[i] = ballCreate(start.x + LAUNCHER_X, start.y + LAUNCHER_Y);
     }
   }
 };

@@ -18,6 +18,7 @@ export const EVENT_DRAG_LEAVE = 'dragleave';
 export const EVENT_DROP = 'drop';
 export const DRAGGABLE = 'draggable';
 export const SVG_NS = 'http://www.w3.org/2000/svg';
+export const POINTER_EVENTS = 'pointer-events';
 
 export const getDocumentBody = () => {
   return document.body;
@@ -139,4 +140,12 @@ export const timeoutPromise = (ms: number) => {
 
 export function copyObject<T>(obj: T): T {
   return structuredClone(obj);
+}
+
+export const px = (n: number) => {
+  return n + 'px';
+}
+
+export const stringify = (n: number) => {
+  return n + '';
 }

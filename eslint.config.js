@@ -21,7 +21,8 @@ export default tseslint.config([
     },
     rules: {
       'no-var': 1,
-      'unused-imports/no-unused-imports': 1,
+      '@typescript-eslint/no-unused-vars': 0,
+      'unused-imports/no-unused-imports': 'warn',
       'unused-imports/no-unused-vars': [
         'warn',
         {
@@ -32,13 +33,6 @@ export default tseslint.config([
         },
       ],
       '@typescript-eslint/no-explicit-any': 1,
-      '@typescript-eslint/no-unused-vars': [
-        'warn',
-        {
-          argsIgnorePattern: '^_',
-          varsIgnorePattern: '^_',
-        },
-      ],
       '@typescript-eslint/no-empty-function': 0,
       '@typescript-eslint/no-var-requires': 0,
       '@typescript-eslint/explicit-module-boundary-types': 0,

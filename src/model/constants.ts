@@ -19,7 +19,7 @@ export const LAUNCHER_RANGE = 36;
 
 export const LEFT_PIVOT = { x: 118, y: 450 };
 export const RIGHT_PIVOT = { x: 282, y: 450 };
-export const LEFT_REST = 0.45;
+export const LEFT_REST_ANGLE = 0.45;
 export const LEFT_UP = -0.55;
-export const RIGHT_REST = Math.PI - 0.45;
+export const RIGHT_REST_ANGLE = Math.PI - 0.45;
 export const RIGHT_UP = Math.PI + 0.55;

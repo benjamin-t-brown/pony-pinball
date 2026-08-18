@@ -1,0 +1,181 @@
+import {
+  DIV,
+  LINE,
+  POINTER_EVENTS,
+  SVG,
+  TRANSFORM,
+  appendChild,
+  createElement,
+  createSvgElement,
+  px,
+  setAttribute,
+  setStyle,
+  stringify,
+} from '../dom';
+import {
+  PART_FIELD,
+  PART_LAUNCHER,
+  PART_PADDLE,
+  type Part,
+} from '../model/Part';
+import type { Field } from '../model/parts/Field';
+import type { Launcher } from '../model/parts/Launcher';
+import type { Obstacle } from '../model/parts/Obstacle';
+import type { Paddle } from '../model/parts/Paddle';
+import { UiElement } from './UiElement';
+
+const LAUNCHER_LEN = 24;
+
+export class PartElement extends UiElement {
+  part: Part;
+  lineEls: SVGLineElement[] = [];
+
+  constructor(part: Part, parent?: UiElement) {
+    super(parent);
+    this.part = part;
+  }
+
+  attach(el: HTMLElement) {
+    const host = this.parent && this.parent.getChildHostEl();
+    if (host) {
+      appendChild(host, el);
+    }
+    this.el = el;
+  }
+
+  addLine(
+    host: SVGSVGElement,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    stroke: string,
+    width: string
+  ) {
+    const el = createSvgElement(LINE, {
+      x1: stringify(x1),
+      y1: stringify(y1),
+      x2: stringify(x2),
+      y2: stringify(y2),
+      stroke,
+      'stroke-width': width,
+      'stroke-linecap': 'round',
+    }) as SVGLineElement;
+    host.appendChild(el);
+    this.lineEls.push(el);
+  }
+
+  build() {
+    const part = this.part;
+    this.setPos(part.x, part.y);
+
+    if (part.type === PART_FIELD) {
+      const field = part as Field;
+      this.width = field.w;
+      this.height = field.h;
+      const el = createElement(DIV);
+      setStyle(el, {
+        position: 'absolute',
+        left: px(field.x),
+        top: px(field.y),
+        width: px(field.w),
+        height: px(field.h),
+        [POINTER_EVENTS]: 'none',
+      });
+      this.attach(el);
+      this.render(0);
+      return;
+    }
+
+    const svg = createSvgElement(SVG, {
+      width: '1',
+      height: '1',
+    }) as SVGSVGElement;
+    setStyle(svg as unknown as HTMLElement, {
+      position: 'absolute',
+      left: px(part.x),
+      top: px(part.y),
+      overflow: 'visible',
+      [POINTER_EVENTS]: 'none',
+    });
+
+    if (part.type === PART_PADDLE) {
+      const line = (part as Paddle).getLine();
+      this.addLine(
+        svg,
+        0,
+        0,
+        line.b.x - line.a.x,
+        line.b.y - line.a.y,
+        '#ccc',
+        '6'
+      );
+    } else if (part.type === PART_LAUNCHER) {
+      const dir = (part as Launcher).dir;
+      this.addLine(
+        svg,
+        0,
+        0,
+        -dir.x * LAUNCHER_LEN,
+        -dir.y * LAUNCHER_LEN,
+        '#c84',
+        '8'
+      );
+    } else {
+      const walls = (part as Obstacle).walls;
+      for (let i = 0; i < walls.length; i++) {
+        const w = walls[i];
+        this.addLine(svg, w.a.x, w.a.y, w.b.x, w.b.y, '#888', '4');
+      }
+    }
+
+    this.attach(svg as unknown as HTMLElement);
+  }
+
+  update(_dt: number) {
+    const part = this.part;
+    const first = this.lineEls[0] as unknown as HTMLElement;
+
+    if (part.type === PART_PADDLE) {
+      if (first) {
+        const line = (part as Paddle).getLine();
+        setAttribute(first, 'x2', stringify(line.b.x - line.a.x));
+        setAttribute(first, 'y2', stringify(line.b.y - line.a.y));
+      }
+      return;
+    }
+
+    if (part.type === PART_LAUNCHER) {
+      if (first) {
+        setAttribute(first, 'stroke', part.active ? '#fc8' : '#c84');
+      }
+      return;
+    }
+
+    if (part.type === PART_FIELD) {
+      const field = part as Field;
+      let bg = 'rgba(70,140,220,0.08)';
+      if (field.active) {
+        bg = field.inside ? 'rgba(120,200,255,0.35)' : 'rgba(70,160,255,0.18)';
+      }
+      if (this.el) {
+        setStyle(this.el, { background: bg });
+      }
+      return;
+    }
+
+    const obstacle = part as Obstacle;
+    if (this.el) {
+      setStyle(this.el, {
+        left: px(obstacle.x),
+        top: px(obstacle.y),
+        'transform-origin': '0 0',
+        [TRANSFORM]: 'rotate(' + obstacle.angle + 'rad)',
+      });
+    }
+    const stroke = obstacle.active ? '#fc8' : '#888';
+    for (let i = 0; i < this.lineEls.length; i++) {
+      setAttribute(this.lineEls[i] as unknown as HTMLElement, 'stroke', stroke);
+    }
+  }
+}

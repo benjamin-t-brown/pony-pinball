@@ -1,4 +1,4 @@
-import type { Section } from '../model/Section';
+import type { Section } from './Section';
 
 export const CAM_SCALE_MIN = 0.25;
 export const CAM_SCALE_MAX = 4;

@@ -5,13 +5,13 @@ import {
   appendChild,
   createElement,
   createSvgElement,
+  px,
   setStyle,
+  stringify,
 } from '../dom';
 import type { Section } from '../model/Section';
-import { FieldElement } from './FieldElement';
-import { ObstacleElement } from './ObstacleElement';
+import { PartElement } from './PartElement';
 import { UiElement } from './UiElement';
-import { WidgetElement } from './WidgetElement';
 
 export class BoardSection extends UiElement {
   section: Section;
@@ -19,7 +19,7 @@ export class BoardSection extends UiElement {
   constructor(section: Section, parent?: UiElement) {
     super(parent);
     this.section = section;
-    this.setId(section.id);
+    this.setId(stringify(section.id));
     this.setPos(section.x, section.y);
     this.width = section.w;
     this.height = section.h;
@@ -30,16 +30,16 @@ export class BoardSection extends UiElement {
     const el = createElement(DIV);
     setStyle(el, {
       position: 'absolute',
-      left: section.x + 'px',
-      top: section.y + 'px',
-      width: section.w + 'px',
-      height: section.h + 'px',
+      left: px(section.x),
+      top: px(section.y),
+      width: px(section.w),
+      height: px(section.h),
       background: section.bg,
     });
 
     const svg = createSvgElement(SVG, {
-      width: String(section.w),
-      height: String(section.h),
+      width: stringify(section.w),
+      height: stringify(section.h),
       viewBox: '0 0 ' + section.w + ' ' + section.h,
     }) as SVGSVGElement;
     setStyle(svg as unknown as HTMLElement, {
@@ -50,10 +50,10 @@ export class BoardSection extends UiElement {
     for (const wall of section.walls) {
       svg.appendChild(
         createSvgElement(LINE, {
-          x1: String(wall.a.x),
-          y1: String(wall.a.y),
-          x2: String(wall.b.x),
-          y2: String(wall.b.y),
+          x1: stringify(wall.a.x),
+          y1: stringify(wall.a.y),
+          x2: stringify(wall.b.x),
+          y2: stringify(wall.b.y),
           stroke: '#888',
           'stroke-width': '4',
           'stroke-linecap': 'round',
@@ -68,18 +68,8 @@ export class BoardSection extends UiElement {
     }
     this.el = el;
 
-    for (let i = 0; i < section.fields.length; i++) {
-      const child = new FieldElement(section.fields[i]);
-      this.addChild(child);
-      child.build();
-    }
-    for (let i = 0; i < section.widgets.length; i++) {
-      const child = new WidgetElement(section.widgets[i]);
-      this.addChild(child);
-      child.build();
-    }
-    for (let i = 0; i < section.obstacles.length; i++) {
-      const child = new ObstacleElement(section.obstacles[i]);
+    for (let i = 0; i < section.parts.length; i++) {
+      const child = new PartElement(section.parts[i]);
       this.addChild(child);
       child.build();
     }

@@ -1,0 +1,161 @@
+PONY PINBALL - LEVEL EDITOR NOTES
+=================================
+Design notes captured before implementation. The runtime half (builder table,
+levels data, perimeter generation) is being built first; this file describes
+the editor that will eventually generate that data.
+
+
+THE ONE RULE
+------------
+The editor must never enter the game bundle.
+
+scripts/build.cjs calls getAllFilePaths(src) and sweeps up every .js it finds,
+so a src/editor/ directory would ship inside the 13k budget. The editor lives
+as a sibling of src/ (next to scratch/ and scripts/, which already work this
+way) and is built separately by Vite with no size limit.
+
+Dependency direction is one-way:
+
+    editor/  ->  src/        allowed
+    src/     ->  editor/     never
+
+That is what lets the editor preview levels using the real updateSimulation and
+the real Paddle physics instead of a reimplementation that drifts out of sync.
+
+
+OUTPUT: A GENERATED .ts FILE, NOT A FETCHED ASSET
+-------------------------------------------------
+The editor writes src/model/levels.ts as a normal generated-and-committed
+source file. It then rides the existing build with zero special handling: no
+fetch, no runtime parser, no build-step string replacement.
+
+Do NOT repeat the events.wpe pattern. build.cjs currently carries ~20 lines of
+regex surgery replacing fetch('/events.wpe') with an inlined array, with three
+fallback patterns because the first two did not match. That is the failure mode
+this avoids.
+
+
+DATA FORMAT
+-----------
+Flat number arrays. Not JSON (repeated keys are pure overhead). Not a
+char-packed string yet either - the decoder costs bytes and only pays off once
+there is a lot of data. Revisit packing if the level count grows.
+
+    SECTIONS: [x, y, w, h, bg, edges, [builder calls]]
+    LINKS:    [aIndex, bIndex, offset, width]
+
+bg is an index into a small palette array.
+edges is a bitmask of which perimeter edges are walled (top 1, right 2,
+bottom 4, left 8). The start section omits bottom so the ball can drain.
+
+
+SECTIONS ARE NODES, OPENINGS ARE EDGES
+--------------------------------------
+Sections are axis-aligned rects placed freely in world space. Two sections are
+adjacent when their edges are collinear and overlapping. A LINK says "these two
+share a boundary, and there is a hole in it at `offset`, `width` wide".
+
+offset is a WORLD coordinate along the shared edge's varying axis (x for a
+horizontal boundary, y for a vertical one). Using world coords rather than
+section-local ones removes the ambiguity about which section's origin it is
+measured from, and makes the editor's job trivial - it is just where the user
+clicked.
+
+Links are explicit rather than derived from geometry, because two sections
+touching should be allowed to stay solidly walled. Adjacency and connection are
+different questions.
+
+Perimeter walls are GENERATED from the rect plus its links. This is the whole
+point: the old hand-authored version kept the same magic 150-250 opening in
+eight places across three wall functions, and moving a section by one pixel
+would have leaked the ball into the void with no error anywhere.
+
+Interior decoration (slopes, lane guides) stays as ordinary builder calls.
+
+Shared-boundary ownership: when two sections share a boundary, the LOWER-INDEX
+section emits the wall and the higher-index one suppresses that span. Without
+this both sides emit coincident walls, which doubles the work in
+resolveBallWalls - a linear scan over every wall, per ball, per substep, with
+no broadphase.
+
+
+EDITOR UX: SNAP TO EDGES, NOT TO A GRID
+---------------------------------------
+This is the piece that gives free placement AND guaranteed adjacency.
+
+Drag out a rect anywhere. While dragging, snap its edges and corners to nearby
+section edges and corners within a few pixels. No grid, arbitrary sizes and
+positions - but the moment two sections touch they share a boundary EXACTLY.
+No floating-point slivers, no near-misses that look connected and are not.
+
+Once two rects share a boundary, the editor offers to place an opening on it:
+click the shared segment, drag the width. That is the link.
+
+Store absolute x,y per section rather than placeAdjacent-style anchor
+relationships. Anchors get fragile the moment you move a section that others
+hang off; absolute coordinates let the editor re-snap on move. At ten sections
+the byte difference is noise. placeAdjacent survives as an editor convenience,
+not a runtime concept.
+
+
+VALIDATION (build this early - it is cheap and catches real breakage)
+--------------------------------------------------------------------
+The editor knows things the runtime cannot check:
+
+  - Opening narrower than the ball. Width must clear 2 * BALL_R (20px) with
+    margin. Current openings are 100 wide, but a hand-dragged 15px gap would
+    silently trap the ball.
+  - Links whose sections do not actually touch (collinear-and-overlapping
+    check on the two rects).
+  - Unreachable sections. Flood-fill from the start section across links and
+    grey out anything the ball can never get to.
+  - Sections that overlap rather than abut, which puts walls inside walls.
+
+Authoring links explicitly is what makes these checkable: a structurally broken
+level becomes visible in the editor instead of at play time.
+
+
+PREFABS EXPAND AT RUNTIME
+-------------------------
+A builder may push walls, parts, or both. That is why it is one table rather
+than separate wall and part tables - a flipper-pair prefab naturally owns both
+its paddles and its inlane slopes.
+
+Do NOT have the editor bake prefabs into raw parts before writing the file.
+Expanding at author time duplicates the data and loses the ability to retune
+every flipper at once. Keep the call in the data and the expansion in the
+shipped code.
+
+The compression argument: makeCircleWalls turns 3 numbers into 12 Lines. A
+bumper stored as raw geometry is 12 walls x 5 numbers = 60 numbers; stored as a
+builder call it is 5. That ~12x is the entire reason this format exists, and it
+generalizes to every prefab.
+
+Shared constants (LEFT_REST_ANGLE, RIGHT_UP, PADDLE_LEN...) stay in constants.ts as
+the defaults the prefabs read. The data only carries what differs per section.
+
+
+CUSTOMIZING BEHAVIOR
+--------------------
+Numeric params (position, angle, force, gravity scale) fall out of the format
+for free.
+
+For event behavior - ball enters a field, do something - use the same dispatch
+trick rather than a scripting layer: an action tag plus params,
+onEnter: [A_SCORE, 100], dispatched through an ACTIONS table.
+
+HAZARD: AbstractAction.getName() returns this.constructor.name, and the Terser
+config uses mangle: { toplevel: true }, so in a production build that returns a
+mangled single letter. Nothing calls it today, so it is harmless dead code -
+but do not let the editor key action selection off class names. Integer tags
+survive minification; names do not.
+
+
+ROUND-TRIPPING (undecided)
+--------------------------
+Two options, not yet chosen:
+  a) Editor imports src/model/levels.ts directly and writes it back through a
+     small Vite dev-server POST handler. Simple, always in sync.
+  b) Editor keeps its own working file and exports on demand.
+
+(a) is probably right, but it means the editor needs a dev-server plugin.

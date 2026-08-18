@@ -34,13 +34,13 @@
 
 // import PrefixFree from 'prefixfree';
 
-var DRUM_TEXTURE = 'https://keithclark.co.uk/labs/css-fps/drum2.png';
+const DRUM_TEXTURE = 'https://keithclark.co.uk/labs/css-fps/drum2.png';
 
 const PrefixFree = (window as any).PrefixFree;
 
 // Assembiles are for grouping faces and other assembiles
 function createAssembly() {
-  var assembly = document.createElement('div');
+  const assembly = document.createElement('div');
   assembly.className = 'threedee assembly';
   return assembly;
 }
@@ -88,13 +88,13 @@ function createFace(
 }
 
 function createTube(dia, height, sides, texture) {
-  var tube = createAssembly();
-  var sideAngle = (Math.PI / sides) * 2;
-  var sideLen = dia * Math.tan(Math.PI / sides);
-  for (var c = 0; c < sides; c++) {
-    var x = (Math.sin(sideAngle * c) * dia) / 2;
-    var z = (Math.cos(sideAngle * c) * dia) / 2;
-    var ry = Math.atan2(x, z);
+  const tube = createAssembly();
+  const sideAngle = (Math.PI / sides) * 2;
+  const sideLen = dia * Math.tan(Math.PI / sides);
+  for (let c = 0; c < sides; c++) {
+    const x = (Math.sin(sideAngle * c) * dia) / 2;
+    const z = (Math.cos(sideAngle * c) * dia) / 2;
+    const ry = Math.atan2(x, z);
     tube.appendChild(
       createFace(
         sideLen + 1,
@@ -115,7 +115,7 @@ function createTube(dia, height, sides, texture) {
 }
 
 export function createBarrel() {
-  var barrel = createTube(100, 196, 20, DRUM_TEXTURE);
+  const barrel = createTube(100, 196, 20, DRUM_TEXTURE);
   barrel.appendChild(
     createFace(100, 100, 0, -98, 0, Math.PI / 2, 0, 0, DRUM_TEXTURE, 0, 100)
   );

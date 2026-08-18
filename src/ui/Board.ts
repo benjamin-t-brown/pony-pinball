@@ -18,7 +18,7 @@ import {
   clampCamScale,
   getCamPan,
   lerpCam,
-} from './camera';
+} from '../model/camera';
 import { UiElement } from './UiElement';
 
 export class Board extends UiElement {

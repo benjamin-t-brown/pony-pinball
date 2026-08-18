@@ -2,10 +2,12 @@ import {
   BR,
   DIV,
   INNER_HTML,
+  POINTER_EVENTS,
   appendChild,
   createElement,
   getGameRoot,
   setStyle,
+  stringify,
 } from '../dom';
 import { findSectionAt } from '../model/Section';
 import { vecLen } from '../sim/physics';
@@ -59,7 +61,7 @@ export class DebugLayer extends Layer {
       color: '#0f0',
       background: 'rgba(0,0,0,0.55)',
       'z-index': '9',
-      'pointer-events': 'none',
+      [POINTER_EVENTS]: 'none',
       'white-space': 'pre',
       'font-family': 'monospace',
       'font-size': '12px',
@@ -93,7 +95,7 @@ export class DebugLayer extends Layer {
         null
       );
       if (section) {
-        zone = section.id;
+        zone = stringify(section.id);
       }
     }
     this.el[INNER_HTML] =

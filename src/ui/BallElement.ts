@@ -1,9 +1,12 @@
 import {
   CIRCLE,
+  POINTER_EVENTS,
   SVG,
   appendChild,
   createSvgElement,
+  px,
   setStyle,
+  stringify,
 } from '../dom';
 import type { Ball } from '../model/Ball';
 import { UiElement } from './UiElement';
@@ -24,15 +27,15 @@ export class BallElement extends UiElement {
     this.height = size;
 
     const svg = createSvgElement(SVG, {
-      width: String(size),
-      height: String(size),
+      width: stringify(size),
+      height: stringify(size),
       viewBox: '0 0 ' + size + ' ' + size,
     }) as SVGSVGElement;
     svg.appendChild(
       createSvgElement(CIRCLE, {
-        'cx': String(ball.r),
-        'cy': String(ball.r),
-        'r': String(ball.r),
+        'cx': stringify(ball.r),
+        'cy': stringify(ball.r),
+        'r': stringify(ball.r),
         'fill': ball.color,
       })
     );
@@ -41,7 +44,7 @@ export class BallElement extends UiElement {
       position: 'absolute',
       left: '0px',
       top: '0px',
-      'pointer-events': 'none',
+      [POINTER_EVENTS]: 'none',
     });
 
     const host = this.parent && this.parent.getChildHostEl();
@@ -64,8 +67,8 @@ export class BallElement extends UiElement {
     this.y = ball.pos.y - ball.r;
     if (this.el) {
       setStyle(this.el, {
-        left: this.x + 'px',
-        top: this.y + 'px',
+        left: px(this.x),
+        top: px(this.y),
       });
     }
   }
