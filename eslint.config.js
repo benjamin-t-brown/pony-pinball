@@ -5,7 +5,7 @@ import unusedImports from 'eslint-plugin-unused-imports';
 import { globalIgnores } from 'eslint/config';
 
 export default tseslint.config([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'editor/**']),
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {

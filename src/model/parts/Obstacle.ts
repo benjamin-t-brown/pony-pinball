@@ -134,13 +134,19 @@ export const makeCircle = (
   y: number,
   resolution: number,
   restitution: number,
-  radius: number
+  radius: number,
+  vx = 0,
+  vy = 0,
+  omega = 0
 ) => {
   const o = new Obstacle(
     x,
     y,
     PART_OBSTACLE,
-    makeCircleWalls(radius, resolution, restitution)
+    makeCircleWalls(radius, resolution, restitution),
+    vx,
+    vy,
+    omega
   );
 
   return o;

@@ -4,10 +4,8 @@ import {
   LAUNCHER_RANGE,
   LEFT_REST_ANGLE,
   LEFT_UP,
-  RIGHT_REST_ANGLE,
-  RIGHT_UP,
 } from './constants';
-import { SectionData } from './levels';
+import type { SectionData } from './levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
 import { Launcher } from './parts/Launcher';
 import { makeCircle } from './parts/Obstacle';
@@ -16,7 +14,7 @@ import { type Section, sectionCreate } from './Section';
 
 export const START = 0;
 
-const BG = ['#555', '#466', '#645'];
+export const BG = ['#555', '#466', '#645'];
 
 export const B_WALLS = 0;
 export const B_LAUNCHER = 2;
@@ -47,13 +45,15 @@ BUILDERS[B_WALLS] = (section, wallList) => {
 };
 
 BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
+  const rest = restAngle || LEFT_REST_ANGLE;
+  const up = upAngle || LEFT_UP;
   section.parts.push(
     new Paddle(
       x,
       y,
       isFlipped ? CONTROL_RIGHT : CONTROL_LEFT,
-      restAngle || (isFlipped ? RIGHT_REST_ANGLE : LEFT_REST_ANGLE),
-      upAngle || (isFlipped ? RIGHT_UP : LEFT_UP)
+      isFlipped ? Math.PI - rest : rest,
+      isFlipped ? Math.PI - up : up
     )
   );
 };
@@ -72,8 +72,20 @@ BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
   );
 };
 
-BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius]) => {
-  const circle = makeCircle(x, y, resolution, restitution, radius);
+BUILDERS[B_CIRCLE] = (
+  section,
+  [x, y, resolution, restitution, radius, dx, dy, omega]
+) => {
+  const circle = makeCircle(
+    x,
+    y,
+    resolution,
+    restitution,
+    radius,
+    dx || 0,
+    dy || 0,
+    omega || 0
+  );
   section.parts.push(circle);
 };
 

@@ -1,0 +1,174 @@
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 13px/1.4 'Segoe UI', system-ui, sans-serif;
+  background: #1a1a1a;
+  color: #ddd;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: #3a3a3a;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #484848;
+}
+
+button.active {
+  background: #4a6740;
+  border-color: #7a9a70;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+input[type='number'],
+select {
+  background: #111;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 3px 6px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  height: 100%;
+}
+
+.sidebar {
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid #333;
+  background: #222;
+}
+
+.sidebar h1 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.sidebar h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+  margin: 16px 0 8px;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.push-right {
+  margin-left: auto;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+
+.field label {
+  color: #aaa;
+  font-size: 11px;
+}
+
+.swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.swatch {
+  width: 22px;
+  height: 22px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.swatch.active {
+  border-color: #fff;
+}
+
+.status {
+  font-size: 12px;
+  color: #8c8;
+  min-height: 1.2em;
+}
+
+.status.error {
+  color: #e88;
+}
+
+.issues {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.issues li {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.issues .error {
+  color: #e88;
+}
+
+.issues .warn {
+  color: #db6;
+}
+
+.section-list button {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 4px;
+}
+
+.canvas-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+}
+
+.canvas-wrap svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.hint {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  color: #888;
+  font-size: 11px;
+  pointer-events: none;
+}
