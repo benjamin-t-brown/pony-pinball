@@ -35,6 +35,7 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
             sendJson(res, 200, {
               sections: mod.SECTIONS,
               links: mod.LINKS,
+              start: mod.START,
             });
             return;
           }
@@ -43,6 +44,7 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
             const data = JSON.parse(raw) as {
               sections: [number, number, number, number, number, number[][]][];
               links: number[][];
+              start?: number[];
             };
             if (!Array.isArray(data.sections) || !Array.isArray(data.links)) {
               sendJson(res, 400, { error: 'sections and links arrays required' });
@@ -55,7 +57,7 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
               sendJson(res, 400, { error: 'invalid path' });
               return;
             }
-            const source = generateLevelsTs(data.sections, data.links);
+            const source = generateLevelsTs(data.sections, data.links, data.start);
             fs.writeFileSync(resolved, source);
             sendJson(res, 200, { ok: true });
             return;

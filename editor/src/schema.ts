@@ -4,6 +4,12 @@ import {
   B_LAUNCHER,
   B_WALLS,
 } from '@game/model/builders';
+import {
+  LAUNCHER_FORCE,
+  LAUNCHER_RANGE,
+  LEFT_REST_ANGLE,
+  LEFT_UP,
+} from '@game/model/constants';
 
 export type ParamDef = {
   name: string;
@@ -68,15 +74,27 @@ export const BUILDER_DEFS: BuilderDef[] = [
 
 export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_FLIPPER_LEFT) {
-    return [B_FLIPPER_LEFT, x, y, 0, 0];
+    return [B_FLIPPER_LEFT, x, y, LEFT_REST_ANGLE, LEFT_UP, 0];
   }
   if (id === B_LAUNCHER) {
-    return [B_LAUNCHER, x, y];
+    return [B_LAUNCHER, x, y, 0, -1, LAUNCHER_FORCE, LAUNCHER_RANGE];
   }
   if (id === B_CIRCLE) {
-    return [B_CIRCLE, x, y, 10, 1, 20];
+    return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0];
   }
   return [id, x, y];
+};
+
+export const ensureCallArgs = (call: number[]) => {
+  if (call[0] === B_WALLS) {
+    return call.slice();
+  }
+  const full = placeDefaults(call[0], call[1] ?? 0, call[2] ?? 0);
+  const next = call.slice();
+  while (next.length < full.length) {
+    next.push(full[next.length]);
+  }
+  return next;
 };
 
 export const defFor = (id: number) => {

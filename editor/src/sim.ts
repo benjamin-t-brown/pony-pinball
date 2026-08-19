@@ -7,21 +7,26 @@ import type { SectionData } from './types';
 
 export const createPlayState = (
   sections: SectionData[],
-  links: number[][]
+  links: number[][],
+  spawn: { x: number; y: number } | null
 ): State => {
   const built = buildLevel(sections, links);
   const start = built[0];
-  const x = start ? start.x + LAUNCHER_X : 0;
-  const y = start ? start.y + LAUNCHER_Y : 0;
+  const x = spawn ? spawn.x : start ? start.x + LAUNCHER_X : 0;
+  const y = spawn ? spawn.y : start ? start.y + LAUNCHER_Y : 0;
   return {
     balls: [ballCreate(x, y)],
     sections: built,
     walls: flattenSectionWalls(built),
     input: [false, false, false],
+    startX: x,
+    startY: y,
   };
 };
 
 export const dropBall = (state: State, x: number, y: number) => {
+  state.startX = x;
+  state.startY = y;
   if (state.balls[0]) {
     state.balls[0].pos.x = x;
     state.balls[0].pos.y = y;

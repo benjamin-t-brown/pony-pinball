@@ -6,8 +6,6 @@ import {
   PART_PADDLE,
 } from '@game/model/Part';
 import {
-  LEFT_REST_ANGLE,
-  LEFT_UP,
   PADDLE_LEN,
 } from '@game/model/constants';
 import type { Field } from '@game/model/parts/Field';
@@ -97,6 +95,7 @@ type Props = {
   tool: Tool;
   cam: Cam;
   playing: boolean;
+  spawn: { x: number; y: number } | null;
   built: Section[];
   sim: State | null;
   onSections: (sections: SectionData[]) => void;
@@ -116,8 +115,8 @@ const callOrigin = (section: SectionData, call: number[]) => {
 
 const flipperPose = (call: number[]) => {
   const flipped = call[5];
-  const rest = call[3] || LEFT_REST_ANGLE;
-  const up = call[4] || LEFT_UP;
+  const rest = call[3];
+  const up = call[4];
   return {
     rest: flipped ? Math.PI - rest : rest,
     up: flipped ? Math.PI - up : up,
@@ -142,8 +141,8 @@ const callVisualSegment = (section: SectionData, call: number[]) => {
     return paddleRay(origin, flipperPose(call).rest);
   }
   if (call[0] === B_LAUNCHER) {
-    const dx = call[3] || 0;
-    const dy = call[4] || -1;
+    const dx = call[3];
+    const dy = call[4];
     const len = Math.hypot(dx, dy) || 1;
     return {
       x0: origin.x,
@@ -181,7 +180,7 @@ const hitsCall = (
     return false;
   }
   if (call[0] === B_CIRCLE) {
-    const r = call[5] || 20;
+    const r = call[5];
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
   return Math.hypot(wx - origin.x, wy - origin.y) < slop * 2;
@@ -325,6 +324,7 @@ export const WorldCanvas = ({
   tool,
   cam,
   playing,
+  spawn,
   built,
   sim,
   onSections,
@@ -977,6 +977,26 @@ export const WorldCanvas = ({
                 />
               ))
             : null}
+          {spawn ? (
+            <g
+              stroke="rgba(255,255,255,0.45)"
+              strokeWidth={2 / cam.scale}
+              strokeLinecap="round"
+            >
+              <line
+                x1={spawn.x - 7 / cam.scale}
+                y1={spawn.y - 7 / cam.scale}
+                x2={spawn.x + 7 / cam.scale}
+                y2={spawn.y + 7 / cam.scale}
+              />
+              <line
+                x1={spawn.x + 7 / cam.scale}
+                y1={spawn.y - 7 / cam.scale}
+                x2={spawn.x - 7 / cam.scale}
+                y2={spawn.y + 7 / cam.scale}
+              />
+            </g>
+          ) : null}
         </g>
       </svg>
       <div className="hint">

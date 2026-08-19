@@ -1,10 +1,4 @@
 import { lineCreate } from '../sim/physics';
-import {
-  LAUNCHER_FORCE,
-  LAUNCHER_RANGE,
-  LEFT_REST_ANGLE,
-  LEFT_UP,
-} from './constants';
 import type { SectionData } from './levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
 import { Launcher } from './parts/Launcher';
@@ -45,48 +39,28 @@ BUILDERS[B_WALLS] = (section, wallList) => {
 };
 
 BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
-  const rest = restAngle || LEFT_REST_ANGLE;
-  const up = upAngle || LEFT_UP;
   section.parts.push(
     new Paddle(
       x,
       y,
       isFlipped ? CONTROL_RIGHT : CONTROL_LEFT,
-      isFlipped ? Math.PI - rest : rest,
-      isFlipped ? Math.PI - up : up
+      isFlipped ? Math.PI - restAngle : restAngle,
+      isFlipped ? Math.PI - upAngle : upAngle
     )
   );
 };
 
 BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
-  s.parts.push(
-    new Launcher(
-      x,
-      y,
-      CONTROL_START,
-      dx || 0,
-      dy || -1,
-      force || LAUNCHER_FORCE,
-      range || LAUNCHER_RANGE
-    )
-  );
+  s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
 };
 
 BUILDERS[B_CIRCLE] = (
   section,
   [x, y, resolution, restitution, radius, dx, dy, omega]
 ) => {
-  const circle = makeCircle(
-    x,
-    y,
-    resolution,
-    restitution,
-    radius,
-    dx || 0,
-    dy || 0,
-    omega || 0
+  section.parts.push(
+    makeCircle(x, y, resolution, restitution, radius, dx, dy, omega)
   );
-  section.parts.push(circle);
 };
 
 // assumes an edge can only have one hole in it at max

@@ -1,5 +1,5 @@
 import { ballCreate, ballIsOutOfBounds, type Ball } from '../model/Ball';
-import { LAUNCHER_X, LAUNCHER_Y, MAX_BALL_SPEED } from '../model/constants';
+import { MAX_BALL_SPEED } from '../model/constants';
 import { forEachPart, sectionContains } from '../model/Section';
 import {
   GRAVITY,
@@ -94,8 +94,7 @@ export const updateSimulation = (state: State, dt: number) => {
     clampBallSpeed(ball);
 
     if (ballIsOutOfBounds(ball, state.sections)) {
-      const start = state.sections[0];
-      state.balls[i] = ballCreate(start.x + LAUNCHER_X, start.y + LAUNCHER_Y);
+      state.balls[i] = ballCreate(state.startX, state.startY);
     }
   }
 };

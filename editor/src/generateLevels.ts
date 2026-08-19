@@ -1,3 +1,4 @@
+import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
 import type { SectionData } from './types';
 
 const BUILDER_NAMES: Record<number, string> = {
@@ -56,10 +57,21 @@ const roundCall = (call: number[]) => {
   return next;
 };
 
+const roundStart = (start?: number[] | { x: number; y: number } | null) => {
+  if (!start) {
+    return [LAUNCHER_X, LAUNCHER_Y];
+  }
+  if (Array.isArray(start)) {
+    return [Math.round(start[0]), Math.round(start[1])];
+  }
+  return [Math.round(start.x), Math.round(start.y)];
+};
+
 export const roundLevel = (
   sections: SectionData[],
-  links: number[][]
-): { sections: SectionData[]; links: number[][] } => {
+  links: number[][],
+  start?: number[] | { x: number; y: number } | null
+): { sections: SectionData[]; links: number[][]; start: number[] } => {
   return {
     sections: sections.map(s => [
       Math.round(s[0]),
@@ -70,16 +82,19 @@ export const roundLevel = (
       s[5].map(roundCall),
     ]),
     links: links.map(l => [l[0], l[1], Math.round(l[2]), Math.round(l[3])]),
+    start: roundStart(start),
   };
 };
 
 export const generateLevelsTs = (
   sections: SectionData[],
-  links: number[][]
+  links: number[][],
+  start?: number[] | { x: number; y: number } | null
 ): string => {
-  const rounded = roundLevel(sections, links);
+  const rounded = roundLevel(sections, links, start);
   sections = rounded.sections;
   links = rounded.links;
+  const spawn = rounded.start;
   const builderNames = new Set<string>();
   const sideNames = new Set<string>();
   for (const section of sections) {
@@ -154,5 +169,8 @@ ${sectionLines.join('\n')}
 export const LINKS: number[][] = [
 ${linkLines.join('\n')}
 ];
+
+/** world x, y */
+export const START = [${formatNum(spawn[0])}, ${formatNum(spawn[1])}];
 `;
 };

@@ -5,17 +5,22 @@ export const loadLevels = async () => {
   if (!res.ok) {
     throw new Error('Failed to load levels');
   }
-  return (await res.json()) as { sections: SectionData[]; links: number[][] };
+  return (await res.json()) as {
+    sections: SectionData[];
+    links: number[][];
+    start?: number[];
+  };
 };
 
 export const saveLevels = async (
   sections: SectionData[],
-  links: number[][]
+  links: number[][],
+  start: number[]
 ) => {
   const res = await fetch('/api/levels', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sections, links }),
+    body: JSON.stringify({ sections, links, start }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

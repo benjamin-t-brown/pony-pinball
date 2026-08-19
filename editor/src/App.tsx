@@ -7,11 +7,13 @@ import {
 } from '@game/model/Part';
 import { updateSimulation } from '@game/sim/updateSimulation';
 import type { State } from '@game/state/State';
+import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
 import { loadLevels, saveLevels } from './api';
 import { Sidebar } from './components/Sidebar';
 import { WorldCanvas } from './components/WorldCanvas';
 import { cloneSections, clampDeltaInRect, clampLocal, findSectionAt } from './geometry';
 import { roundLevel } from './generateLevels';
+import { ensureCallArgs } from './schema';
 import {
   linksToOpenings,
   openingsToLinks,
@@ -60,7 +62,9 @@ export const App = () => {
   const [status, setStatus] = useState('Loading…');
   const [statusError, setStatusError] = useState(false);
   const [frame, setFrame] = useState(0);
+  const [spawn, setSpawn] = useState<{ x: number; y: number } | null>(null);
   const simRef = useRef<State | null>(null);
+  const spawnRef = useRef<{ x: number; y: number } | null>(null);
   const wrapSize = useRef({ w: 800, h: 600 });
   const mouseRef = useRef({ x: 0, y: 0 });
 
@@ -96,11 +100,20 @@ export const App = () => {
   }, []);
 
   const applyLoad = useCallback(
-    (data: { sections: SectionData[]; links: number[][] }, fitted: boolean) => {
+    (data: { sections: SectionData[]; links: number[][]; start?: number[] }, fitted: boolean) => {
       const cloned = cloneSections(data.sections);
+      for (let i = 0; i < cloned.length; i++) {
+        cloned[i][5] = cloned[i][5].map(ensureCallArgs);
+      }
       setSections(cloned);
       setOpenings(linksToOpenings(cloned, data.links));
       setSelection(null);
+      const at =
+        data.start && data.start.length >= 2
+          ? { x: data.start[0], y: data.start[1] }
+          : { x: LAUNCHER_X, y: LAUNCHER_Y };
+      spawnRef.current = at;
+      setSpawn(at);
       setDirty(false);
       setStatusError(false);
       setStatus('Loaded src/model/levels.ts');
@@ -127,7 +140,7 @@ export const App = () => {
       simRef.current = null;
       return;
     }
-    simRef.current = createPlayState(sections, links);
+    simRef.current = createPlayState(sections, links, spawnRef.current);
     let last = performance.now();
     let acc = 0;
     let raf = 0;
@@ -348,10 +361,13 @@ export const App = () => {
 
   const onSave = async () => {
     try {
-      const rounded = roundLevel(sections, links);
-      await saveLevels(rounded.sections, rounded.links);
+      const rounded = roundLevel(sections, links, spawnRef.current);
+      await saveLevels(rounded.sections, rounded.links, rounded.start);
       setSections(rounded.sections);
       setOpenings(linksToOpenings(rounded.sections, rounded.links));
+      const at = { x: rounded.start[0], y: rounded.start[1] };
+      spawnRef.current = at;
+      setSpawn(at);
       setDirty(false);
       setStatusError(false);
       setStatus('Saved src/model/levels.ts');
@@ -408,6 +424,10 @@ export const App = () => {
   }, []);
 
   const onDropBall = (x: number, y: number) => {
+    const at = { x, y };
+    spawnRef.current = at;
+    setSpawn(at);
+    setDirty(true);
     if (simRef.current) {
       dropBall(simRef.current, x, y);
       setFrame(n => n + 1);
@@ -454,6 +474,7 @@ export const App = () => {
         tool={tool}
         cam={cam}
         playing={playing}
+        spawn={spawn}
         built={built}
         sim={playing ? simRef.current : null}
         onSections={markDirty}
