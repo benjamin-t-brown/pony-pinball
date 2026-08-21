@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { B_CIRCLE, B_FLIPPER_LEFT, B_LAUNCHER, B_WALLS } from '@game/model/builders';
+import { B_CIRCLE, B_CONVEYER, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_WALLS } from '@game/model/builders';
 import {
   PART_FIELD,
   PART_LAUNCHER,
@@ -18,18 +18,21 @@ import {
   applyHandle,
   clampDeltaInRect,
   clampLocal,
+  clampRectLocal,
   cloneSections,
   distToSegment,
   findSectionAt,
   findSharedEdgeAt,
   HANDLE_LIVE,
   handlePositions,
+  normalizeFieldRect,
   normalizeRect,
   px,
   sharedBoundary,
   snapPolar,
   snapRect,
   SNAP_PX,
+  ANGLE_SNAP,
   toLocal,
   type Handle,
 } from '../geometry';
@@ -38,7 +41,7 @@ import {
   DEFAULT_OPENING_WIDTH,
   openingSpan,
 } from '../openings';
-import { placeDefaults } from '../schema';
+import { placeDefaults, triggerDefFor } from '../schema';
 import type { Cam, Opening, SectionData, Selection, Tool } from '../types';
 
 type Drag =
@@ -54,6 +57,19 @@ type Drag =
     }
   | { kind: 'resize'; index: number; handle: Handle; orig: SectionData }
   | { kind: 'wall'; section: number; x0: number; y0: number }
+  | { kind: 'field'; section: number; x0: number; y0: number; id: number }
+  | {
+      kind: 'resizeField';
+      section: number;
+      call: number;
+      handle: Handle;
+      orig: [number, number, number, number];
+    }
+  | {
+      kind: 'rotateAim';
+      section: number;
+      call: number;
+    }
   | {
       kind: 'moveCall';
       section: number;
@@ -86,6 +102,11 @@ type Drag =
       kind: 'moveOpening';
       index: number;
       grab: number;
+    }
+  | {
+      kind: 'resizeOpening';
+      index: number;
+      fixed: number;
     };
 
 type Props = {
@@ -101,13 +122,95 @@ type Props = {
   onSections: (sections: SectionData[]) => void;
   onOpenings: (openings: Opening[]) => void;
   onSelection: (selection: Selection) => void;
+  onTool: (tool: Tool) => void;
   onCam: (cam: Cam) => void;
   onDropBall: (x: number, y: number) => void;
   onViewport: (w: number, h: number) => void;
   onCursor: (x: number, y: number) => void;
 };
 
+const isRectBuilder = (id: number) => {
+  return id === B_FIELD || id === B_CONVEYER;
+};
+
+const CONVEYER_ARROW_LEN = 28;
+
+const conveyerArrowWorld = (section: SectionData, call: number[]) => {
+  const cx = section[0] + call[1] + call[3] / 2;
+  const cy = section[1] + call[2] + call[4] / 2;
+  const angle = call[5];
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  return {
+    cx,
+    cy,
+    angle,
+    x0: cx - ca * CONVEYER_ARROW_LEN,
+    y0: cy - sa * CONVEYER_ARROW_LEN,
+    x1: cx + ca * CONVEYER_ARROW_LEN,
+    y1: cy + sa * CONVEYER_ARROW_LEN,
+  };
+};
+
+const hitConveyerTip = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+) => {
+  if (call[0] !== B_CONVEYER) {
+    return false;
+  }
+  const arrow = conveyerArrowWorld(section, call);
+  const hx = (arrow.x1 - cam.x) * cam.scale;
+  const hy = (arrow.y1 - cam.y) * cam.scale;
+  return Math.hypot(sx - hx, sy - hy) <= 10;
+};
+
 const LAUNCHER_LEN = 24;
+
+const launcherTipWorld = (section: SectionData, call: number[]) => {
+  const origin = callOrigin(section, call);
+  const dx = call[3];
+  const dy = call[4];
+  const len = Math.hypot(dx, dy) || 1;
+  return {
+    x: origin.x - (dx / len) * LAUNCHER_LEN,
+    y: origin.y - (dy / len) * LAUNCHER_LEN,
+    ox: origin.x,
+    oy: origin.y,
+  };
+};
+
+const hitLauncherTip = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+) => {
+  if (call[0] !== B_LAUNCHER) {
+    return false;
+  }
+  const tip = launcherTipWorld(section, call);
+  const hx = (tip.x - cam.x) * cam.scale;
+  const hy = (tip.y - cam.y) * cam.scale;
+  return Math.hypot(sx - hx, sy - hy) <= 10;
+};
+
+const hitAimTip = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+) => {
+  return (
+    hitConveyerTip(section, call, sx, sy, cam) ||
+    hitLauncherTip(section, call, sx, sy, cam)
+  );
+};
 
 const callOrigin = (section: SectionData, call: number[]) => {
   return { x: section[0] + call[1], y: section[1] + call[2] };
@@ -182,6 +285,13 @@ const hitsCall = (
   if (call[0] === B_CIRCLE) {
     const r = call[5];
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
+  }
+  if (isRectBuilder(call[0])) {
+    const x = origin.x;
+    const y = origin.y;
+    const w = call[3];
+    const h = call[4];
+    return wx >= x - slop && wx <= x + w + slop && wy >= y - slop && wy <= y + h + slop;
   }
   return Math.hypot(wx - origin.x, wy - origin.y) < slop * 2;
 };
@@ -263,6 +373,54 @@ const wallWorldEnds = (
   ] as const;
 };
 
+const openingWorldEnds = (
+  openings: Opening[],
+  sections: SectionData[],
+  index: number
+) => {
+  const span = openingSpan(openings[index], sections);
+  if (!span) {
+    return null;
+  }
+  if (span.axis === 'h') {
+    return [
+      { x: span.lo, y: span.pos },
+      { x: span.hi, y: span.pos },
+    ] as const;
+  }
+  return [
+    { x: span.pos, y: span.lo },
+    { x: span.pos, y: span.hi },
+  ] as const;
+};
+
+const hitOpeningEnd = (
+  openings: Opening[],
+  sections: SectionData[],
+  index: number,
+  sx: number,
+  sy: number,
+  cam: Cam
+): 0 | 1 | null => {
+  const ends = openingWorldEnds(openings, sections, index);
+  if (!ends) {
+    return null;
+  }
+  const r = 8;
+  let best: 0 | 1 | null = null;
+  let bestD = r;
+  for (let i = 0; i < 2; i++) {
+    const hx = (ends[i].x - cam.x) * cam.scale;
+    const hy = (ends[i].y - cam.y) * cam.scale;
+    const d = Math.hypot(sx - hx, sy - hy);
+    if (d <= bestD) {
+      bestD = d;
+      best = i as 0 | 1;
+    }
+  }
+  return best;
+};
+
 const hitWallEnd = (
   sections: SectionData[],
   sel: { section: number; call: number; segment: number },
@@ -307,6 +465,32 @@ const hitHandle = (
   return null;
 };
 
+const fieldWorld = (section: SectionData, call: number[]): SectionData => {
+  return [section[0] + call[1], section[1] + call[2], call[3], call[4], 0, []];
+};
+
+const fieldCorners = (rect: SectionData) => {
+  return handlePositions(rect).filter(h => h.id.length === 2);
+};
+
+const hitFieldHandle = (
+  rect: SectionData,
+  sx: number,
+  sy: number,
+  cam: Cam
+): Handle | null => {
+  const handles = fieldCorners(rect);
+  const r = 8;
+  for (let i = 0; i < handles.length; i++) {
+    const hx = (handles[i].x - cam.x) * cam.scale;
+    const hy = (handles[i].y - cam.y) * cam.scale;
+    if (Math.hypot(sx - hx, sy - hy) <= r) {
+      return handles[i].id;
+    }
+  }
+  return null;
+};
+
 const ensureWallsCall = (section: SectionData) => {
   for (let i = 0; i < section[5].length; i++) {
     if (section[5][i][0] === B_WALLS) {
@@ -330,6 +514,7 @@ export const WorldCanvas = ({
   onSections,
   onOpenings,
   onSelection,
+  onTool,
   onCam,
   onDropBall,
   onViewport,
@@ -349,8 +534,7 @@ export const WorldCanvas = ({
     x1: number;
     y1: number;
   } | null>(null);
-  const spaceRef = useRef(false);
-  const [space, setSpace] = useState(false);
+  const [showWallIds, setShowWallIds] = useState(false);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -370,25 +554,31 @@ export const WorldCanvas = ({
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        spaceRef.current = true;
-        setSpace(true);
-        if (!playing) {
-          e.preventDefault();
-        }
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        return;
+      }
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        setShowWallIds(true);
       }
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        spaceRef.current = false;
-        setSpace(false);
+      if (e.code === 'Tab') {
+        e.preventDefault();
+        setShowWallIds(false);
       }
+    };
+    const blur = () => {
+      setShowWallIds(false);
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
     return () => {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
     };
   }, [playing]);
 
@@ -440,14 +630,15 @@ export const WorldCanvas = ({
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     const { sx, sy, wx, wy } = localPoint(e);
     onCursor(wx, wy);
+    if (e.button === 1) {
+      e.preventDefault();
+      dragRef.current = { kind: 'pan', lx: e.clientX, ly: e.clientY };
+      return;
+    }
     if (playing) {
       if (e.button === 0) {
         onDropBall(wx, wy);
       }
-      return;
-    }
-    if (e.button === 1 || spaceRef.current) {
-      dragRef.current = { kind: 'pan', lx: e.clientX, ly: e.clientY };
       return;
     }
     if (e.button !== 0) {
@@ -473,12 +664,29 @@ export const WorldCanvas = ({
         const span = openingSpan(o, sections);
         onSelection(existing);
         if (span) {
-          const along = span.axis === 'h' ? wx : wy;
-          dragRef.current = {
-            kind: 'moveOpening',
-            index: existing.index,
-            grab: along - o.offset,
-          };
+          const end = hitOpeningEnd(
+            openings,
+            sections,
+            existing.index,
+            sx,
+            sy,
+            cam
+          );
+          if (end !== null) {
+            const o2 = openings[existing.index];
+            dragRef.current = {
+              kind: 'resizeOpening',
+              index: existing.index,
+              fixed: end === 0 ? o2.offset + o2.width : o2.offset,
+            };
+          } else {
+            const along = span.axis === 'h' ? wx : wy;
+            dragRef.current = {
+              kind: 'moveOpening',
+              index: existing.index,
+              grab: along - o.offset,
+            };
+          }
         }
         return;
       }
@@ -523,11 +731,50 @@ export const WorldCanvas = ({
         setWallGhost({ x0: wx, y0: wy, x1: wx, y1: wy });
         return;
       }
+      if (isRectBuilder(tool.id)) {
+        dragRef.current = {
+          kind: 'field',
+          section: si,
+          x0: local.x,
+          y0: local.y,
+          id: tool.id,
+        };
+        setGhost({ x: wx, y: wy, w: 0, h: 0 });
+        return;
+      }
       const next = cloneSections(sections);
       next[si][5].push(placeDefaults(tool.id, local.x, local.y));
       onSections(next);
       onSelection({ kind: 'call', section: si, call: next[si][5].length - 1 });
       return;
+    }
+
+    if (selection && selection.kind === 'call') {
+      const s = sections[selection.section];
+      const call = s && s[5][selection.call];
+      if (s && call) {
+        if (hitAimTip(s, call, sx, sy, cam)) {
+          dragRef.current = {
+            kind: 'rotateAim',
+            section: selection.section,
+            call: selection.call,
+          };
+          return;
+        }
+        if (isRectBuilder(call[0])) {
+          const handle = hitFieldHandle(fieldWorld(s, call), sx, sy, cam);
+          if (handle) {
+            dragRef.current = {
+              kind: 'resizeField',
+              section: selection.section,
+              call: selection.call,
+              handle,
+              orig: [call[1], call[2], call[3], call[4]],
+            };
+            return;
+          }
+        }
+      }
     }
 
     if (selection && selection.kind === 'section') {
@@ -550,6 +797,26 @@ export const WorldCanvas = ({
           };
           return;
         }
+      }
+    }
+
+    if (selection && selection.kind === 'opening') {
+      const end = hitOpeningEnd(
+        openings,
+        sections,
+        selection.index,
+        sx,
+        sy,
+        cam
+      );
+      if (end !== null) {
+        const o = openings[selection.index];
+        dragRef.current = {
+          kind: 'resizeOpening',
+          index: selection.index,
+          fixed: end === 0 ? o.offset + o.width : o.offset,
+        };
+        return;
       }
     }
 
@@ -580,17 +847,26 @@ export const WorldCanvas = ({
       };
     }
     if (hit && hit.kind === 'call') {
-      const call = sections[hit.section][5][hit.call];
+      const s = sections[hit.section];
+      const call = s && s[5][hit.call];
       if (call && call[0] !== B_WALLS && call.length >= 3) {
-        dragRef.current = {
-          kind: 'moveCall',
-          section: hit.section,
-          call: hit.call,
-          ox: call[1],
-          oy: call[2],
-          x0: wx,
-          y0: wy,
-        };
+        if (hitAimTip(s, call, sx, sy, cam)) {
+          dragRef.current = {
+            kind: 'rotateAim',
+            section: hit.section,
+            call: hit.call,
+          };
+        } else {
+          dragRef.current = {
+            kind: 'moveCall',
+            section: hit.section,
+            call: hit.call,
+            ox: call[1],
+            oy: call[2],
+            x0: wx,
+            y0: wy,
+          };
+        }
       }
     }
     if (hit && hit.kind === 'wall') {
@@ -626,12 +902,21 @@ export const WorldCanvas = ({
       const o = openings[hit.index];
       const span = openingSpan(o, sections);
       if (o && span) {
-        const along = span.axis === 'h' ? wx : wy;
-        dragRef.current = {
-          kind: 'moveOpening',
-          index: hit.index,
-          grab: along - o.offset,
-        };
+        const end = hitOpeningEnd(openings, sections, hit.index, sx, sy, cam);
+        if (end !== null) {
+          dragRef.current = {
+            kind: 'resizeOpening',
+            index: hit.index,
+            fixed: end === 0 ? o.offset + o.width : o.offset,
+          };
+        } else {
+          const along = span.axis === 'h' ? wx : wy;
+          dragRef.current = {
+            kind: 'moveOpening',
+            index: hit.index,
+            grab: along - o.offset,
+          };
+        }
       }
     }
   };
@@ -708,6 +993,77 @@ export const WorldCanvas = ({
       onOpenings(openings.map(o => clampOpening(o, next)));
       return;
     }
+    if (drag.kind === 'field') {
+      const s = sections[drag.section];
+      if (!s) {
+        return;
+      }
+      const cur = toLocal(s, wx, wy);
+      const p = clampLocal(s, cur.x, cur.y);
+      const raw = normalizeFieldRect(drag.x0, drag.y0, p.x, p.y);
+      const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
+      setGhost({
+        x: s[0] + clamped.x,
+        y: s[1] + clamped.y,
+        w: clamped.w,
+        h: clamped.h,
+      });
+      return;
+    }
+    if (drag.kind === 'resizeField') {
+      const s = sections[drag.section];
+      if (!s) {
+        return;
+      }
+      const p = toLocal(s, wx, wy);
+      const raw = applyHandle(
+        [drag.orig[0], drag.orig[1], drag.orig[2], drag.orig[3], 0, []],
+        drag.handle,
+        p.x,
+        p.y
+      );
+      const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
+      const next = cloneSections(sections);
+      const call = next[drag.section][5][drag.call];
+      if (call) {
+        call[1] = clamped.x;
+        call[2] = clamped.y;
+        call[3] = clamped.w;
+        call[4] = clamped.h;
+        onSections(next);
+      }
+      return;
+    }
+    if (drag.kind === 'rotateAim') {
+      const s = sections[drag.section];
+      const call = s && s[5][drag.call];
+      if (!s || !call) {
+        return;
+      }
+      const next = cloneSections(sections);
+      const nextCall = next[drag.section][5][drag.call];
+      if (call[0] === B_CONVEYER) {
+        const cx = s[0] + call[1] + call[3] / 2;
+        const cy = s[1] + call[2] + call[4] / 2;
+        let ang = Math.atan2(wy - cy, wx - cx);
+        if (e.shiftKey) {
+          ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
+        }
+        nextCall[5] = ang;
+      } else if (call[0] === B_LAUNCHER) {
+        const ox = s[0] + call[1];
+        const oy = s[1] + call[2];
+        // Tip is drawn opposite the launch dir; aim the tip at the cursor.
+        let ang = Math.atan2(wy - oy, wx - ox);
+        if (e.shiftKey) {
+          ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
+        }
+        nextCall[3] = -Math.cos(ang);
+        nextCall[4] = -Math.sin(ang);
+      }
+      onSections(next);
+      return;
+    }
     if (drag.kind === 'wall') {
       const s = sections[drag.section];
       let x1 = wx;
@@ -742,8 +1098,14 @@ export const WorldCanvas = ({
       const next = cloneSections(sections);
       const call = next[drag.section][5][drag.call];
       if (call && call.length >= 3) {
-        call[1] = local.x;
-        call[2] = local.y;
+        if (isRectBuilder(call[0])) {
+          const box = clampRectLocal(s, local.x, local.y, call[3], call[4]);
+          call[1] = box.x;
+          call[2] = box.y;
+        } else {
+          call[1] = local.x;
+          call[2] = local.y;
+        }
         onSections(next);
       }
       return;
@@ -814,6 +1176,23 @@ export const WorldCanvas = ({
         sections
       );
       onOpenings(next);
+      return;
+    }
+    if (drag.kind === 'resizeOpening') {
+      const o = openings[drag.index];
+      const span = o ? openingSpan(o, sections) : null;
+      if (!o || !span) {
+        return;
+      }
+      const along = span.axis === 'h' ? wx : wy;
+      const lo = Math.min(along, drag.fixed);
+      const hi = Math.max(along, drag.fixed);
+      const next = openings.slice();
+      next[drag.index] = clampOpening(
+        { ...o, offset: lo, width: Math.max(8, hi - lo) },
+        sections
+      );
+      onOpenings(next);
     }
   };
 
@@ -841,6 +1220,28 @@ export const WorldCanvas = ({
       next.push([snapped.x, snapped.y, snapped.w, snapped.h, 0, []]);
       onSections(next);
       onSelection({ kind: 'section', index: next.length - 1 });
+    }
+    if (drag.kind === 'field') {
+      const { wx, wy } = localPoint(e);
+      const s = sections[drag.section];
+      if (s) {
+        const cur = toLocal(s, wx, wy);
+        const p = clampLocal(s, cur.x, cur.y);
+        const raw = normalizeFieldRect(drag.x0, drag.y0, p.x, p.y);
+        const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
+        const next = cloneSections(sections);
+        const call = placeDefaults(drag.id, clamped.x, clamped.y);
+        call[3] = clamped.w;
+        call[4] = clamped.h;
+        next[drag.section][5].push(call);
+        onSections(next);
+        onSelection({
+          kind: 'call',
+          section: drag.section,
+          call: next[drag.section][5].length - 1,
+        });
+        onTool({ kind: 'select' });
+      }
     }
     if (drag.kind === 'wall') {
       const { wx, wy } = localPoint(e);
@@ -874,10 +1275,30 @@ export const WorldCanvas = ({
   let cursor = 'default';
   if (playing) {
     cursor = 'crosshair';
-  } else if (space) {
-    cursor = 'grab';
   } else if (tool.kind !== 'select') {
     cursor = 'crosshair';
+  }
+
+  let triggerWalls: Set<number> | null = null;
+  let triggerWallSection = -1;
+  if (selection && selection.kind === 'call') {
+    const call = sections[selection.section]?.[5][selection.call];
+    if (call && call[0] === B_FIELD) {
+      const trig = triggerDefFor(call[5] ?? 0);
+      const walls = new Set<number>();
+      for (let a = 0; a < trig.args.length; a++) {
+        if (trig.args[a] === 'wall') {
+          const wi = call[6 + a];
+          if (wi >= 0) {
+            walls.add(wi);
+          }
+        }
+      }
+      if (walls.size) {
+        triggerWalls = walls;
+        triggerWallSection = selection.section;
+      }
+    }
   }
 
   return (
@@ -900,25 +1321,75 @@ export const WorldCanvas = ({
                 selection.kind === 'section' &&
                 selection.index === section.id
               }
+              highlightWalls={
+                triggerWallSection === section.id ? triggerWalls : null
+              }
             />
           ))}
+          {showWallIds
+            ? built.map(section =>
+                section.walls.map((w, i) => (
+                  <text
+                    key={'wi' + section.id + '-' + i}
+                    x={(w.a.x + w.b.x) / 2 + section.x}
+                    y={(w.a.y + w.b.y) / 2 + section.y}
+                    fill="#fc8"
+                    stroke="#000"
+                    strokeWidth={3 / cam.scale}
+                    paintOrder="stroke"
+                    fontSize={12 / cam.scale}
+                    fontWeight="bold"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                  >
+                    {i}
+                  </text>
+                ))
+              )
+            : null}
           {openings.map((o, i) => {
             const span = openingSpan(o, sections);
             if (!span) {
               return null;
             }
             const selected = selection && selection.kind === 'opening' && selection.index === i;
+            const hs = 5 / cam.scale;
             return (
-              <line
-                key={'o' + i}
-                x1={span.axis === 'h' ? span.lo : span.pos}
-                y1={span.axis === 'h' ? span.pos : span.lo}
-                x2={span.axis === 'h' ? span.hi : span.pos}
-                y2={span.axis === 'h' ? span.pos : span.hi}
-                stroke={selected ? '#fc8' : '#6c8'}
-                strokeWidth={selected ? 10 : 8}
-                strokeLinecap="round"
-              />
+              <g key={'o' + i}>
+                <line
+                  x1={span.axis === 'h' ? span.lo : span.pos}
+                  y1={span.axis === 'h' ? span.pos : span.lo}
+                  x2={span.axis === 'h' ? span.hi : span.pos}
+                  y2={span.axis === 'h' ? span.pos : span.hi}
+                  stroke={selected ? '#fc8' : '#6c8'}
+                  strokeWidth={selected ? 10 : 8}
+                  strokeLinecap="round"
+                />
+                {selected && !playing
+                  ? (
+                    <>
+                      <rect
+                        x={(span.axis === 'h' ? span.lo : span.pos) - hs}
+                        y={(span.axis === 'h' ? span.pos : span.lo) - hs}
+                        width={hs * 2}
+                        height={hs * 2}
+                        fill="#fff"
+                        stroke="#000"
+                        strokeWidth={1 / cam.scale}
+                      />
+                      <rect
+                        x={(span.axis === 'h' ? span.hi : span.pos) - hs}
+                        y={(span.axis === 'h' ? span.pos : span.hi) - hs}
+                        width={hs * 2}
+                        height={hs * 2}
+                        fill="#fff"
+                        stroke="#000"
+                        strokeWidth={1 / cam.scale}
+                      />
+                    </>
+                  )
+                  : null}
+              </g>
             );
           })}
           {tool.kind === 'opening'
@@ -948,6 +1419,30 @@ export const WorldCanvas = ({
           ) : null}
           {selection && selection.kind === 'call'
             ? callMarker(sections, selection.section, selection.call, cam.scale)
+            : null}
+          {selection &&
+          selection.kind === 'call' &&
+          !playing &&
+          sections[selection.section] &&
+          sections[selection.section][5][selection.call] &&
+          isRectBuilder(sections[selection.section][5][selection.call][0])
+            ? fieldCorners(
+                fieldWorld(
+                  sections[selection.section],
+                  sections[selection.section][5][selection.call]
+                )
+              ).map(h => (
+                <rect
+                  key={h.id}
+                  x={h.x - 5 / cam.scale}
+                  y={h.y - 5 / cam.scale}
+                  width={10 / cam.scale}
+                  height={10 / cam.scale}
+                  fill="#fff"
+                  stroke="#000"
+                  strokeWidth={1 / cam.scale}
+                />
+              ))
             : null}
           {selection && selection.kind === 'wall'
             ? wallMarker(sections, selection, cam.scale)
@@ -1001,8 +1496,8 @@ export const WorldCanvas = ({
       </svg>
       <div className="hint">
         {playing
-          ? 'Click to drop the ball. Z / ← left flipper, / / → right, Space launch. Wheel zooms.'
-          : 'Space-drag pan, wheel zoom. C clones the selected builder at the cursor. Shift locks wall angle (15°).'}
+          ? 'Click to drop the ball. Middle-drag pans. R resets. Esc stops. Z / ← left flipper, / / → right, Space launch. Wheel zooms.'
+          : 'Space plays, Esc stops. Middle-drag pan, wheel zoom. C clones the selected builder at the cursor. Shift locks wall angle (15°).'}
       </div>
     </div>
   );
@@ -1065,6 +1560,46 @@ const callMarker = (
           strokeDasharray={`${8 / scale} ${6 / scale}`}
         />
       ) : null}
+      {isRectBuilder(call[0]) ? (
+        <rect
+          x={origin.x}
+          y={origin.y}
+          width={call[3]}
+          height={call[4]}
+          fill="none"
+          stroke="#fc8"
+          strokeWidth={2 / scale}
+        />
+      ) : null}
+      {call[0] === B_CONVEYER
+        ? (() => {
+            const arrow = conveyerArrowWorld(s, call);
+            const tip = 5 / scale;
+            const ca = Math.cos(arrow.angle);
+            const sa = Math.sin(arrow.angle);
+            return (
+              <g>
+                {conveyerArrowMarks(
+                  arrow.cx,
+                  arrow.cy,
+                  ca,
+                  sa,
+                  CONVEYER_ARROW_LEN,
+                  '#fc8',
+                  4 / scale
+                )}
+                <circle
+                  cx={arrow.x1}
+                  cy={arrow.y1}
+                  r={tip}
+                  fill="#fff"
+                  stroke="#000"
+                  strokeWidth={1 / scale}
+                />
+              </g>
+            );
+          })()
+        : null}
       {segment ? (
         <line
           x1={segment.x0}
@@ -1076,15 +1611,27 @@ const callMarker = (
           strokeLinecap="round"
         />
       ) : null}
-      <rect
-        x={origin.x - hs}
-        y={origin.y - hs}
-        width={hs * 2}
-        height={hs * 2}
-        fill="#fff"
-        stroke="#000"
-        strokeWidth={1 / scale}
-      />
+      {call[0] === B_LAUNCHER && segment ? (
+        <circle
+          cx={segment.x1}
+          cy={segment.y1}
+          r={5 / scale}
+          fill="#fff"
+          stroke="#000"
+          strokeWidth={1 / scale}
+        />
+      ) : null}
+      {!isRectBuilder(call[0]) && call[0] !== B_LAUNCHER ? (
+        <rect
+          x={origin.x - hs}
+          y={origin.y - hs}
+          width={hs * 2}
+          height={hs * 2}
+          fill="#fff"
+          stroke="#000"
+          strokeWidth={1 / scale}
+        />
+      ) : null}
     </g>
   );
 };
@@ -1141,9 +1688,11 @@ const wallMarker = (
 const SectionPreview = ({
   section,
   selected,
+  highlightWalls,
 }: {
   section: Section;
   selected: boolean;
+  highlightWalls: Set<number> | null;
 }) => {
   return (
     <g transform={`translate(${section.x} ${section.y})`}>
@@ -1157,18 +1706,27 @@ const SectionPreview = ({
       <text x={8} y={18} fill="#fff" fontSize={14} fontWeight="bold">
         {section.id}
       </text>
-      {section.walls.map((w, i) => (
-        <line
-          key={'w' + i}
-          x1={w.a.x}
-          y1={w.a.y}
-          x2={w.b.x}
-          y2={w.b.y}
-          stroke="#888"
-          strokeWidth={4}
-          strokeLinecap="round"
-        />
-      ))}
+      {section.walls.map((w, i) => {
+        const lit = highlightWalls && highlightWalls.has(i);
+        return (
+          <line
+            key={'w' + i}
+            x1={w.a.x}
+            y1={w.a.y}
+            x2={w.b.x}
+            y2={w.b.y}
+            stroke={
+              lit
+                ? '#fc8'
+                : w.rest < 0
+                  ? 'rgba(136,136,136,0.2)'
+                  : '#888'
+            }
+            strokeWidth={lit ? 7 : 4}
+            strokeLinecap="round"
+          />
+        );
+      })}
       {section.parts.map((part, i) => (
         <PartPreview key={'p' + i} part={part} />
       ))}
@@ -1176,17 +1734,60 @@ const SectionPreview = ({
   );
 };
 
+const conveyerArrowMarks = (
+  cx: number,
+  cy: number,
+  ca: number,
+  sa: number,
+  len: number,
+  stroke: string,
+  strokeWidth: number
+) => {
+  const tipX = cx + ca * len;
+  const tipY = cy + sa * len;
+  const head = Math.max(8, len * 0.35);
+  const bx = tipX - ca * head;
+  const by = tipY - sa * head;
+  const pxOff = -sa * head * 0.65;
+  const pyOff = ca * head * 0.65;
+  return (
+    <g stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round">
+      <line x1={cx - ca * len} y1={cy - sa * len} x2={tipX} y2={tipY} />
+      <line x1={tipX} y1={tipY} x2={bx + pxOff} y2={by + pyOff} />
+      <line x1={tipX} y1={tipY} x2={bx - pxOff} y2={by - pyOff} />
+    </g>
+  );
+};
+
 const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
   if (part.type === PART_FIELD) {
     const field = part as Field;
+    const conveyer = !field.trigger && field.grav === 0;
+    const fill = conveyer
+      ? field.inside
+        ? 'rgba(240,200,80,0.4)'
+        : 'rgba(200,160,50,0.22)'
+      : field.inside
+        ? 'rgba(120,200,255,0.35)'
+        : 'rgba(70,140,220,0.18)';
+    const forceLen = Math.hypot(field.ax, field.ay);
+    const cx = field.x + field.w / 2;
+    const cy = field.y + field.h / 2;
+    const ca = forceLen > 0 ? field.ax / forceLen : 1;
+    const sa = forceLen > 0 ? field.ay / forceLen : 0;
     return (
-      <rect
-        x={field.x}
-        y={field.y}
-        width={field.w}
-        height={field.h}
-        fill="rgba(70,140,220,0.18)"
-      />
+      <g>
+        <rect
+          x={field.x}
+          y={field.y}
+          width={field.w}
+          height={field.h}
+          fill={fill}
+        />
+        {conveyer && forceLen > 0
+          ? conveyerArrowMarks(cx, cy, ca, sa, CONVEYER_ARROW_LEN, '#fc8', 3)
+          : null}
+      </g>
     );
   }
   if (part.type === PART_PADDLE) {

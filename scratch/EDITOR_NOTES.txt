@@ -25,7 +25,7 @@ the real Paddle physics instead of a reimplementation that drifts out of sync.
 
 OUTPUT: A GENERATED .ts FILE, NOT A FETCHED ASSET
 -------------------------------------------------
-The editor writes src/model/levels.ts as a normal generated-and-committed
+The editor writes src/levels.ts as a normal generated-and-committed
 source file. It then rides the existing build with zero special handling: no
 fetch, no runtime parser, no build-step string replacement.
 
@@ -154,7 +154,7 @@ survive minification; names do not.
 ROUND-TRIPPING (undecided)
 --------------------------
 Two options, not yet chosen:
-  a) Editor imports src/model/levels.ts directly and writes it back through a
+  a) Editor imports src/levels.ts directly and writes it back through a
      small Vite dev-server POST handler. Simple, always in sync.
   b) Editor keeps its own working file and exports on demand.
 

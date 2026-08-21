@@ -8,6 +8,7 @@ import type { SectionData } from './types';
 
 export const SNAP_PX = 8;
 export const MIN_SECTION = 40;
+export const MIN_FIELD = 8;
 
 export type EdgeWorld = {
   axis: 'h' | 'v';
@@ -107,6 +108,38 @@ export const clampLocal = (section: SectionData, x: number, y: number) => {
   return {
     x: px(Math.max(0, Math.min(section[2], x))),
     y: px(Math.max(0, Math.min(section[3], y))),
+  };
+};
+
+export const clampRectLocal = (
+  section: SectionData,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) => {
+  let nw = Math.max(MIN_FIELD, w);
+  let nh = Math.max(MIN_FIELD, h);
+  nw = Math.min(nw, section[2]);
+  nh = Math.min(nh, section[3]);
+  const nx = Math.max(0, Math.min(section[2] - nw, x));
+  const ny = Math.max(0, Math.min(section[3] - nh, y));
+  return { x: px(nx), y: px(ny), w: px(nw), h: px(nh) };
+};
+
+export const normalizeFieldRect = (
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number
+) => {
+  const x = Math.min(x0, x1);
+  const y = Math.min(y0, y1);
+  return {
+    x,
+    y,
+    w: Math.max(MIN_FIELD, Math.abs(x1 - x0)),
+    h: Math.max(MIN_FIELD, Math.abs(y1 - y0)),
   };
 };
 

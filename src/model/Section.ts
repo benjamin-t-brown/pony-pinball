@@ -1,4 +1,4 @@
-import { Line, lineCreate } from '../sim/physics';
+import { Line, lineCreate, lineSet } from '../sim/physics';
 import type { Part } from './Part';
 
 /** Perimeter edge bits, in the order applyPerimeter walks them. */
@@ -197,22 +197,32 @@ export const forEachPart = (
 //   }
 // };
 
-export const flattenSectionWalls = (sections: Section[]): Line[] => {
-  const walls: Line[] = [];
+export const flattenSectionWalls = (
+  sections: Section[],
+  into?: Line[]
+): Line[] => {
+  const walls = into || [];
+  let n = 0;
   for (let i = 0; i < sections.length; i++) {
     const s = sections[i];
     for (let j = 0; j < s.walls.length; j++) {
       const wall = s.walls[j];
-      walls.push(
-        lineCreate(
-          wall.a.x + s.x,
-          wall.a.y + s.y,
-          wall.b.x + s.x,
-          wall.b.y + s.y,
-          wall.rest
-        )
-      );
+      if (wall.rest < 0) {
+        continue;
+      }
+      const x0 = wall.a.x + s.x;
+      const y0 = wall.a.y + s.y;
+      const x1 = wall.b.x + s.x;
+      const y1 = wall.b.y + s.y;
+      if (n < walls.length) {
+        lineSet(walls[n], x0, y0, x1, y1);
+        walls[n].rest = wall.rest;
+      } else {
+        walls.push(lineCreate(x0, y0, x1, y1, wall.rest));
+      }
+      n++;
     }
   }
+  walls.length = n;
   return walls;
 };

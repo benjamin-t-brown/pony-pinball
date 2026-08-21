@@ -1,5 +1,5 @@
 import { getGameRoot } from './dom';
-import { LayerManager } from './LayerManager';
+import { LayerManager } from './layers/LayerManager';
 import { DebugLayer } from './layers/DebugLayer';
 import { SimLayer } from './layers/SimLayer';
 import { SimUiLayer } from './layers/SimUiLayer';

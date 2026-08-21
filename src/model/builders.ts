@@ -1,21 +1,22 @@
 import { lineCreate } from '../sim/physics';
-import type { SectionData } from './levels';
+import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
+import { Field } from './parts/Field';
 import { Launcher } from './parts/Launcher';
 import { makeCircle } from './parts/Obstacle';
 import { Paddle } from './parts/Paddle';
 import { type Section, sectionCreate } from './Section';
-
-export const START = 0;
+import { TRIGGERS, Trigger } from './Trigger';
 
 export const BG = ['#555', '#466', '#645'];
 
 export const B_WALLS = 0;
 export const B_LAUNCHER = 2;
 // export const B_BUMPER = 3;
-// export const B_FIELD = 4;
+export const B_FIELD = 4;
 export const B_FLIPPER_LEFT = 5;
 export const B_CIRCLE = 6;
+export const B_CONVEYER = 7;
 
 export const SECTION_SIDE_BOTTOM = 0;
 export const SECTION_SIDE_TOP = 1;
@@ -52,6 +53,33 @@ BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
 
 BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
   s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
+};
+
+BUILDERS[B_FIELD] = (s, data) => {
+  const x = data[0];
+  const y = data[1];
+  const w = data[2];
+  const h = data[3];
+  const id = data[4];
+  const Ctor = TRIGGERS[id] || Trigger;
+  const field = new Field(x, y, w, h);
+  field.trigger = new Ctor(data.slice(5));
+  s.parts.push(field);
+};
+
+BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
+  const field = new Field(
+    x,
+    y,
+    w,
+    h,
+    0,
+    Math.cos(angle) * power,
+    Math.sin(angle) * power,
+    maxSpeed
+  );
+  field.drag = drag;
+  s.parts.push(field);
 };
 
 BUILDERS[B_CIRCLE] = (

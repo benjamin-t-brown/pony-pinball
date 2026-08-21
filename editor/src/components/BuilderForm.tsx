@@ -1,6 +1,6 @@
-import { B_WALLS } from '@game/model/builders';
+import { B_FIELD, B_WALLS } from '@game/model/builders';
 import type { SectionData, Selection } from '../types';
-import { defFor } from '../schema';
+import { defFor, TRIGGER_DEFS, triggerDefFor } from '../schema';
 import { cloneSections } from '../geometry';
 
 type Props = {
@@ -55,27 +55,60 @@ export const BuilderForm = ({ sections, selection, onChange }: Props) => {
   }
 
   const def = defFor(call[0]);
+  const trig = call[0] === B_FIELD ? triggerDefFor(call[5]) : null;
+  const params = def
+    ? def.params
+    : call.slice(1).map((_n: number, i: number) => ({ name: `arg${i}` }));
+  const extra = trig ? trig.args.map(name => ({ name })) : [];
   return (
     <div>
       <h2>{def ? def.name : `Builder ${call[0]}`}</h2>
-      {(def
-        ? def.params
-        : call.slice(1).map((_n: number, i: number) => ({ name: `arg${i}` }))
-      ).map((param: { name: string; step?: number }, i: number) => (
-          <div className="field" key={param.name}>
+      {[...params, ...extra].map((param: { name: string; step?: number }, i: number) => (
+          <div className="field" key={param.name + i}>
             <label>{param.name}</label>
-            <input
-              type="number"
-              step={param.step ?? 1}
-              value={call[i + 1] ?? 0}
-              onChange={e => {
-                setArg(
-                  i + 1,
-                  Number(e.target.value),
-                  param.name === 'x' || param.name === 'y'
-                );
-              }}
-            />
+            {param.name === 'trigger' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  const id = Number(e.target.value);
+                  const next = cloneSections(sections);
+                  const nextCall = next[selection.section][5][selection.call];
+                  nextCall[5] = id;
+                  const names = triggerDefFor(id).args;
+                  const n = 6 + names.length;
+                  while (nextCall.length < n) {
+                    nextCall.push(0);
+                  }
+                  nextCall.length = n;
+                  onChange(next);
+                }}
+              >
+                {TRIGGER_DEFS.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="number"
+                step={param.step ?? 1}
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(
+                    i + 1,
+                    Number(e.target.value),
+                    param.name === 'x' ||
+                      param.name === 'y' ||
+                      param.name === 'w' ||
+                      param.name === 'h' ||
+                      param.name === 'wall' ||
+                      param.name === 'onDelay' ||
+                      param.name === 'offDelay'
+                  );
+                }}
+              />
+            )}
           </div>
         )
       )}

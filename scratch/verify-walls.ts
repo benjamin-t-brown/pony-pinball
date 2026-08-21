@@ -5,7 +5,7 @@
  *
  * Run: npx tsx scratch/verify-walls.ts
  */
-import { buildLevel } from '../src/model/levels';
+import { buildLevel } from '../src/model/builders';
 import { flattenSectionWalls } from '../src/model/Section';
 
 // ---- the old hardcoded level, transcribed from git HEAD ----

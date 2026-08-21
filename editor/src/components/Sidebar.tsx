@@ -54,7 +54,7 @@ export const Sidebar = ({
     <aside className="sidebar">
       <h1>Level editor</h1>
       <div className="row">
-        <button onClick={onSave} disabled={playing}>
+        <button onClick={onSave}>
           Save{dirty ? ' *' : ''}
         </button>
         <button

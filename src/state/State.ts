@@ -2,7 +2,7 @@ import { Ball, ballCreate } from '../model/Ball';
 import { buildLevel } from '../model/builders';
 import { Section, flattenSectionWalls } from '../model/Section';
 import { Line } from '../sim/physics';
-import { LINKS, SECTIONS, START } from '../model/levels';
+import { LINKS, SECTIONS, START } from '../levels';
 
 export type State = {
   balls: Ball[];

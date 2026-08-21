@@ -1,5 +1,7 @@
 import { type Circle, vecLen, vecMul } from '../../sim/physics';
 import { PART_FIELD, Part } from '../Part';
+import type { Section } from '../Section';
+import type { Trigger } from '../Trigger';
 
 export class Field extends Part {
   w = 0;
@@ -11,6 +13,7 @@ export class Field extends Part {
   ay = 0;
   drag = 0;
   maxSpeed = 0;
+  trigger: Trigger | null = null;
 
   constructor(
     x: number,
@@ -53,19 +56,55 @@ export class Field extends Part {
     ox: number,
     oy: number,
     dtSeconds: number,
-    g: number
+    g: number,
+    section: Section
   ) {
     const inNow =
       this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
     if (inNow && !this.inside) {
       this.onEnter();
+      if (this.trigger) {
+        this.trigger.onActivated(section);
+      }
     } else if (!inNow && this.inside) {
       this.onExit();
+      if (this.trigger) {
+        this.trigger.onDeactivated(section);
+      }
     }
     this.inside = inNow;
+    if (this.trigger) {
+      this.trigger.onUpdate(dtSeconds * 1000, section);
+    }
     if (!inNow) {
       return g;
     }
+    if (this.trigger) {
+      return g;
+    }
+
+    // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
+    // motion so the ball settles into the stream instead of skating across it.
+    const forceLen = Math.hypot(this.ax, this.ay);
+    if (this.grav === 0 && forceLen > 0) {
+      const nx = this.ax / forceLen;
+      const ny = this.ay / forceLen;
+      const along = ball.vel.x * nx + ball.vel.y * ny;
+      const catchRate = this.drag > 0 ? this.drag : 4;
+      const damp = Math.max(0, 1 - catchRate * dtSeconds);
+      let newAlong = along + forceLen * dtSeconds;
+      if (this.maxSpeed > 0) {
+        if (newAlong > this.maxSpeed) {
+          newAlong = this.maxSpeed;
+        } else if (newAlong < -this.maxSpeed) {
+          newAlong = -this.maxSpeed;
+        }
+      }
+      ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
+      ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
+      return 0;
+    }
+
     ball.vel.x += this.ax * dtSeconds;
     ball.vel.y += this.ay * dtSeconds;
     if (this.drag > 0) {

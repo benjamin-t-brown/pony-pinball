@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import fs from 'fs';
 import path from 'path';
 import type { Plugin, ViteDevServer } from 'vite';
-import { generateLevelsTs } from './src/generateLevels';
 
 const readBody = (req: IncomingMessage) => {
   return new Promise<string>((resolve, reject) => {
@@ -23,15 +22,30 @@ const sendJson = (res: ServerResponse, status: number, body: unknown) => {
   res.end(JSON.stringify(body));
 };
 
+const roundStart = (start?: number[]) => {
+  if (!start || start.length < 2) {
+    return [384, 582];
+  }
+  return [Math.round(start[0]), Math.round(start[1])];
+};
+
+const ensureStartExport = (source: string, start: number[]) => {
+  const line = `export const START = [${start[0]}, ${start[1]}];`;
+  if (/export const START\s*=/.test(source)) {
+    return source.replace(/export const START\s*=\s*\[[^\]]*\];/, line);
+  }
+  return `${source.replace(/\s*$/, '')}\n\n/** world x, y */\n${line}\n`;
+};
+
 export const levelsApiPlugin = (repoRoot: string): Plugin => {
-  const levelsPath = path.join(repoRoot, 'src', 'model', 'levels.ts');
+  const levelsPath = path.join(repoRoot, 'src', 'levels.ts');
   return {
     name: 'levels-api',
     configureServer(server: ViteDevServer) {
       server.middlewares.use('/api/levels', (req, res, next) => {
         const handle = async () => {
           if (req.method === 'GET') {
-            const mod = await server.ssrLoadModule('@game/model/levels.ts');
+            const mod = await server.ssrLoadModule('@game/levels.ts');
             sendJson(res, 200, {
               sections: mod.SECTIONS,
               links: mod.LINKS,
@@ -57,7 +71,16 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
               sendJson(res, 400, { error: 'invalid path' });
               return;
             }
-            const source = generateLevelsTs(data.sections, data.links, data.start);
+            const start = roundStart(data.start);
+            const gen = (await server.ssrLoadModule('/src/generateLevels.ts')) as {
+              generateLevelsTs: (
+                sections: unknown,
+                links: unknown,
+                start?: number[]
+              ) => string;
+            };
+            let source = gen.generateLevelsTs(data.sections, data.links, start);
+            source = ensureStartExport(source, start);
             fs.writeFileSync(resolved, source);
             sendJson(res, 200, { ok: true });
             return;

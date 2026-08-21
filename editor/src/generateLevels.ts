@@ -1,11 +1,22 @@
 import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
+import {
+  TRIGGER_DEACTIVATE_WALL,
+  TRIGGER_MOVE_DOOR,
+} from '@game/model/Trigger';
 import type { SectionData } from './types';
 
 const BUILDER_NAMES: Record<number, string> = {
   0: 'B_WALLS',
   2: 'B_LAUNCHER',
+  4: 'B_FIELD',
   5: 'B_FLIPPER_LEFT',
   6: 'B_CIRCLE',
+  7: 'B_CONVEYER',
+};
+
+const TRIGGER_NAMES: Record<number, string> = {
+  [TRIGGER_DEACTIVATE_WALL]: 'TRIGGER_DEACTIVATE_WALL',
+  [TRIGGER_MOVE_DOOR]: 'TRIGGER_MOVE_DOOR',
 };
 
 const SIDE_NAMES = [
@@ -37,6 +48,15 @@ const formatCall = (call: number[], indent: string) => {
     lines.push(`${indent}]`);
     return lines.join('\n');
   }
+  if (id === 4) {
+    const trig = TRIGGER_NAMES[args[4]] || formatNum(args[4]);
+    const nums = [
+      ...args.slice(0, 4).map(formatNum),
+      trig,
+      ...args.slice(5).map(formatNum),
+    ];
+    return `${indent}[${[name, ...nums].join(', ')}]`;
+  }
   return `${indent}[${[name, ...args.map(formatNum)].join(', ')}]`;
 };
 
@@ -44,6 +64,19 @@ const roundCall = (call: number[]) => {
   const next = call.slice();
   if (next[0] === 0) {
     for (let i = 1; i < next.length; i++) {
+      next[i] = Math.round(next[i]);
+    }
+    return next;
+  }
+  if (next[0] === 4) {
+    const end = next[5] === 1 ? 7 : next.length;
+    for (let i = 1; i < end && i < next.length; i++) {
+      next[i] = Math.round(next[i]);
+    }
+    return next;
+  }
+  if (next[0] === 7) {
+    for (let i = 1; i <= 4 && i < next.length; i++) {
       next[i] = Math.round(next[i]);
     }
     return next;
@@ -97,11 +130,18 @@ export const generateLevelsTs = (
   const spawn = rounded.start;
   const builderNames = new Set<string>();
   const sideNames = new Set<string>();
+  const triggerNames = new Set<string>();
   for (const section of sections) {
     for (const call of section[5]) {
       const name = BUILDER_NAMES[call[0]];
       if (name) {
         builderNames.add(name);
+      }
+      if (call[0] === 4) {
+        const trig = TRIGGER_NAMES[call[5]];
+        if (trig) {
+          triggerNames.add(trig);
+        }
       }
     }
   }
@@ -114,9 +154,12 @@ export const generateLevelsTs = (
 
   const imports = [...builderNames, ...sideNames].sort();
   const importBlock =
-    imports.length > 0
-      ? `import {\n  ${imports.join(',\n  ')},\n} from './builders';\n`
-      : `import {} from './builders';\n`;
+    (imports.length > 0
+      ? `import {\n  ${imports.join(',\n  ')},\n} from './model/builders';\n`
+      : `import {} from './model/builders';\n`) +
+    (triggerNames.size > 0
+      ? `import {\n  ${[...triggerNames].sort().join(',\n  ')},\n} from './model/Trigger';\n`
+      : '');
 
   const sectionLines: string[] = [];
   for (const s of sections) {

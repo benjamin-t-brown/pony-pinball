@@ -1,5 +1,5 @@
-import { LAYER_OFF, LAYER_ON, Layer } from './layers/Layer';
-import type { StateManager } from './state/StateManager';
+import { LAYER_OFF, LAYER_ON, Layer } from './Layer';
+import type { StateManager } from '../state/StateManager';
 
 // the smaller this is, the smaller the physics step and
 // less chance the ball phases through walls, but more cpu power used

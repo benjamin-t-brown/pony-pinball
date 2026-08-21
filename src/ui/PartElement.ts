@@ -82,6 +82,35 @@ export class PartElement extends UiElement {
         height: px(field.h),
         [POINTER_EVENTS]: 'none',
       });
+      const forceLen = Math.hypot(field.ax, field.ay);
+      if (!field.trigger && field.grav === 0 && forceLen > 0) {
+        const svg = createSvgElement(SVG, {
+          width: stringify(field.w),
+          height: stringify(field.h),
+        }) as SVGSVGElement;
+        setStyle(svg as unknown as HTMLElement, {
+          position: 'absolute',
+          inset: '0',
+          overflow: 'visible',
+          [POINTER_EVENTS]: 'none',
+        });
+        const nx = field.ax / forceLen;
+        const ny = field.ay / forceLen;
+        const cx = field.w / 2;
+        const cy = field.h / 2;
+        const len = 28;
+        const head = 10;
+        const tipX = cx + nx * len;
+        const tipY = cy + ny * len;
+        const bx = tipX - nx * head;
+        const by = tipY - ny * head;
+        const pxOff = -ny * head * 0.65;
+        const pyOff = nx * head * 0.65;
+        this.addLine(svg, cx - nx * len, cy - ny * len, tipX, tipY, '#fc8', '3');
+        this.addLine(svg, tipX, tipY, bx + pxOff, by + pyOff, '#fc8', '3');
+        this.addLine(svg, tipX, tipY, bx - pxOff, by - pyOff, '#fc8', '3');
+        appendChild(el, svg as unknown as HTMLElement);
+      }
       this.attach(el);
       this.render(0);
       return;
@@ -154,9 +183,18 @@ export class PartElement extends UiElement {
 
     if (part.type === PART_FIELD) {
       const field = part as Field;
-      let bg = 'rgba(70,140,220,0.08)';
+      const conveyer = !field.trigger && field.grav === 0;
+      let bg = conveyer ? 'rgba(180,140,40,0.08)' : 'rgba(70,140,220,0.08)';
       if (field.active) {
-        bg = field.inside ? 'rgba(120,200,255,0.35)' : 'rgba(70,160,255,0.18)';
+        if (conveyer) {
+          bg = field.inside
+            ? 'rgba(240,200,80,0.4)'
+            : 'rgba(200,160,50,0.22)';
+        } else {
+          bg = field.inside
+            ? 'rgba(120,200,255,0.35)'
+            : 'rgba(70,160,255,0.18)';
+        }
       }
       if (this.el) {
         setStyle(this.el, { background: bg });

@@ -1,6 +1,10 @@
 import { ballCreate, ballIsOutOfBounds, type Ball } from '../model/Ball';
 import { MAX_BALL_SPEED } from '../model/constants';
-import { forEachPart, sectionContains } from '../model/Section';
+import {
+  flattenSectionWalls,
+  forEachPart,
+  sectionContains,
+} from '../model/Section';
 import {
   GRAVITY,
   circleIntegrate,
@@ -69,7 +73,7 @@ export const updateParts = (state: State, dt: number) => {
 export const preBallParts = (ball: Ball, state: State, dtSeconds: number) => {
   let g = GRAVITY;
   forEachPart(state.sections, (part, section) => {
-    g = part.preBall(ball, section.x, section.y, dtSeconds, g);
+    g = part.preBall(ball, section.x, section.y, dtSeconds, g, section);
   });
   return g;
 };
@@ -86,6 +90,7 @@ export const updateSimulation = (state: State, dt: number) => {
   for (let i = 0; i < state.balls.length; i++) {
     const ball = state.balls[i];
     updateBallMotion(ball, dtSeconds, preBallParts(ball, state, dtSeconds));
+    flattenSectionWalls(state.sections, state.walls);
     resolveBallWalls(ball, state.walls);
     resolveBallParts(ball, state);
     // A paddle sweeping into a ball can push it through a wall, so give the

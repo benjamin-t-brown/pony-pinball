@@ -353,10 +353,12 @@ function processCodeFile(text, filePath) {
     .replace(/export /g, '')
     .replace(/const /g, 'let ');
 
-
   // Replace throw new Error(...) with throw 1 if flag is enabled
   if (USE_DISABLE_THROW) {
-    processedText = processedText.replace(/throw\s+new\s+Error\([^)]*\)/g, 'throw 1');
+    processedText = processedText.replace(
+      /throw\s+new\s+Error\([^)]*\)/g,
+      'throw 1'
+    );
   }
 
   return processedText;
@@ -377,22 +379,20 @@ const build = async () => {
   fs.mkdirSync(srcDistDir, { recursive: true });
   // await execAsync(`cp -r ${__dirname}/../public/* ${resDistDir}`);
 
-
   console.log('\nMinify code...');
   const filePaths = sortByImports(
     getAllFilePaths(path.resolve(__dirname + '/../src'))
   );
   console.log('files to concat and minify:\n', filePaths.join('\n '));
-  
+
   let indexFile = '';
-  
+
   // add all the source files
   indexFile += filePaths.reduce((resultFile, currentFilePath) => {
     const currentFile = fs.readFileSync(currentFilePath).toString();
     resultFile += processCodeFile(currentFile, currentFilePath);
     return resultFile;
   }, '');
-
 
   fs.writeFileSync(srcDistDir + '/index.js', indexFile);
   fs.writeFileSync(__dirname + '/../index.concat.js', indexFile);
@@ -462,6 +462,11 @@ const build = async () => {
   ];
   const result = execFileSync(ect, args);
   await execAsync(`rm -rf ${srcDistDir}/public`);
+  console.log(
+    'advzip',
+    advzip,
+    ['-z', '-4', srcDistDir + '/index.zip'].join(' ')
+  );
   execFileSync(advzip, ['-z', '-4', srcDistDir + '/index.zip']);
   try {
     const result = await execAsync(

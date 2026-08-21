@@ -167,7 +167,7 @@ export const resolveCircleLine = (
   const cp = lineClosestPoint(l, c.pos);
   const diff = vecSub(c.pos, cp);
   const dist = vecLen(diff);
-  if (dist >= c.r) {
+  if (l.rest < 0 || dist >= c.r) {
     return false;
   }
 

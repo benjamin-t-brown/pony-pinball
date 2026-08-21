@@ -22,6 +22,7 @@ import {
 import { createPlayState, dropBall } from './sim';
 import type { Cam, Opening, SectionData, Selection, Tool } from './types';
 import { validateLevel } from './validation';
+import { builtWallIndex, remapTriggerWalls } from './wallRefs';
 
 const PHYSICS_DT_MS = 4;
 
@@ -116,7 +117,7 @@ export const App = () => {
       setSpawn(at);
       setDirty(false);
       setStatusError(false);
-      setStatus('Loaded src/model/levels.ts');
+      setStatus('Loaded src/levels.ts');
       if (fitted) {
         setCam(fitCam(cloned, wrapSize.current.w, wrapSize.current.h));
       }
@@ -215,9 +216,27 @@ export const App = () => {
         e.preventDefault();
         setSelection(null);
         setTool({ kind: 'select' });
+        if (playing) {
+          onPlay(false);
+        }
+        return;
+      }
+      if (e.code === 'Space' && !playing) {
+        e.preventDefault();
+        if (!e.repeat) {
+          onPlay(true);
+        }
         return;
       }
       if (playing) {
+        if (e.key.toLowerCase() === 'r' && !e.repeat) {
+          e.preventDefault();
+          const state = simRef.current;
+          if (state) {
+            dropBall(state, state.startX, state.startY);
+            setFrame(n => n + 1);
+          }
+        }
         return;
       }
       const k = e.key.toLowerCase();
@@ -258,6 +277,9 @@ export const App = () => {
       return;
     }
     if (selection.kind === 'section') {
+      if (!confirm('Delete this section?')) {
+        return;
+      }
       const next = cloneSections(sections);
       next.splice(selection.index, 1);
       markDirty(next);
@@ -283,10 +305,18 @@ export const App = () => {
       const next = cloneSections(sections);
       const call = next[selection.section][5][selection.call];
       const k = 1 + selection.segment * 4;
+      const wallIndex = builtWallIndex(
+        sections[selection.section],
+        selection.section,
+        selection.call,
+        selection.segment,
+        openingsToLinks(sections, openings)
+      );
       call.splice(k, 4);
       if (call.length <= 1) {
         next[selection.section][5].splice(selection.call, 1);
       }
+      remapTriggerWalls(next[selection.section][5], wallIndex);
       markDirty(next);
       setSelection(null);
     }
@@ -370,7 +400,7 @@ export const App = () => {
       setSpawn(at);
       setDirty(false);
       setStatusError(false);
-      setStatus('Saved src/model/levels.ts');
+      setStatus('Saved src/levels.ts');
     } catch (err) {
       setStatusError(true);
       setStatus(String(err));
@@ -381,16 +411,14 @@ export const App = () => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        if (!playing) {
-          onSave();
-        }
+        onSave();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [playing, onSave]);
+  }, [onSave]);
 
   const onLoad = async () => {
     if (dirty && !confirm('Discard unsaved changes?')) {
@@ -437,6 +465,8 @@ export const App = () => {
   const onPlay = (next: boolean) => {
     setPlaying(next);
     if (next) {
+      setSelection(null);
+      setTool({ kind: 'select' });
       setStatusError(false);
       setStatus('Play: click to drop the ball');
     } else {
@@ -480,6 +510,7 @@ export const App = () => {
         onSections={markDirty}
         onOpenings={markOpenings}
         onSelection={setSelection}
+        onTool={setTool}
         onCam={setCam}
         onDropBall={onDropBall}
         onViewport={onViewport}

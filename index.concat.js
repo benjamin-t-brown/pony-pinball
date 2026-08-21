@@ -106,214 +106,6 @@ let px = (n) => {
 let stringify = (n) => {
     return n + '';
 };
-let LAYER_ON = 0;
-let LAYER_OFF = 1;
-let LAYER_SUSPEND = 2;
-class Layer {
-    window;
-    layerState = LAYER_ON;
-    uiElements = [];
-    removeFlag = false;
-    id;
-    constructor(windowOrId = null, id = '') {
-        if (typeof windowOrId === 'string') {
-            this.window = null;
-            this.id = windowOrId;
-        }
-        else {
-            this.window = windowOrId;
-            this.id = id;
-        }
-        if (this.window) {
-            let host = this.window;
-            let pos = (e) => {
-                let r = host.getBoundingClientRect();
-                let p = e;
-                return {
-                    x: p.clientX - r.left,
-                    y: p.clientY - r.top,
-                    b: p.button || 0,
-                    d: p.deltaY || 0,
-                    s: p.shiftKey,
-                };
-            };
-            domAddEventListener(host, 'pointerdown', e => {
-                let p = pos(e);
-                this.onMouseDown(p.x, p.y, p.b, p.s);
-            });
-            domAddEventListener(host, 'pointerup', e => {
-                let p = pos(e);
-                this.onMouseUp(p.x, p.y, p.b);
-            });
-            domAddEventListener(host, 'pointermove', e => {
-                let p = pos(e);
-                this.onMouseHover(p.x, p.y);
-            });
-            addEventListener('keydown', e => {
-                this.onKeyDown(e.code, e.keyCode);
-            });
-            addEventListener('keyup', e => {
-                this.onKeyUp(e.code, e.keyCode);
-            });
-            addEventListener('resize', () => {
-                this.onResize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
-            });
-            host.addEventListener('wheel', e => {
-                e.preventDefault();
-                let p = pos(e);
-                this.onMouseWheel(p.x, p.y, p.d);
-            }, { passive: false });
-        }
-    }
-    onMouseDown(x, y, button, shift = false) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
-                return;
-            }
-        }
-    }
-    onMouseUp(x, y, button) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseUpEvent(x, y, button)) {
-                return;
-            }
-        }
-    }
-    onMouseHover(x, y) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkHoverEvent(x, y)) {
-                return;
-            }
-        }
-    }
-    onMouseWheel(x, y, dir) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
-                return;
-            }
-        }
-    }
-    onResize(width, height) {
-        if (this.layerState === LAYER_OFF) {
-            return;
-        }
-        for (let elem of this.uiElements) {
-            elem.checkResizeEvent(width, height);
-        }
-    }
-    onKeyDown(_key, _keyCode) { }
-    onKeyUp(_key, _keyCode) { }
-    turnOn() {
-        this.layerState = LAYER_ON;
-    }
-    turnOff() {
-        this.layerState = LAYER_OFF;
-    }
-    suspend() {
-        this.layerState = LAYER_SUSPEND;
-    }
-    remove() {
-        this.removeFlag = true;
-    }
-    shouldRemove() {
-        return this.removeFlag;
-    }
-    getId() {
-        return this.id;
-    }
-    setId(id) {
-        this.id = id;
-    }
-    addUiElement(element) {
-        this.uiElements.push(element);
-        element.build();
-    }
-    getUiElement(elementId) {
-        for (let elem of this.uiElements) {
-            if (elem.getId() === elementId) {
-                return elem;
-            }
-        }
-        return null;
-    }
-    getWindow() {
-        return this.window;
-    }
-    input() { }
-    update(dt) {
-        for (let elem of this.uiElements) {
-            elem.update(dt);
-        }
-    }
-    render(dt) {
-        for (let elem of this.uiElements) {
-            elem.render(dt);
-        }
-    }
-}
-// the smaller this is, the smaller the physics step and
-// less chance the ball phases through walls, but more cpu power used
-let PHYSICS_DT_MS = 4;
-class LayerManager {
-    last = performance.now();
-    acc = 0;
-    layers;
-    stateManager;
-    constructor(layers, stateManager = null) {
-        this.layers = layers;
-        this.stateManager = stateManager;
-    }
-    start() {
-        this.updateRender(0);
-        requestAnimationFrame(this.loop);
-    }
-    integrate(dt) {
-        for (let layer of this.layers) {
-            if (layer.layerState === LAYER_ON) {
-                layer.update(dt);
-            }
-        }
-    }
-    updateRender(dt) {
-        if (this.stateManager) {
-            this.stateManager.update(dt);
-        }
-        for (let i = this.layers.length - 1; i >= 0; i--) {
-            if (this.layers[i].shouldRemove()) {
-                this.layers.splice(i, 1);
-            }
-        }
-        for (let layer of this.layers) {
-            if (layer.layerState === LAYER_OFF) {
-                continue;
-            }
-            layer.render(dt);
-        }
-    }
-    loop = (t) => {
-        let dt = Math.min(33, t - this.last);
-        this.last = t;
-        this.acc += dt;
-        while (this.acc >= PHYSICS_DT_MS) {
-            this.integrate(PHYSICS_DT_MS);
-            this.acc -= PHYSICS_DT_MS;
-        }
-        this.updateRender(dt);
-        requestAnimationFrame(this.loop);
-    };
-}
 // Extra distance the solver pushes a body past the surface, so the next step
 // starts outside instead of exactly on the boundary.
 let CONTACT_SLOP = 0.01;
@@ -416,7 +208,7 @@ let resolveCircleLine = (c, l, friction = 0, surfaceVel = null) => {
     let cp = lineClosestPoint(l, c.pos);
     let diff = vecSub(c.pos, cp);
     let dist = vecLen(diff);
-    if (dist >= c.r) {
+    if (l.rest < 0 || dist >= c.r) {
         return false;
     }
     // A centre sitting exactly on the segment has no direction to push along, so
@@ -596,15 +388,31 @@ let forEachPart = (sections, fn) => {
 //     }
 //   }
 // };
-let flattenSectionWalls = (sections) => {
-    let walls = [];
+let flattenSectionWalls = (sections, into) => {
+    let walls = into || [];
+    let n = 0;
     for (let i = 0; i < sections.length; i++) {
         let s = sections[i];
         for (let j = 0; j < s.walls.length; j++) {
             let wall = s.walls[j];
-            walls.push(lineCreate(wall.a.x + s.x, wall.a.y + s.y, wall.b.x + s.x, wall.b.y + s.y, wall.rest));
+            if (wall.rest < 0) {
+                continue;
+            }
+            let x0 = wall.a.x + s.x;
+            let y0 = wall.a.y + s.y;
+            let x1 = wall.b.x + s.x;
+            let y1 = wall.b.y + s.y;
+            if (n < walls.length) {
+                lineSet(walls[n], x0, y0, x1, y1);
+                walls[n].rest = wall.rest;
+            }
+            else {
+                walls.push(lineCreate(x0, y0, x1, y1, wall.rest));
+            }
+            n++;
         }
     }
+    walls.length = n;
     return walls;
 };
 class StateManagerInterface {
@@ -625,6 +433,163 @@ class StateManagerInterface {
 let getStateGlobal = () => {
     return StateManagerInterface.getStateManager(true).getState();
 };
+let LAYER_ON = 0;
+let LAYER_OFF = 1;
+let LAYER_SUSPEND = 2;
+class Layer {
+    window;
+    layerState = LAYER_ON;
+    uiElements = [];
+    removeFlag = false;
+    id;
+    constructor(windowOrId = null, id = '') {
+        if (typeof windowOrId === 'string') {
+            this.window = null;
+            this.id = windowOrId;
+        }
+        else {
+            this.window = windowOrId;
+            this.id = id;
+        }
+        if (this.window) {
+            let host = this.window;
+            let pos = (e) => {
+                let r = host.getBoundingClientRect();
+                let p = e;
+                return {
+                    x: p.clientX - r.left,
+                    y: p.clientY - r.top,
+                    b: p.button || 0,
+                    d: p.deltaY || 0,
+                    s: p.shiftKey,
+                };
+            };
+            domAddEventListener(host, 'pointerdown', e => {
+                let p = pos(e);
+                this.onMouseDown(p.x, p.y, p.b, p.s);
+            });
+            domAddEventListener(host, 'pointerup', e => {
+                let p = pos(e);
+                this.onMouseUp(p.x, p.y, p.b);
+            });
+            domAddEventListener(host, 'pointermove', e => {
+                let p = pos(e);
+                this.onMouseHover(p.x, p.y);
+            });
+            addEventListener('keydown', e => {
+                this.onKeyDown(e.code, e.keyCode);
+            });
+            addEventListener('keyup', e => {
+                this.onKeyUp(e.code, e.keyCode);
+            });
+            addEventListener('resize', () => {
+                this.onResize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
+            });
+            host.addEventListener('wheel', e => {
+                e.preventDefault();
+                let p = pos(e);
+                this.onMouseWheel(p.x, p.y, p.d);
+            }, { passive: false });
+        }
+    }
+    onMouseDown(x, y, button, shift = false) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
+                return;
+            }
+        }
+    }
+    onMouseUp(x, y, button) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseUpEvent(x, y, button)) {
+                return;
+            }
+        }
+    }
+    onMouseHover(x, y) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkHoverEvent(x, y)) {
+                return;
+            }
+        }
+    }
+    onMouseWheel(x, y, dir) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
+                return;
+            }
+        }
+    }
+    onResize(width, height) {
+        if (this.layerState === LAYER_OFF) {
+            return;
+        }
+        for (let elem of this.uiElements) {
+            elem.checkResizeEvent(width, height);
+        }
+    }
+    onKeyDown(_key, _keyCode) { }
+    onKeyUp(_key, _keyCode) { }
+    turnOn() {
+        this.layerState = LAYER_ON;
+    }
+    turnOff() {
+        this.layerState = LAYER_OFF;
+    }
+    suspend() {
+        this.layerState = LAYER_SUSPEND;
+    }
+    remove() {
+        this.removeFlag = true;
+    }
+    shouldRemove() {
+        return this.removeFlag;
+    }
+    getId() {
+        return this.id;
+    }
+    setId(id) {
+        this.id = id;
+    }
+    addUiElement(element) {
+        this.uiElements.push(element);
+        element.build();
+    }
+    getUiElement(elementId) {
+        for (let elem of this.uiElements) {
+            if (elem.getId() === elementId) {
+                return elem;
+            }
+        }
+        return null;
+    }
+    getWindow() {
+        return this.window;
+    }
+    input() { }
+    update(dt) {
+        for (let elem of this.uiElements) {
+            elem.update(dt);
+        }
+    }
+    render(dt) {
+        for (let elem of this.uiElements) {
+            elem.render(dt);
+        }
+    }
+}
 let DEBUG_N = 60;
 let rollCreate = () => {
     let hist = [];
@@ -708,6 +673,57 @@ class DebugLayer extends Layer {
                 zone;
     }
 }
+// the smaller this is, the smaller the physics step and
+// less chance the ball phases through walls, but more cpu power used
+let PHYSICS_DT_MS = 4;
+class LayerManager {
+    last = performance.now();
+    acc = 0;
+    layers;
+    stateManager;
+    constructor(layers, stateManager = null) {
+        this.layers = layers;
+        this.stateManager = stateManager;
+    }
+    start() {
+        this.updateRender(0);
+        requestAnimationFrame(this.loop);
+    }
+    integrate(dt) {
+        for (let layer of this.layers) {
+            if (layer.layerState === LAYER_ON) {
+                layer.update(dt);
+            }
+        }
+    }
+    updateRender(dt) {
+        if (this.stateManager) {
+            this.stateManager.update(dt);
+        }
+        for (let i = this.layers.length - 1; i >= 0; i--) {
+            if (this.layers[i].shouldRemove()) {
+                this.layers.splice(i, 1);
+            }
+        }
+        for (let layer of this.layers) {
+            if (layer.layerState === LAYER_OFF) {
+                continue;
+            }
+            layer.render(dt);
+        }
+    }
+    loop = (t) => {
+        let dt = Math.min(33, t - this.last);
+        this.last = t;
+        this.acc += dt;
+        while (this.acc >= PHYSICS_DT_MS) {
+            this.integrate(PHYSICS_DT_MS);
+            this.acc -= PHYSICS_DT_MS;
+        }
+        this.updateRender(dt);
+        requestAnimationFrame(this.loop);
+    };
+}
 let W = 400;
 let H = 600;
 let BALL_R = 10;
@@ -784,7 +800,7 @@ let updateParts = (state, dt) => {
 let preBallParts = (ball, state, dtSeconds) => {
     let g = GRAVITY;
     forEachPart(state.sections, (part, section) => {
-        g = part.preBall(ball, section.x, section.y, dtSeconds, g);
+        g = part.preBall(ball, section.x, section.y, dtSeconds, g, section);
     });
     return g;
 };
@@ -799,6 +815,7 @@ let updateSimulation = (state, dt) => {
     for (let i = 0; i < state.balls.length; i++) {
         let ball = state.balls[i];
         updateBallMotion(ball, dtSeconds, preBallParts(ball, state, dtSeconds));
+        flattenSectionWalls(state.sections, state.walls);
         resolveBallWalls(ball, state.walls);
         resolveBallParts(ball, state);
         // A paddle sweeping into a ball can push it through a wall, so give the
@@ -806,8 +823,7 @@ let updateSimulation = (state, dt) => {
         resolveBallWalls(ball, state.walls);
         clampBallSpeed(ball);
         if (ballIsOutOfBounds(ball, state.sections)) {
-            let start = state.sections[0];
-            state.balls[i] = ballCreate(start.x + LAUNCHER_X, start.y + LAUNCHER_Y);
+            state.balls[i] = ballCreate(state.startX, state.startY);
         }
     }
 };
@@ -1091,7 +1107,7 @@ class Part {
      * Pre-integration: apply forces to the ball and return the gravity it should
      * integrate with. Returning `g` untouched opts out of both.
      */
-    preBall(_ball, _ox, _oy, _dtSeconds, g) {
+    preBall(_ball, _ox, _oy, _dtSeconds, g, _section) {
         return g;
     }
     /** Post-integration: resolve contact. */
@@ -1141,6 +1157,35 @@ class PartElement extends UiElement {
                 height: px(field.h),
                 [POINTER_EVENTS]: 'none',
             });
+            let forceLen = Math.hypot(field.ax, field.ay);
+            if (!field.trigger && field.grav === 0 && forceLen > 0) {
+                let svg = createSvgElement(SVG, {
+                    width: stringify(field.w),
+                    height: stringify(field.h),
+                });
+                setStyle(svg, {
+                    position: 'absolute',
+                    inset: '0',
+                    overflow: 'visible',
+                    [POINTER_EVENTS]: 'none',
+                });
+                let nx = field.ax / forceLen;
+                let ny = field.ay / forceLen;
+                let cx = field.w / 2;
+                let cy = field.h / 2;
+                let len = 28;
+                let head = 10;
+                let tipX = cx + nx * len;
+                let tipY = cy + ny * len;
+                let bx = tipX - nx * head;
+                let by = tipY - ny * head;
+                let pxOff = -ny * head * 0.65;
+                let pyOff = nx * head * 0.65;
+                this.addLine(svg, cx - nx * len, cy - ny * len, tipX, tipY, '#fc8', '3');
+                this.addLine(svg, tipX, tipY, bx + pxOff, by + pyOff, '#fc8', '3');
+                this.addLine(svg, tipX, tipY, bx - pxOff, by - pyOff, '#fc8', '3');
+                appendChild(el, svg);
+            }
             this.attach(el);
             this.render(0);
             return;
@@ -1192,9 +1237,19 @@ class PartElement extends UiElement {
         }
         if (part.type === PART_FIELD) {
             let field = part;
-            let bg = 'rgba(70,140,220,0.08)';
+            let conveyer = !field.trigger && field.grav === 0;
+            let bg = conveyer ? 'rgba(180,140,40,0.08)' : 'rgba(70,140,220,0.08)';
             if (field.active) {
-                bg = field.inside ? 'rgba(120,200,255,0.35)' : 'rgba(70,160,255,0.18)';
+                if (conveyer) {
+                    bg = field.inside
+                        ? 'rgba(240,200,80,0.4)'
+                        : 'rgba(200,160,50,0.22)';
+                }
+                else {
+                    bg = field.inside
+                        ? 'rgba(120,200,255,0.35)'
+                        : 'rgba(70,160,255,0.18)';
+                }
             }
             if (this.el) {
                 setStyle(this.el, { background: bg });
@@ -1519,6 +1574,99 @@ class SimUiLayer extends Layer {
         this.setControl(key, false);
     }
 }
+class Field extends Part {
+    w = 0;
+    h = 0;
+    permanent = true;
+    inside = false;
+    grav = 1;
+    ax = 0;
+    ay = 0;
+    drag = 0;
+    maxSpeed = 0;
+    trigger = null;
+    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
+        super(x, y, PART_FIELD);
+        this.active = true;
+        this.w = w;
+        this.h = h;
+        this.grav = grav;
+        this.ax = ax;
+        this.ay = ay;
+        this.maxSpeed = maxSpeed;
+    }
+    unactivate() {
+        if (!this.permanent) {
+            this.active = false;
+        }
+    }
+    contains(px, py, ox, oy) {
+        let x = this.x + ox;
+        let y = this.y + oy;
+        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
+    }
+    onEnter() { }
+    onExit() { }
+    preBall(ball, ox, oy, dtSeconds, g, section) {
+        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
+        if (inNow && !this.inside) {
+            this.onEnter();
+            if (this.trigger) {
+                this.trigger.onActivated(section);
+            }
+        }
+        else if (!inNow && this.inside) {
+            this.onExit();
+            if (this.trigger) {
+                this.trigger.onDeactivated(section);
+            }
+        }
+        this.inside = inNow;
+        if (this.trigger) {
+            this.trigger.onUpdate(dtSeconds * 1000, section);
+        }
+        if (!inNow) {
+            return g;
+        }
+        if (this.trigger) {
+            return g;
+        }
+        // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
+        // motion so the ball settles into the stream instead of skating across it.
+        let forceLen = Math.hypot(this.ax, this.ay);
+        if (this.grav === 0 && forceLen > 0) {
+            let nx = this.ax / forceLen;
+            let ny = this.ay / forceLen;
+            let along = ball.vel.x * nx + ball.vel.y * ny;
+            let catchRate = this.drag > 0 ? this.drag : 4;
+            let damp = Math.max(0, 1 - catchRate * dtSeconds);
+            let newAlong = along + forceLen * dtSeconds;
+            if (this.maxSpeed > 0) {
+                if (newAlong > this.maxSpeed) {
+                    newAlong = this.maxSpeed;
+                }
+                else if (newAlong < -this.maxSpeed) {
+                    newAlong = -this.maxSpeed;
+                }
+            }
+            ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
+            ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
+            return 0;
+        }
+        ball.vel.x += this.ax * dtSeconds;
+        ball.vel.y += this.ay * dtSeconds;
+        if (this.drag > 0) {
+            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
+        }
+        if (this.maxSpeed > 0) {
+            let speed = vecLen(ball.vel);
+            if (speed > this.maxSpeed) {
+                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
+            }
+        }
+        return g * this.grav;
+    }
+}
 class Launcher extends Part {
     dir;
     force = 0;
@@ -1553,6 +1701,7 @@ class Obstacle extends Part {
     vy = 0;
     angle = 0;
     omega = 0;
+    r = 0;
     walls = [];
     worldWalls = [];
     alwaysSolid = true;
@@ -1583,26 +1732,27 @@ class Obstacle extends Part {
         this.x += this.vx * dtSeconds;
         this.y += this.vy * dtSeconds;
         this.angle += this.omega * dtSeconds;
-        if (this.x < 0) {
-            this.x = 0;
+        let r = this.r;
+        if (this.x < r) {
+            this.x = r;
             if (this.vx < 0) {
                 this.vx = -this.vx;
             }
         }
-        else if (this.x > section.w) {
-            this.x = section.w;
+        else if (this.x > section.w - r) {
+            this.x = section.w - r;
             if (this.vx > 0) {
                 this.vx = -this.vx;
             }
         }
-        if (this.y < 0) {
-            this.y = 0;
+        if (this.y < r) {
+            this.y = r;
             if (this.vy < 0) {
                 this.vy = -this.vy;
             }
         }
-        else if (this.y > section.h) {
-            this.y = section.h;
+        else if (this.y > section.h - r) {
+            this.y = section.h - r;
             if (this.vy > 0) {
                 this.vy = -this.vy;
             }
@@ -1639,10 +1789,15 @@ let makeCircleWalls = (r, n, rest) => {
 };
 let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega = 0) => {
     let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
+    o.r = radius;
     return o;
 };
 /** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
-let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
+let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
+    o.r = r;
+    return o;
+};
 class Paddle extends Part {
     angle = 0;
     prevAngle = 0;
@@ -1730,14 +1885,124 @@ class Paddle extends Part {
         this.syncLine();
     }
 }
-let START = 0;
+let TRIGGER_DEACTIVATE_WALL = 0;
+let TRIGGER_MOVE_DOOR = 1;
+/**
+ * Script attached to a trigger field. Occupancy is owned by the field; these
+ * hooks may mutate the section (walls, parts) while the ball is inside.
+ * `args` is the rest of the builder call after the trigger id.
+ */
+class Trigger {
+    args = [];
+    constructor(args) {
+        this.args = args;
+    }
+    onActivated(_section) { }
+    onDeactivated(_section) { }
+    onUpdate(_dt, _section) { }
+}
+class DeactivateWallTrigger extends Trigger {
+    rest = 0.5;
+    disableIn = -1;
+    enableIn = -1;
+    disableWall(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall || wall.rest < 0) {
+            return;
+        }
+        this.rest = wall.rest;
+        wall.rest = -1;
+    }
+    enableWall(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        wall.rest = this.rest;
+    }
+    onActivated(section) {
+        this.enableIn = -1;
+        if (this.args[1] > 0) {
+            this.disableIn = this.args[1];
+            return;
+        }
+        this.disableWall(section);
+    }
+    onDeactivated(section) {
+        this.disableIn = -1;
+        if (this.args[2] > 0) {
+            this.enableIn = this.args[2];
+            return;
+        }
+        this.enableWall(section);
+    }
+    onUpdate(dt, section) {
+        if (this.disableIn >= 0) {
+            this.disableIn -= dt;
+            if (this.disableIn <= 0) {
+                this.disableIn = -1;
+                this.disableWall(section);
+            }
+        }
+        if (this.enableIn >= 0) {
+            this.enableIn -= dt;
+            if (this.enableIn <= 0) {
+                this.enableIn = -1;
+                this.enableWall(section);
+            }
+        }
+    }
+}
+class MoveDoorTrigger extends Trigger {
+    x0 = 0;
+    y0 = 0;
+    x1 = 0;
+    y1 = 0;
+    held = false;
+    onActivated(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        this.held = true;
+        this.x0 = wall.a.x;
+        this.y0 = wall.a.y;
+        this.x1 = wall.b.x;
+        this.y1 = wall.b.y;
+    }
+    onDeactivated(section) {
+        this.held = false;
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        wall.a.x = this.x0;
+        wall.a.y = this.y0;
+        wall.b.x = this.x1;
+        wall.b.y = this.y1;
+    }
+    onUpdate(dt, section) {
+        if (!this.held) {
+            return;
+        }
+        let s = dt / 1000;
+        // wall.a.x += this.args[1] * s;
+        // wall.a.y += this.args[2] * s;
+        // wall.b.x += this.args[1] * s;
+        // wall.b.y += this.args[2] * s;
+    }
+}
+let TRIGGERS = [];
+TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
+TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
 let BG = ['#555', '#466', '#645'];
 let B_WALLS = 0;
 let B_LAUNCHER = 2;
 // let B_BUMPER = 3;
-// let B_FIELD = 4;
+let B_FIELD = 4;
 let B_FLIPPER_LEFT = 5;
 let B_CIRCLE = 6;
+let B_CONVEYER = 7;
 let SECTION_SIDE_BOTTOM = 0;
 let SECTION_SIDE_TOP = 1;
 let SECTION_SIDE_LEFT = 2;
@@ -1755,16 +2020,29 @@ BUILDERS[B_WALLS] = (section, wallList) => {
     }
 };
 BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
-    let rest = restAngle || LEFT_REST_ANGLE;
-    let up = upAngle || LEFT_UP;
-    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - rest : rest, isFlipped ? Math.PI - up : up));
+    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle));
 };
 BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
-    s.parts.push(new Launcher(x, y, CONTROL_START, dx || 0, dy || -1, force || LAUNCHER_FORCE, range || LAUNCHER_RANGE));
+    s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
+};
+BUILDERS[B_FIELD] = (s, data) => {
+    let x = data[0];
+    let y = data[1];
+    let w = data[2];
+    let h = data[3];
+    let id = data[4];
+    let Ctor = TRIGGERS[id] || Trigger;
+    let field = new Field(x, y, w, h);
+    field.trigger = new Ctor(data.slice(5));
+    s.parts.push(field);
+};
+BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
+    let field = new Field(x, y, w, h, 0, Math.cos(angle) * power, Math.sin(angle) * power, maxSpeed);
+    field.drag = drag;
+    s.parts.push(field);
 };
 BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius, dx, dy, omega]) => {
-    let circle = makeCircle(x, y, resolution, restitution, radius, dx || 0, dy || 0, omega || 0);
-    section.parts.push(circle);
+    section.parts.push(makeCircle(x, y, resolution, restitution, radius, dx, dy, omega));
 };
 // assumes an edge can only have one hole in it at max
 let buildSectionEdges = (sections, links) => {
@@ -1822,25 +2100,27 @@ let SECTIONS = [
         0,
         0,
         400,
-        600,
+        520,
         0,
         [
             [
                 B_WALLS,
-                0, 419, 122, 463,
-                369, 420, 275, 462,
-                372, 573, 372, 600,
-                0, 500, 373, 560,
-                372, 596, 400, 596,
+                2, 301, 115, 358,
+                371, 297, 224, 337,
+                0, 413, 373, 473,
                 350, 200, 400, 280,
                 350, 200, 400, 108,
-                369, 301, 369, 534
+                373, 474, 373, 520,
+                372, 445, 372, 300,
+                0, 86, 96, 0,
+                0, 103, 173, 147,
+                307, 167, 400, 107
             ],
-            [B_FLIPPER_LEFT, 123, 471, 0, 0],
-            [B_FLIPPER_LEFT, 275, 470, 0, 0, 1],
-            [B_LAUNCHER, 384, 582],
-            [B_CIRCLE, 95, 179, 10, 1.2, 40, 22, 0, 1.2],
-            [B_CIRCLE, 288, 92, 10, 1.2, 40, 22, 0, 1.2],
+            [B_FLIPPER_LEFT, 114, 369, 0.45, -0.55, 0],
+            [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1],
+            [B_LAUNCHER, 387, 489, 0, -1, 950, 36],
+            [B_CIRCLE, 162, 67, 10, 1.2, 40, 0, 0, 1.2],
+            [B_CIRCLE, 82, 256, 10, 1.2, 40, 0, 0, 1.2],
         ],
     ],
     [
@@ -1852,38 +2132,168 @@ let SECTIONS = [
         [
             [
                 B_WALLS,
-                0, 146, 163, 0,
-                66, 342, 0, 318,
-                20, 302, 75, 208,
-                217, 69, 358, 48,
-                297, 199, 338, 214,
-                297, 400, 400, 306,
-                52, 372, 102, 400,
-                42, 339, 52, 371,
-                254, 111, 400, 102,
-                145, 400, 135, 369
+                0, 148, 11, 108,
+                149, 400, 37, 288,
+                354, 400, 354, 337,
+                354, 337, 169, 337,
+                174, 389, 149, 399,
+                16, 251, 37, 287,
+                0, 209, 15, 251,
+                11, 107, 32, 71,
+                33, 70, 62, 41,
+                63, 40, 102, 17,
+                101, 17, 153, 0,
+                253, 72, 359, 72,
+                389, 73, 400, 73,
+                354, 376, 400, 376,
+                240, 15, 185, 0,
+                359, 72, 359, 128,
+                389, 73, 389, 130,
+                169, 336, 169, 158,
+                207, 157, 207, 229,
+                168, 247, 233, 264,
+                354, 336, 169, 312
             ],
-            [B_FLIPPER_LEFT, 67, 350, 0, -0.55],
-            [B_CIRCLE, 230, 263, 3, 1, 40, 12, 0, 0],
-            [B_LAUNCHER, 153, 370],
+            [B_LAUNCHER, 135, 370, -0.7071, -0.7071, 1300, 36],
+            [B_CONVEYER, 176, 341, 173, 39, 3.1416, 320, 400, 35, 6],
+            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 19, 800, 500],
+            [B_CONVEYER, 254, 45, 104, 23, 0.1444, 400, 160, 6],
+            [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1],
+            [B_FLIPPER_LEFT, 235, 271, 0.7, 0, 0],
+            [B_CONVEYER, 173, 160, 30, 68, 1.5708, 400, 160, 6],
+            [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2],
         ],
     ],
-    [400, -400, 640, 400, 2, []],
+    [
+        400,
+        -400,
+        588,
+        400,
+        2,
+        [
+            [
+                B_WALLS,
+                458, 312, 94, 368,
+                504, 158, 579, 193,
+                588, 174, 580, 192,
+                93, 368, 61, 400,
+                0, 339, 61, 400,
+                82, 84, 82, 278,
+                459, 312, 475, 400
+            ],
+            [B_CONVEYER, 35, 87, 32, 191, 1.5708, 400, 160, 6],
+            [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970, 36],
+            [B_CIRCLE, 160, 161, 15, 1.2, 22, 0, 160, 1.2],
+            [B_CIRCLE, 249, 283, 15, 1.2, 37, 0, 150, 1.2],
+            [B_CIRCLE, 398, 50, 15, 1.2, 36, 0, 150, 1.2],
+            [B_LAUNCHER, 577, 155, 0, -1, 2200, 36],
+            [B_CIRCLE, 336, 370, 15, 1.2, 22, 0, 250, 1.2],
+            [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1],
+        ],
+    ],
+    [
+        400,
+        0,
+        588,
+        107,
+        0,
+        [
+            [
+                B_WALLS,
+                588, 56, 4, 105,
+                116, 46, 61, 100,
+                116, 45, 116, 2
+            ],
+            [B_FIELD, 72, 48, 63, 56, TRIGGER_DEACTIVATE_WALL, 7, 800, 800],
+        ],
+    ],
+    [
+        478,
+        -1076,
+        510,
+        676,
+        1,
+        [
+            [
+                B_WALLS,
+                482, 676, 482, 49,
+                471, 0, 509, 38,
+                349, 676, 0, 640,
+                483, 47, 495, 26,
+                334, 1, 271, 64,
+                271, 64, 207, 0,
+                271, 63, 253, 130,
+                253, 214, 253, 129,
+                304, 237, 410, 265,
+                304, 236, 359, 219,
+                410, 265, 360, 219,
+                482, 287, 432, 212,
+                481, 129, 432, 210,
+                174, 581, 74, 523,
+                337, 580, 452, 514,
+                452, 514, 452, 429,
+                72, 522, 72, 437,
+                36, 437, 36, 643,
+                164, 520, 125, 453,
+                125, 452, 125, 521,
+                165, 522, 125, 522,
+                383, 449, 383, 518,
+                383, 518, 343, 518,
+                344, 516, 383, 450,
+                56, 196, 35, 198,
+                34, 199, 34, 334,
+                119, 285, 58, 196,
+                170, 248, 56, 161,
+                55, 161, 33, 161,
+                31, 161, 0, 193,
+                30, 160, 0, 128,
+                17, 641, 0, 591,
+                36, 592, 19, 641,
+                34, 334, 119, 285
+            ],
+            [B_FLIPPER_LEFT, 336, 588, 0.45, -0.55, 1],
+            [B_FLIPPER_LEFT, 175, 588, 0.45, -0.55, 0],
+            [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2],
+            [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2],
+            [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, 2],
+            [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, 2],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 8, 0, 400],
+            [B_CONVEYER, 344, 643, 139, 26, 1.5708, 400, 160, 6],
+            [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
+            [B_LAUNCHER, 18, 607, -0, -1, 1250, 36],
+            [B_FIELD, 6, 514, 15, 108, TRIGGER_DEACTIVATE_WALL, 36, 0, 1000],
+            [B_FIELD, 15, 517, 16, 110, TRIGGER_DEACTIVATE_WALL, 35, 0, 1000],
+            [B_CIRCLE, 104, 376, 10, 1.2, 25, 0, 0, -1.6],
+        ],
+    ],
+    [329, -1476, 270, 400, 2, []],
 ];
 /** section, side, localOffset, width */
 let LINKS = [
-    [0, SECTION_SIDE_TOP, 179, 100],
-    [1, SECTION_SIDE_BOTTOM, 179, 100],
-    [1, SECTION_SIDE_RIGHT, 150, 100],
-    [2, SECTION_SIDE_LEFT, 150, 100],
+    [0, SECTION_SIDE_TOP, 172, 227],
+    [1, SECTION_SIDE_BOTTOM, 172, 227],
+    [1, SECTION_SIDE_RIGHT, 129, 138],
+    [2, SECTION_SIDE_LEFT, 129, 138],
+    [2, SECTION_SIDE_BOTTOM, 476, 112],
+    [3, SECTION_SIDE_TOP, 476, 112],
+    [0, SECTION_SIDE_RIGHT, 0, 107],
+    [3, SECTION_SIDE_LEFT, 0, 107],
+    [2, SECTION_SIDE_TOP, 412, 176],
+    [4, SECTION_SIDE_BOTTOM, 334, 176],
+    [4, SECTION_SIDE_TOP, 0, 121],
+    [5, SECTION_SIDE_BOTTOM, 149, 121],
 ];
+/** world x, y */
+let START = [907, -627];
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
     return {
-        balls: [ballCreate(LAUNCHER_X, LAUNCHER_Y)],
+        balls: [ballCreate(START[0], START[1])],
         sections,
         walls: flattenSectionWalls(sections),
         input: [false, false, false],
+        startX: START[0],
+        startY: START[1],
     };
 };
 class StateManager {
@@ -1965,64 +2375,6 @@ let startGame = () => {
     new LayerManager([new SimLayer(), new SimUiLayer(root), new DebugLayer()], stateManager).start();
 };
 addEventListener('load', startGame);
-class Field extends Part {
-    w = 0;
-    h = 0;
-    permanent = true;
-    inside = false;
-    grav = 1;
-    ax = 0;
-    ay = 0;
-    drag = 0;
-    maxSpeed = 0;
-    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
-        super(x, y, PART_FIELD);
-        this.active = true;
-        this.w = w;
-        this.h = h;
-        this.grav = grav;
-        this.ax = ax;
-        this.ay = ay;
-        this.maxSpeed = maxSpeed;
-    }
-    unactivate() {
-        if (!this.permanent) {
-            this.active = false;
-        }
-    }
-    contains(px, py, ox, oy) {
-        let x = this.x + ox;
-        let y = this.y + oy;
-        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
-    }
-    onEnter() { }
-    onExit() { }
-    preBall(ball, ox, oy, dtSeconds, g) {
-        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
-        if (inNow && !this.inside) {
-            this.onEnter();
-        }
-        else if (!inNow && this.inside) {
-            this.onExit();
-        }
-        this.inside = inNow;
-        if (!inNow) {
-            return g;
-        }
-        ball.vel.x += this.ax * dtSeconds;
-        ball.vel.y += this.ay * dtSeconds;
-        if (this.drag > 0) {
-            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
-        }
-        if (this.maxSpeed > 0) {
-            let speed = vecLen(ball.vel);
-            if (speed > this.maxSpeed) {
-                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
-            }
-        }
-        return g * this.grav;
-    }
-}
 class AbstractAction {
     state = null;
     stateManager = null;

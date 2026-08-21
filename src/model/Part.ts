@@ -52,7 +52,8 @@ export class Part {
     _ox: number,
     _oy: number,
     _dtSeconds: number,
-    g: number
+    g: number,
+    _section: Section
   ) {
     return g;
   }

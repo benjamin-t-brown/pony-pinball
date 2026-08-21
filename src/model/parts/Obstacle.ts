@@ -11,6 +11,7 @@ export class Obstacle extends Part {
   vy = 0;
   angle = 0;
   omega = 0;
+  r = 0;
   walls: Line[] = [];
   worldWalls: Line[] = [];
   alwaysSolid = true;
@@ -53,24 +54,25 @@ export class Obstacle extends Part {
     this.y += this.vy * dtSeconds;
     this.angle += this.omega * dtSeconds;
 
-    if (this.x < 0) {
-      this.x = 0;
+    const r = this.r;
+    if (this.x < r) {
+      this.x = r;
       if (this.vx < 0) {
         this.vx = -this.vx;
       }
-    } else if (this.x > section.w) {
-      this.x = section.w;
+    } else if (this.x > section.w - r) {
+      this.x = section.w - r;
       if (this.vx > 0) {
         this.vx = -this.vx;
       }
     }
-    if (this.y < 0) {
-      this.y = 0;
+    if (this.y < r) {
+      this.y = r;
       if (this.vy < 0) {
         this.vy = -this.vy;
       }
-    } else if (this.y > section.h) {
-      this.y = section.h;
+    } else if (this.y > section.h - r) {
+      this.y = section.h - r;
       if (this.vy > 0) {
         this.vy = -this.vy;
       }
@@ -148,7 +150,7 @@ export const makeCircle = (
     vy,
     omega
   );
-
+  o.r = radius;
   return o;
 };
 
@@ -162,5 +164,16 @@ export const makeBumper = (
   vx = 0,
   vy = 0,
   omega = 0
-) =>
-  new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
+) => {
+  const o = new Obstacle(
+    x,
+    y,
+    PART_OBSTACLE,
+    makeCircleWalls(r, n, rest),
+    vx,
+    vy,
+    omega
+  );
+  o.r = r;
+  return o;
+};
