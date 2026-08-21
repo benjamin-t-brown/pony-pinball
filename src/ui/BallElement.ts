@@ -37,6 +37,7 @@ export class BallElement extends UiElement {
         'cy': stringify(ball.r),
         'r': stringify(ball.r),
         'fill': ball.color,
+        'fill-opacity': '0.75',
       })
     );
 

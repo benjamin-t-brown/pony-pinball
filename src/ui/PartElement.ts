@@ -12,6 +12,11 @@ import {
   setStyle,
   stringify,
 } from '../dom';
+import type { Collectable } from '../model/parts/Collectable';
+import type { Field } from '../model/parts/Field';
+import type { Launcher } from '../model/parts/Launcher';
+import type { Obstacle } from '../model/parts/Obstacle';
+import type { Paddle } from '../model/parts/Paddle';
 import {
   PART_COLLECTABLE,
   PART_FIELD,
@@ -19,14 +24,7 @@ import {
   PART_PADDLE,
   type Part,
 } from '../model/Part';
-import type { Collectable } from '../model/parts/Collectable';
-import type { Field } from '../model/parts/Field';
-import type { Launcher } from '../model/parts/Launcher';
-import type { Obstacle } from '../model/parts/Obstacle';
-import type { Paddle } from '../model/parts/Paddle';
 import { UiElement } from './UiElement';
-
-const LAUNCHER_LEN = 24;
 
 export class PartElement extends UiElement {
   part: Part;
@@ -161,16 +159,19 @@ export class PartElement extends UiElement {
         '6'
       );
     } else if (part.type === PART_LAUNCHER) {
-      const dir = (part as Launcher).dir;
+      const launcher = part as Launcher;
+      const dir = launcher.dir;
+      const drawLen = launcher.len;
       this.addLine(
         svg,
         0,
         0,
-        -dir.x * LAUNCHER_LEN,
-        -dir.y * LAUNCHER_LEN,
+        -dir.x * drawLen,
+        -dir.y * drawLen,
         '#c84',
         '8'
       );
+      this.addLine(svg, 0, 0, 0, 0, '#fc8', '8');
     } else {
       const walls = (part as Obstacle).walls;
       for (let i = 0; i < walls.length; i++) {
@@ -208,8 +209,19 @@ export class PartElement extends UiElement {
     }
 
     if (part.type === PART_LAUNCHER) {
+      const launcher = part as Launcher;
+      const fill = this.lineEls[1] as unknown as HTMLElement;
       if (first) {
-        setAttribute(first, 'stroke', part.active ? '#fc8' : '#c84');
+        setAttribute(first, 'stroke', '#c84');
+        setAttribute(first, 'x2', stringify(-launcher.dir.x * launcher.len));
+        setAttribute(first, 'y2', stringify(-launcher.dir.y * launcher.len));
+      }
+      if (fill) {
+        const t = launcher.getChargeT();
+        const len = launcher.len * t;
+        setAttribute(fill, 'x2', stringify(-launcher.dir.x * len));
+        setAttribute(fill, 'y2', stringify(-launcher.dir.y * len));
+        setAttribute(fill, 'stroke', t >= 1 ? '#fc8' : '#fa6');
       }
       return;
     }

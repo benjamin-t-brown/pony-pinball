@@ -744,6 +744,8 @@ let LAUNCHER_X = 384;
 let LAUNCHER_Y = 582;
 let LAUNCHER_FORCE = 1250;
 let LAUNCHER_RANGE = 36;
+let LAUNCHER_CHARGE_MS = 600;
+let LAUNCHER_LEN = 24;
 let LEFT_PIVOT = { x: 118, y: 450 };
 let RIGHT_PIVOT = { x: 282, y: 450 };
 let LEFT_REST_ANGLE = 0.45;
@@ -1040,6 +1042,7 @@ class BallElement extends UiElement {
             'cy': stringify(ball.r),
             'r': stringify(ball.r),
             'fill': ball.color,
+            'fill-opacity': '0.75',
         }));
         setStyle(svg, {
             position: 'absolute',
@@ -1247,28 +1250,52 @@ class Launcher extends Part {
     dir;
     force = 0;
     range = 0;
-    fired = false;
-    constructor(x, y, control, dx, dy, force, range) {
+    chargeMs = 500;
+    len = LAUNCHER_LEN;
+    charge = 0;
+    pendingFire = false;
+    constructor(x, y, control, dx, dy, force, range, chargeMs = 500, len = LAUNCHER_LEN) {
         super(x, y, PART_LAUNCHER, control);
         this.dir = vecNorm(vecCreate(dx, dy));
         this.force = force;
         this.range = range;
+        this.chargeMs = chargeMs > 0 ? chargeMs : 1;
+        this.len = len > 0 ? len : LAUNCHER_LEN;
+    }
+    /** 0..1 fill for the charge indicator. */
+    getChargeT() {
+        return this.charge / this.chargeMs;
+    }
+    activate() {
+        this.active = true;
     }
     unactivate() {
+        if (this.active) {
+            this.pendingFire = this.charge > 0;
+        }
         this.active = false;
-        this.fired = false;
+    }
+    update(dt, _section) {
+        if (this.active) {
+            this.charge += dt;
+            if (this.charge > this.chargeMs) {
+                this.charge = this.chargeMs;
+            }
+        }
     }
     affectBall(ball, ox, oy) {
-        if (!this.active || this.fired) {
+        if (!this.pendingFire) {
             return;
         }
+        this.pendingFire = false;
+        let t = this.getChargeT();
+        this.charge = 0;
         let dx = ball.pos.x - (this.x + ox);
         let dy = ball.pos.y - (this.y + oy);
         if (dx * dx + dy * dy > this.range * this.range) {
             return;
         }
-        ball.vel = vecMul(this.dir, this.force);
-        this.fired = true;
+        ball.vel = vecMul(this.dir, this.force * t);
     }
 }
 let FLASH_MS = 120;
@@ -1398,10 +1425,11 @@ class Paddle extends Part {
     omega = 0;
     line;
     worldLine;
-    constructor(x, y, control, restAngle, upAngle) {
+    constructor(x, y, control, restAngle, upAngle, len = PADDLE_LEN) {
         super(x, y, PART_PADDLE, control);
         this.restAngle = restAngle;
         this.upAngle = upAngle;
+        this.len = len;
         this.angle = restAngle;
         this.prevAngle = restAngle;
         this.line = lineCreate(x, y, x, y);
@@ -1595,19 +1623,17 @@ class GateSection4Trigger extends Trigger {
         if (groupType !== 0) {
             return;
         }
-        if ((state.collected[0] || 0) < 5) {
+        let needed = 5;
+        let section = 4;
+        let wallIndex = 44;
+        if ((state.collected[0] || 0) < needed) {
             return;
         }
-        let target = state.sections[4];
+        let target = state.sections[section];
         if (!target) {
             return;
         }
-        for (let i = 0; i < target.walls.length; i++) {
-            let wall = target.walls[i];
-            if (wall.color >= 0) {
-                wall.rest = -1;
-            }
-        }
+        target.walls[wallIndex].rest = -1;
     }
 }
 let TRIGGERS = [];
@@ -1650,11 +1676,11 @@ BUILDERS[B_WALL_GATE] = (section, [x0, y0, x1, y1, color]) => {
     let c = color | 0;
     section.walls.push(lineCreate(x0, y0, x1, y1, 0.5, c < 0 ? 0 : c % GATE_COLORS.length));
 };
-BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
-    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle));
+BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped, flipperLength]) => {
+    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle, flipperLength > 0 ? flipperLength : PADDLE_LEN));
 };
-BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
-    s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
+BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range, chargeMs, launcherLength]) => {
+    s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range, chargeMs, launcherLength));
 };
 BUILDERS[B_FIELD] = (s, data) => {
     let x = data[0];
@@ -1731,7 +1757,6 @@ let buildLevel = (sectionData, links) => {
     }
     return sections;
 };
-let LAUNCHER_LEN = 24;
 class PartElement extends UiElement {
     part;
     lineEls = [];
@@ -1842,8 +1867,11 @@ class PartElement extends UiElement {
             this.addLine(svg, 0, 0, line.b.x - line.a.x, line.b.y - line.a.y, '#ccc', '6');
         }
         else if (part.type === PART_LAUNCHER) {
-            let dir = part.dir;
-            this.addLine(svg, 0, 0, -dir.x * LAUNCHER_LEN, -dir.y * LAUNCHER_LEN, '#c84', '8');
+            let launcher = part;
+            let dir = launcher.dir;
+            let drawLen = launcher.len;
+            this.addLine(svg, 0, 0, -dir.x * drawLen, -dir.y * drawLen, '#c84', '8');
+            this.addLine(svg, 0, 0, 0, 0, '#fc8', '8');
         }
         else {
             let walls = part.walls;
@@ -1877,8 +1905,19 @@ class PartElement extends UiElement {
             return;
         }
         if (part.type === PART_LAUNCHER) {
+            let launcher = part;
+            let fill = this.lineEls[1];
             if (first) {
-                setAttribute(first, 'stroke', part.active ? '#fc8' : '#c84');
+                setAttribute(first, 'stroke', '#c84');
+                setAttribute(first, 'x2', stringify(-launcher.dir.x * launcher.len));
+                setAttribute(first, 'y2', stringify(-launcher.dir.y * launcher.len));
+            }
+            if (fill) {
+                let t = launcher.getChargeT();
+                let len = launcher.len * t;
+                setAttribute(fill, 'x2', stringify(-launcher.dir.x * len));
+                setAttribute(fill, 'y2', stringify(-launcher.dir.y * len));
+                setAttribute(fill, 'stroke', t >= 1 ? '#fc8' : '#fa6');
             }
             return;
         }
@@ -2254,9 +2293,9 @@ let SECTIONS = [
                 0, 103, 173, 147,
                 307, 167, 400, 107
             ],
-            [B_FLIPPER_LEFT, 114, 369, 0.45, -0.55, 0],
-            [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1],
-            [B_LAUNCHER, 387, 489, 0, -1, 950, 36],
+            [B_FLIPPER_LEFT, 114, 369, 0.45, -0.55, 0, 58],
+            [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1, 58],
+            [B_LAUNCHER, 387, 489, 0, -1, 950, 36, 600, 24],
             [B_CIRCLE, 162, 67, 10, 1.2, 40, 0, 0, 1.2],
             [B_CIRCLE, 82, 256, 10, 1.2, 40, 0, 0, 1.2],
         ],
@@ -2291,12 +2330,12 @@ let SECTIONS = [
                 168, 247, 233, 264,
                 354, 336, 169, 312
             ],
-            [B_LAUNCHER, 135, 370, -0.7071, -0.7071, 1300, 36],
+            [B_LAUNCHER, 135, 370, -0.7071, -0.7071, 1300, 36, 600, 24],
             [B_CONVEYER, 176, 341, 173, 39, 3.1416, 320, 400, 35, 6],
-            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 26, 800, 500],
+            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 27, 800, 500],
             [B_CONVEYER, 254, 45, 104, 23, 0.1444, 400, 160, 6],
-            [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1],
-            [B_FLIPPER_LEFT, 235, 271, 0.7, 0, 0],
+            [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1, 58],
+            [B_FLIPPER_LEFT, 235, 271, 0.7, 0, 0, 58],
             [B_CONVEYER, 173, 160, 30, 68, 1.5708, 400, 160, 6],
             [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2],
             [B_WALL_GATE, 354, 376, 400, 376, 2],
@@ -2320,13 +2359,13 @@ let SECTIONS = [
                 93, 368, 116, 399
             ],
             [B_CONVEYER, 35, 87, 32, 191, 1.5708, 400, 160, 6],
-            [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970, 36],
+            [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970, 36, 600, 24],
             [B_CIRCLE, 160, 161, 15, 1.2, 22, 0, 160, 1.2],
             [B_CIRCLE, 249, 283, 15, 1.2, 37, 0, 150, 1.2],
             [B_CIRCLE, 398, 50, 15, 1.2, 36, 0, 150, 1.2],
-            [B_LAUNCHER, 577, 155, 0, -1, 2200, 36],
+            [B_LAUNCHER, 575, 143, 0, -1, 2500, 50, 500, 38],
             [B_CIRCLE, 336, 370, 15, 1.2, 22, 0, 250, 1.2],
-            [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1],
+            [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1, 58],
         ],
     ],
     [
@@ -2381,37 +2420,118 @@ let SECTIONS = [
                 34, 334, 119, 285,
                 481, 287, 449, 342,
                 481, 398, 450, 343,
-                197, 218, 197, 161
+                197, 218, 214, 160,
+                214, 159, 214, 61
             ],
-            [B_FLIPPER_LEFT, 332, 585, 0.45, -0.55, 1],
-            [B_FLIPPER_LEFT, 179, 586, 0.45, -0.55, 0],
+            [B_FLIPPER_LEFT, 332, 585, 0.45, -0.55, 1, 58],
+            [B_FLIPPER_LEFT, 179, 586, 0.45, -0.55, 0, 58],
             [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2],
-            [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, 2],
-            [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, 2],
-            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 39, 0, 400],
+            [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, -2],
+            [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, -2],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 43, 0, 400],
             [B_CONVEYER, 344, 643, 139, 26, 1.5708, 400, 160, 6],
             [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
-            [B_LAUNCHER, 18, 607, 0, -1, 1250, 36],
-            [B_FIELD, 6, 514, 15, 108, TRIGGER_DEACTIVATE_WALL, 41, 0, 1000],
-            [B_FIELD, 15, 517, 16, 110, TRIGGER_DEACTIVATE_WALL, 40, 0, 1000],
+            [B_LAUNCHER, 18, 577, 0, -1, 1450, 50, 600, 50],
+            [B_FIELD, 6, 507, 15, 108, TRIGGER_DEACTIVATE_WALL, 43, 0, 1000],
+            [B_FIELD, 14, 504, 16, 110, TRIGGER_DEACTIVATE_WALL, 42, 0, 1000],
             [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
-            [B_WALL_RESTI, 127, 457, 162, 518, 1.2],
-            [B_WALL_RESTI, 345, 514, 381, 452, 1.2],
+            [B_WALL_RESTI, 127, 455, 162, 519, 1.2],
+            [B_WALL_RESTI, 345, 516, 381, 451, 1.2],
             [B_WALL_GATE, 30, 160, 0, 128, 4],
             [B_WALL_GATE, 31, 161, 0, 193, 4],
             [B_WALL_GATE, 483, 48, 495, 27, 2],
             [B_WALL_GATE, 95, 248, 129, 219, 5],
-            [B_FAN, 144, 101, 4, 1, 72, 0, 0, -1.35],
-            [B_CONVEYER, 202, 162, 47, 58, -1.5708, 400, 175, 6],
-            [B_COLLECTABLE, 120, 79, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_CONVEYER, 217, 13, 34, 191, -1.5708, 900, 900, 4],
+            [B_COLLECTABLE, 103, 77, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 41, 141, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 364, 112, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 367, 111, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 284, 210, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 236, 70, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 215, 38, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 249, 417, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_FAN, 124, 98, 4, 1, 80, 0, 0, -1.1],
         ],
     ],
-    [329, -1476, 270, 400, 2, []],
+    [
+        299,
+        -1629,
+        270,
+        553,
+        2,
+        [
+            [
+                B_WALLS,
+                234, 0, 270, 32,
+                254, 553, 268, 539,
+                251, 552, 237, 538,
+                179, 406, 179, 553,
+                213, 431, 213, 553,
+                179, 405, 203, 381,
+                237, 537, 213, 431,
+                101, 0, 73, 38,
+                234, 331, 234, 294,
+                234, 253, 234, 165,
+                234, 125, 234, 45,
+                137, 223, 232, 168,
+                73, 38, 73, 79,
+                73, 131, 73, 402,
+                234, 44, 126, 44,
+                234, 125, 127, 125,
+                233, 294, 128, 374,
+                181, 493, 2, 553,
+                233, 331, 188, 331,
+                126, 124, 126, 44
+            ],
+            [B_LAUNCHER, 253, 510, 0, -1, 1650, 36, 700, 33],
+            [B_WALL_GATE, 235, 164, 269, 130, 1],
+            [B_WALL_GATE, 234, 292, 268, 258, 1],
+            [B_FIELD, 247, 363, 19, 180, TRIGGER_DEACTIVATE_WALL, 27, 200, 500],
+            [B_FIELD, 239, 369, 20, 173, TRIGGER_DEACTIVATE_WALL, 26, 200, 300],
+            [B_WALL_RESTI, 137, 223, 113, 182, 0.5],
+            [B_LAUNCHER, 133, 198, -0.5141, -0.8577, 600, 36, 600, 15],
+            [B_FLIPPER_LEFT, 96, 421, 0.9, -0.6, 0, 58],
+            [B_WALL_RESTI, 73, 402, 96, 415, 0.5],
+            [B_FLIPPER_LEFT, 71, 165, 0.45, -0.55, 1, 42],
+            [B_CIRCLE, 36, 261, 10, 1.25, 11, 0, 0, 1],
+            [B_CIRCLE, 35, 372, 10, 1.25, 11, 0, 0, -1],
+        ],
+    ],
+    [
+        78,
+        -1076,
+        400,
+        676,
+        0,
+        [
+            [
+                B_WALLS,
+                0, 42, 334, 132,
+                400, 160, 277, 193,
+                151, 327, 0, 287,
+                218, 349, 341, 382,
+                0, 397, 306, 479,
+                397, 495, 341, 382,
+                400, 508, 96, 590,
+                274, 675, 2, 603,
+                320, 673, 398, 615,
+                211, 210, 67, 248
+            ],
+            [B_FLIPPER_LEFT, 212, 347, 0.7, -0.3, 1, 58],
+            [B_FLIPPER_LEFT, 216, 209, 0.65, -0.25, 0, 58],
+            [B_CIRCLE, 340, 283, 6, 1.25, 29, 0, 0, 2],
+        ],
+    ],
+    [
+        78,
+        -1201,
+        221,
+        125,
+        1,
+        [
+            [B_FAN, 157, 63, 4, 1, 57, 0, 0, 1.05],
+            [B_FAN, 60, 63, 4, 1, 57, 0, 0, 1.05],
+        ],
+    ],
 ];
 /** section, side, localOffset, width */
 let LINKS = [
@@ -2426,10 +2546,18 @@ let LINKS = [
     [2, SECTION_SIDE_TOP, 412, 176],
     [4, SECTION_SIDE_BOTTOM, 334, 176],
     [4, SECTION_SIDE_TOP, 0, 33],
-    [5, SECTION_SIDE_BOTTOM, 149, 33],
+    [5, SECTION_SIDE_BOTTOM, 179, 33],
+    [5, SECTION_SIDE_LEFT, 428, 125],
+    [7, SECTION_SIDE_RIGHT, 0, 125],
+    [6, SECTION_SIDE_TOP, 0, 51],
+    [7, SECTION_SIDE_BOTTOM, 0, 51],
+    [1, SECTION_SIDE_TOP, 356, 35],
+    [6, SECTION_SIDE_BOTTOM, 278, 35],
+    [4, SECTION_SIDE_LEFT, 437, 51],
+    [6, SECTION_SIDE_RIGHT, 437, 51],
 ];
 /** world x, y */
-let START = [882, -602];
+let START = [114, -1090];
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
     return {

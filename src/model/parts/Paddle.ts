@@ -36,11 +36,13 @@ export class Paddle extends Part {
     y: number,
     control: number,
     restAngle: number,
-    upAngle: number
+    upAngle: number,
+    len = PADDLE_LEN
   ) {
     super(x, y, PART_PADDLE, control);
     this.restAngle = restAngle;
     this.upAngle = upAngle;
+    this.len = len;
     this.angle = restAngle;
     this.prevAngle = restAngle;
     this.line = lineCreate(x, y, x, y);

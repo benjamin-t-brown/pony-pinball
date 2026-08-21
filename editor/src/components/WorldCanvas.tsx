@@ -8,6 +8,7 @@ import {
 } from '@game/model/Part';
 import {
   PADDLE_LEN,
+  LAUNCHER_LEN,
 } from '@game/model/constants';
 import type { Collectable } from '@game/model/parts/Collectable';
 import type { Field } from '@game/model/parts/Field';
@@ -172,16 +173,19 @@ const hitConveyerTip = (
   return Math.hypot(sx - hx, sy - hy) <= 10;
 };
 
-const LAUNCHER_LEN = 24;
+const launcherDrawLen = (call: number[]) => {
+  return call[8] > 0 ? call[8] : LAUNCHER_LEN;
+};
 
 const launcherTipWorld = (section: SectionData, call: number[]) => {
   const origin = callOrigin(section, call);
   const dx = call[3];
   const dy = call[4];
   const len = Math.hypot(dx, dy) || 1;
+  const draw = launcherDrawLen(call);
   return {
-    x: origin.x - (dx / len) * LAUNCHER_LEN,
-    y: origin.y - (dy / len) * LAUNCHER_LEN,
+    x: origin.x - (dx / len) * draw,
+    y: origin.y - (dy / len) * draw,
     ox: origin.x,
     oy: origin.y,
   };
@@ -232,30 +236,33 @@ const flipperPose = (call: number[]) => {
 
 const paddleRay = (
   origin: { x: number; y: number },
-  angle: number
+  angle: number,
+  len: number
 ) => {
   return {
     x0: origin.x,
     y0: origin.y,
-    x1: origin.x + PADDLE_LEN * Math.cos(angle),
-    y1: origin.y + PADDLE_LEN * Math.sin(angle),
+    x1: origin.x + len * Math.cos(angle),
+    y1: origin.y + len * Math.sin(angle),
   };
 };
 
 const callVisualSegment = (section: SectionData, call: number[]) => {
   const origin = callOrigin(section, call);
   if (call[0] === B_FLIPPER_LEFT) {
-    return paddleRay(origin, flipperPose(call).rest);
+    const len = call[6] > 0 ? call[6] : PADDLE_LEN;
+    return paddleRay(origin, flipperPose(call).rest, len);
   }
   if (call[0] === B_LAUNCHER) {
     const dx = call[3];
     const dy = call[4];
     const len = Math.hypot(dx, dy) || 1;
+    const draw = launcherDrawLen(call);
     return {
       x0: origin.x,
       y0: origin.y,
-      x1: origin.x - (dx / len) * LAUNCHER_LEN,
-      y1: origin.y - (dy / len) * LAUNCHER_LEN,
+      x1: origin.x - (dx / len) * draw,
+      y1: origin.y - (dy / len) * draw,
     };
   }
   return null;
@@ -279,7 +286,8 @@ const hitsCall = (
       return true;
     }
     if (call[0] === B_FLIPPER_LEFT) {
-      const up = paddleRay(origin, flipperPose(call).up);
+      const len = call[6] > 0 ? call[6] : PADDLE_LEN;
+      const up = paddleRay(origin, flipperPose(call).up, len);
       if (distToSegment(wx, wy, up.x0, up.y0, up.x1, up.y1) < fat) {
         return true;
       }
@@ -1531,6 +1539,7 @@ export const WorldCanvas = ({
                   cy={ball.pos.y}
                   r={ball.r}
                   fill={ball.color}
+                  fillOpacity={0.75}
                 />
               ))
             : null}
@@ -1605,7 +1614,11 @@ const callMarker = (
   const segment = callVisualSegment(s, call);
   const up =
     call[0] === B_FLIPPER_LEFT
-      ? paddleRay(origin, flipperPose(call).up)
+      ? paddleRay(
+          origin,
+          flipperPose(call).up,
+          call[6] > 0 ? call[6] : PADDLE_LEN
+        )
       : null;
   const hs = 5 / scale;
   return (
@@ -1896,17 +1909,32 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
   }
   if (part.type === PART_LAUNCHER) {
     const launcher = part as Launcher;
-    const len = 24;
+    const len = launcher.len;
+    const t = launcher.getChargeT();
+    const fill = len * t;
     return (
-      <line
-        x1={launcher.x}
-        y1={launcher.y}
-        x2={launcher.x - launcher.dir.x * len}
-        y2={launcher.y - launcher.dir.y * len}
-        stroke={launcher.active ? '#fc8' : '#c84'}
-        strokeWidth={8}
-        strokeLinecap="round"
-      />
+      <g>
+        <line
+          x1={launcher.x}
+          y1={launcher.y}
+          x2={launcher.x - launcher.dir.x * len}
+          y2={launcher.y - launcher.dir.y * len}
+          stroke="#c84"
+          strokeWidth={8}
+          strokeLinecap="round"
+        />
+        {fill > 0 ? (
+          <line
+            x1={launcher.x}
+            y1={launcher.y}
+            x2={launcher.x - launcher.dir.x * fill}
+            y2={launcher.y - launcher.dir.y * fill}
+            stroke={t >= 1 ? '#fc8' : '#fa6'}
+            strokeWidth={8}
+            strokeLinecap="round"
+          />
+        ) : null}
+      </g>
     );
   }
   const obstacle = part as Obstacle;

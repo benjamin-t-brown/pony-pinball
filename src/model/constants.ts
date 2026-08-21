@@ -16,6 +16,8 @@ export const LAUNCHER_X = 384;
 export const LAUNCHER_Y = 582;
 export const LAUNCHER_FORCE = 1250;
 export const LAUNCHER_RANGE = 36;
+export const LAUNCHER_CHARGE_MS = 600;
+export const LAUNCHER_LEN = 24;
 
 export const LEFT_PIVOT = { x: 118, y: 450 };
 export const RIGHT_PIVOT = { x: 282, y: 450 };

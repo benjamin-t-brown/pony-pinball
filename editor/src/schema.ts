@@ -17,10 +17,13 @@ import {
   TRIGGER_MOVE_DOOR,
 } from '@game/model/Trigger';
 import {
+  LAUNCHER_CHARGE_MS,
   LAUNCHER_FORCE,
+  LAUNCHER_LEN,
   LAUNCHER_RANGE,
   LEFT_REST_ANGLE,
   LEFT_UP,
+  PADDLE_LEN,
 } from '@game/model/constants';
 
 export type ParamDef = {
@@ -76,6 +79,7 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'restAngle', step: 0.05 },
       { name: 'upAngle', step: 0.05 },
       { name: 'isFlipped', step: 1 },
+      { name: 'flipperLength' },
     ],
   },
   {
@@ -89,6 +93,8 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'dy', step: 0.1 },
       { name: 'force' },
       { name: 'range' },
+      { name: 'chargeMs' },
+      { name: 'launcherLength' },
     ],
   },
   {
@@ -193,10 +199,20 @@ export const triggerDefFor = (id: number) => {
 
 export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_FLIPPER_LEFT) {
-    return [B_FLIPPER_LEFT, x, y, LEFT_REST_ANGLE, LEFT_UP, 0];
+    return [B_FLIPPER_LEFT, x, y, LEFT_REST_ANGLE, LEFT_UP, 0, PADDLE_LEN];
   }
   if (id === B_LAUNCHER) {
-    return [B_LAUNCHER, x, y, 0, -1, LAUNCHER_FORCE, LAUNCHER_RANGE];
+    return [
+      B_LAUNCHER,
+      x,
+      y,
+      0,
+      -1,
+      LAUNCHER_FORCE,
+      LAUNCHER_RANGE,
+      LAUNCHER_CHARGE_MS,
+      LAUNCHER_LEN,
+    ];
   }
   if (id === B_CIRCLE) {
     return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0];

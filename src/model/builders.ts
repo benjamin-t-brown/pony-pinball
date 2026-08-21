@@ -1,6 +1,7 @@
 import { lineCreate } from '../sim/physics';
 import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
+import { PADDLE_LEN } from './constants';
 import { Collectable } from './parts/Collectable';
 import { Field } from './parts/Field';
 import { Launcher } from './parts/Launcher';
@@ -56,20 +57,36 @@ BUILDERS[B_WALL_GATE] = (section, [x0, y0, x1, y1, color]) => {
   );
 };
 
-BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
+BUILDERS[B_FLIPPER_LEFT] = (
+  section,
+  [x, y, restAngle, upAngle, isFlipped, flipperLength]
+) => {
   section.parts.push(
     new Paddle(
       x,
       y,
       isFlipped ? CONTROL_RIGHT : CONTROL_LEFT,
       isFlipped ? Math.PI - restAngle : restAngle,
-      isFlipped ? Math.PI - upAngle : upAngle
+      isFlipped ? Math.PI - upAngle : upAngle,
+      flipperLength > 0 ? flipperLength : PADDLE_LEN
     )
   );
 };
 
-BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
-  s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
+BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range, chargeMs, launcherLength]) => {
+  s.parts.push(
+    new Launcher(
+      x,
+      y,
+      CONTROL_START,
+      dx,
+      dy,
+      force,
+      range,
+      chargeMs,
+      launcherLength
+    )
+  );
 };
 
 BUILDERS[B_FIELD] = (s, data) => {
