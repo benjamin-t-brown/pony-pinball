@@ -13,11 +13,13 @@ import {
   stringify,
 } from '../dom';
 import {
+  PART_COLLECTABLE,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
   type Part,
 } from '../model/Part';
+import type { Collectable } from '../model/parts/Collectable';
 import type { Field } from '../model/parts/Field';
 import type { Launcher } from '../model/parts/Launcher';
 import type { Obstacle } from '../model/parts/Obstacle';
@@ -68,6 +70,25 @@ export class PartElement extends UiElement {
   build() {
     const part = this.part;
     this.setPos(part.x, part.y);
+
+    if (part.type === PART_COLLECTABLE) {
+      const coin = part as Collectable;
+      const d = coin.r * 2;
+      const el = createElement(DIV);
+      setStyle(el, {
+        position: 'absolute',
+        left: px(coin.x - coin.r),
+        top: px(coin.y - coin.r),
+        width: px(d),
+        height: px(d),
+        'border-radius': '50%',
+        background: '#fc8',
+        [POINTER_EVENTS]: 'none',
+      });
+      this.attach(el);
+      this.render(0);
+      return;
+    }
 
     if (part.type === PART_FIELD) {
       const field = part as Field;
@@ -164,6 +185,18 @@ export class PartElement extends UiElement {
   update(_dt: number) {
     const part = this.part;
     const first = this.lineEls[0] as unknown as HTMLElement;
+
+    if (part.type === PART_COLLECTABLE) {
+      const coin = part as Collectable;
+      if (this.el) {
+        setStyle(this.el, {
+          display: coin.taken ? 'none' : 'block',
+          left: px(coin.x - coin.r),
+          top: px(coin.y - coin.r),
+        });
+      }
+      return;
+    }
 
     if (part.type === PART_PADDLE) {
       if (first) {

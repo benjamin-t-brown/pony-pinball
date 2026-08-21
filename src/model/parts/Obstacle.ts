@@ -131,6 +131,17 @@ export const makeCircleWalls = (r: number, n: number, rest: number): Line[] => {
   return walls;
 };
 
+/** Radial paddles from the hub out to `r`, evenly spaced around the circle. */
+export const makeFanWalls = (r: number, paddles: number, rest: number): Line[] => {
+  const n = paddles < 1 ? 1 : paddles | 0;
+  const walls: Line[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    walls.push(lineCreate(0, 0, r * Math.cos(a), r * Math.sin(a), rest));
+  }
+  return walls;
+};
+
 export const makeCircle = (
   x: number,
   y: number,
@@ -146,6 +157,29 @@ export const makeCircle = (
     y,
     PART_OBSTACLE,
     makeCircleWalls(radius, resolution, restitution),
+    vx,
+    vy,
+    omega
+  );
+  o.r = radius;
+  return o;
+};
+
+export const makeFan = (
+  x: number,
+  y: number,
+  paddles: number,
+  restitution: number,
+  radius: number,
+  vx = 0,
+  vy = 0,
+  omega = 0
+) => {
+  const o = new Obstacle(
+    x,
+    y,
+    PART_OBSTACLE,
+    makeFanWalls(radius, paddles, restitution),
     vx,
     vy,
     omega

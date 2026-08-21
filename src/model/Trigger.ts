@@ -2,10 +2,17 @@ import type { Section } from './Section';
 
 export const TRIGGER_DEACTIVATE_WALL = 0;
 export const TRIGGER_MOVE_DOOR = 1;
+/** Collectable: 5 coins of group 0 open all gates in section 4. */
+export const TRIGGER_GATE_SECTION_4 = 2;
+
+export type CollectState = {
+  collected: number[];
+  sections: Section[];
+};
 
 /**
- * Script attached to a trigger field. Occupancy is owned by the field; these
- * hooks may mutate the section (walls, parts) while the ball is inside.
+ * Script attached to a trigger field or collectable. Occupancy / pickup is
+ * owned by the part; these hooks may mutate the section (walls, parts).
  * `args` is the rest of the builder call after the trigger id.
  */
 export class Trigger {
@@ -20,6 +27,8 @@ export class Trigger {
   onDeactivated(_section: Section) {}
 
   onUpdate(_dt: number, _section: Section) {}
+
+  onCollect(_section: Section, _state: CollectState, _groupType: number) {}
 }
 
 export class DeactivateWallTrigger extends Trigger {
@@ -123,6 +132,30 @@ export class MoveDoorTrigger extends Trigger {
   }
 }
 
+/**
+ * Hardcoded collectable goal: after 5 group-0 coins, disable every gate wall
+ * (color >= 0) in section 4.
+ */
+export class GateSection4Trigger extends Trigger {
+  onCollect(_section: Section, state: CollectState, groupType: number) {
+    if (groupType !== 0) {
+      return;
+    }
+    const needed = 5;
+    const section = 4;
+    const wallIndex = 44;
+    if ((state.collected[0] || 0) < needed) {
+      return;
+    }
+    const target = state.sections[section];
+    if (!target) {
+      return;
+    }
+    target.walls[wallIndex].rest = -1;
+  }
+}
+
 export const TRIGGERS: (typeof Trigger)[] = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
 TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
+TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;

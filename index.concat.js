@@ -138,10 +138,11 @@ let circleIntegrate = (c, dtSeconds, gravity = GRAVITY) => {
     c.pos = vecAdd(c.pos, vecMul(c.vel, dtSeconds));
     return c;
 };
-let lineCreate = (x1, y1, x2, y2, rest = 0.5) => ({
+let lineCreate = (x1, y1, x2, y2, rest = 0.5, color = -1) => ({
     a: vecCreate(x1, y1),
     b: vecCreate(x2, y2),
     rest,
+    color,
 });
 let lineSet = (l, x1, y1, x2, y2) => {
     l.a.x = x1;
@@ -405,9 +406,10 @@ let flattenSectionWalls = (sections, into) => {
             if (n < walls.length) {
                 lineSet(walls[n], x0, y0, x1, y1);
                 walls[n].rest = wall.rest;
+                walls[n].color = wall.color;
             }
             else {
-                walls.push(lineCreate(x0, y0, x1, y1, wall.rest));
+                walls.push(lineCreate(x0, y0, x1, y1, wall.rest, wall.color));
             }
             n++;
         }
@@ -800,7 +802,7 @@ let updateParts = (state, dt) => {
 let preBallParts = (ball, state, dtSeconds) => {
     let g = GRAVITY;
     forEachPart(state.sections, (part, section) => {
-        g = part.preBall(ball, section.x, section.y, dtSeconds, g, section);
+        g = part.preBall(ball, section.x, section.y, dtSeconds, g, section, state);
     });
     return g;
 };
@@ -1077,6 +1079,7 @@ let PART_PADDLE = 0;
 let PART_LAUNCHER = 1;
 let PART_OBSTACLE = 2;
 let PART_FIELD = 3;
+let PART_COLLECTABLE = 4;
 /**
  * Everything that lives in a Section and can touch the ball: paddles,
  * launchers, bumpers, fields. One list, one loop, one UI element — adding a
@@ -1107,12 +1110,627 @@ class Part {
      * Pre-integration: apply forces to the ball and return the gravity it should
      * integrate with. Returning `g` untouched opts out of both.
      */
-    preBall(_ball, _ox, _oy, _dtSeconds, g, _section) {
+    preBall(_ball, _ox, _oy, _dtSeconds, g, _section, _state) {
         return g;
     }
     /** Post-integration: resolve contact. */
     affectBall(_ball, _ox, _oy) { }
 }
+class Collectable extends Part {
+    r = 12;
+    groupType = 0;
+    taken = false;
+    trigger = null;
+    constructor(x, y, r, groupType) {
+        super(x, y, PART_COLLECTABLE);
+        this.active = true;
+        this.r = r;
+        this.groupType = groupType;
+    }
+    preBall(ball, ox, oy, _dtSeconds, g, section, state) {
+        if (this.taken || !state) {
+            return g;
+        }
+        let dx = ball.pos.x - (this.x + ox);
+        let dy = ball.pos.y - (this.y + oy);
+        let hitR = this.r + ball.r;
+        if (dx * dx + dy * dy > hitR * hitR) {
+            return g;
+        }
+        this.taken = true;
+        this.active = false;
+        let gt = this.groupType;
+        while (state.collected.length <= gt) {
+            state.collected.push(0);
+        }
+        state.collected[gt]++;
+        if (this.trigger) {
+            this.trigger.onCollect(section, state, gt);
+        }
+        return g;
+    }
+}
+class Field extends Part {
+    w = 0;
+    h = 0;
+    permanent = true;
+    inside = false;
+    grav = 1;
+    ax = 0;
+    ay = 0;
+    drag = 0;
+    maxSpeed = 0;
+    trigger = null;
+    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
+        super(x, y, PART_FIELD);
+        this.active = true;
+        this.w = w;
+        this.h = h;
+        this.grav = grav;
+        this.ax = ax;
+        this.ay = ay;
+        this.maxSpeed = maxSpeed;
+    }
+    unactivate() {
+        if (!this.permanent) {
+            this.active = false;
+        }
+    }
+    contains(px, py, ox, oy) {
+        let x = this.x + ox;
+        let y = this.y + oy;
+        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
+    }
+    onEnter() { }
+    onExit() { }
+    preBall(ball, ox, oy, dtSeconds, g, section, _state) {
+        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
+        if (inNow && !this.inside) {
+            this.onEnter();
+            if (this.trigger) {
+                this.trigger.onActivated(section);
+            }
+        }
+        else if (!inNow && this.inside) {
+            this.onExit();
+            if (this.trigger) {
+                this.trigger.onDeactivated(section);
+            }
+        }
+        this.inside = inNow;
+        if (this.trigger) {
+            this.trigger.onUpdate(dtSeconds * 1000, section);
+        }
+        if (!inNow) {
+            return g;
+        }
+        if (this.trigger) {
+            return g;
+        }
+        // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
+        // motion so the ball settles into the stream instead of skating across it.
+        let forceLen = Math.hypot(this.ax, this.ay);
+        if (this.grav === 0 && forceLen > 0) {
+            let nx = this.ax / forceLen;
+            let ny = this.ay / forceLen;
+            let along = ball.vel.x * nx + ball.vel.y * ny;
+            let catchRate = this.drag > 0 ? this.drag : 4;
+            let damp = Math.max(0, 1 - catchRate * dtSeconds);
+            let newAlong = along + forceLen * dtSeconds;
+            if (this.maxSpeed > 0) {
+                if (newAlong > this.maxSpeed) {
+                    newAlong = this.maxSpeed;
+                }
+                else if (newAlong < -this.maxSpeed) {
+                    newAlong = -this.maxSpeed;
+                }
+            }
+            ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
+            ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
+            return 0;
+        }
+        ball.vel.x += this.ax * dtSeconds;
+        ball.vel.y += this.ay * dtSeconds;
+        if (this.drag > 0) {
+            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
+        }
+        if (this.maxSpeed > 0) {
+            let speed = vecLen(ball.vel);
+            if (speed > this.maxSpeed) {
+                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
+            }
+        }
+        return g * this.grav;
+    }
+}
+class Launcher extends Part {
+    dir;
+    force = 0;
+    range = 0;
+    fired = false;
+    constructor(x, y, control, dx, dy, force, range) {
+        super(x, y, PART_LAUNCHER, control);
+        this.dir = vecNorm(vecCreate(dx, dy));
+        this.force = force;
+        this.range = range;
+    }
+    unactivate() {
+        this.active = false;
+        this.fired = false;
+    }
+    affectBall(ball, ox, oy) {
+        if (!this.active || this.fired) {
+            return;
+        }
+        let dx = ball.pos.x - (this.x + ox);
+        let dy = ball.pos.y - (this.y + oy);
+        if (dx * dx + dy * dy > this.range * this.range) {
+            return;
+        }
+        ball.vel = vecMul(this.dir, this.force);
+        this.fired = true;
+    }
+}
+let FLASH_MS = 120;
+class Obstacle extends Part {
+    vx = 0;
+    vy = 0;
+    angle = 0;
+    omega = 0;
+    r = 0;
+    walls = [];
+    worldWalls = [];
+    alwaysSolid = true;
+    touching = false;
+    flash = 0;
+    constructor(x, y, type, walls, vx = 0, vy = 0, omega = 0) {
+        super(x, y, type);
+        this.vx = vx;
+        this.vy = vy;
+        this.omega = omega;
+        this.walls = walls;
+        for (let i = 0; i < walls.length; i++) {
+            this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
+        }
+    }
+    onHit() {
+        this.activate();
+        this.flash = FLASH_MS;
+    }
+    update(dt, section) {
+        let dtSeconds = dt / 1000;
+        if (this.flash > 0) {
+            this.flash -= dt;
+            if (this.flash <= 0) {
+                this.unactivate();
+            }
+        }
+        this.x += this.vx * dtSeconds;
+        this.y += this.vy * dtSeconds;
+        this.angle += this.omega * dtSeconds;
+        let r = this.r;
+        if (this.x < r) {
+            this.x = r;
+            if (this.vx < 0) {
+                this.vx = -this.vx;
+            }
+        }
+        else if (this.x > section.w - r) {
+            this.x = section.w - r;
+            if (this.vx > 0) {
+                this.vx = -this.vx;
+            }
+        }
+        if (this.y < r) {
+            this.y = r;
+            if (this.vy < 0) {
+                this.vy = -this.vy;
+            }
+        }
+        else if (this.y > section.h - r) {
+            this.y = section.h - r;
+            if (this.vy > 0) {
+                this.vy = -this.vy;
+            }
+        }
+    }
+    affectBall(ball, ox, oy) {
+        if (!this.active && !this.alwaysSolid) {
+            this.touching = false;
+            return;
+        }
+        let wx = this.x + ox;
+        let wy = this.y + oy;
+        let ca = Math.cos(this.angle);
+        let sa = Math.sin(this.angle);
+        for (let i = 0; i < this.walls.length; i++) {
+            let w = this.walls[i];
+            lineSet(this.worldWalls[i], w.a.x * ca - w.a.y * sa + wx, w.a.x * sa + w.a.y * ca + wy, w.b.x * ca - w.b.y * sa + wx, w.b.x * sa + w.b.y * ca + wy);
+        }
+        let hit = resolveBallWalls(ball, this.worldWalls, vecCreate(this.vx - this.omega * (ball.pos.y - wy), this.vy + this.omega * (ball.pos.x - wx)));
+        if (hit && !this.touching) {
+            this.onHit();
+        }
+        this.touching = hit;
+    }
+}
+let makeCircleWalls = (r, n, rest) => {
+    let walls = [];
+    for (let i = 0; i < n; i++) {
+        let a0 = (i / n) * Math.PI * 2;
+        let a1 = ((i + 1) / n) * Math.PI * 2;
+        walls.push(lineCreate(r * Math.cos(a0), r * Math.sin(a0), r * Math.cos(a1), r * Math.sin(a1), rest));
+    }
+    return walls;
+};
+/** Radial paddles from the hub out to `r`, evenly spaced around the circle. */
+let makeFanWalls = (r, paddles, rest) => {
+    let n = paddles < 1 ? 1 : paddles | 0;
+    let walls = [];
+    for (let i = 0; i < n; i++) {
+        let a = (i / n) * Math.PI * 2;
+        walls.push(lineCreate(0, 0, r * Math.cos(a), r * Math.sin(a), rest));
+    }
+    return walls;
+};
+let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
+    o.r = radius;
+    return o;
+};
+let makeFan = (x, y, paddles, restitution, radius, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeFanWalls(radius, paddles, restitution), vx, vy, omega);
+    o.r = radius;
+    return o;
+};
+/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
+let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
+    o.r = r;
+    return o;
+};
+class Paddle extends Part {
+    angle = 0;
+    prevAngle = 0;
+    restAngle = 0;
+    upAngle = 0;
+    len = PADDLE_LEN;
+    omega = 0;
+    line;
+    worldLine;
+    constructor(x, y, control, restAngle, upAngle) {
+        super(x, y, PART_PADDLE, control);
+        this.restAngle = restAngle;
+        this.upAngle = upAngle;
+        this.angle = restAngle;
+        this.prevAngle = restAngle;
+        this.line = lineCreate(x, y, x, y);
+        this.worldLine = lineCreate(x, y, x, y, PADDLE_REST);
+        this.syncLine();
+    }
+    syncLine() {
+        lineSet(this.line, this.x, this.y, this.x + this.len * Math.cos(this.angle), this.y + this.len * Math.sin(this.angle));
+    }
+    getLine() {
+        return this.line;
+    }
+    /** Velocity of the paddle's surface at a world point: omega cross r. */
+    getSurfaceVel(p, pivotX, pivotY) {
+        return vecCreate(-this.omega * (p.y - pivotY), this.omega * (p.x - pivotX));
+    }
+    /**
+     * Which face of the paddle a world point lies on, +1 or -1, measured against
+     * the paddle at `angle`.
+     */
+    sideOf(p, pivotX, pivotY, angle) {
+        let cross = Math.cos(angle) * (p.y - pivotY) - Math.sin(angle) * (p.x - pivotX);
+        return cross < 0 ? -1 : 1;
+    }
+    affectBall(ball, ox, oy) {
+        let pivotX = this.x + ox;
+        let pivotY = this.y + oy;
+        let dirX = Math.cos(this.angle);
+        let dirY = Math.sin(this.angle);
+        lineSet(this.worldLine, pivotX, pivotY, pivotX + this.len * dirX, pivotY + this.len * dirY);
+        let reach = ball.r + PADDLE_HALF_WIDTH;
+        let { point, t } = lineClosestPointT(this.worldLine, ball.pos);
+        let diff = vecSub(ball.pos, point);
+        let dist = vecLen(diff);
+        if (dist >= reach) {
+            return;
+        }
+        // Orient the normal by the face the ball was on *before* this step's sweep.
+        // Deriving it from the current position flips it the moment the paddle
+        // rotates past the ball's centre, and the correction then fires the ball
+        // back into the swept path to be hit again — the stick-and-drag artifact.
+        let side = this.sideOf(ball.pos, pivotX, pivotY, this.prevAngle);
+        let faceN = vecCreate(-dirY * side, dirX * side);
+        // Along the paddle's length the contact is against its flat face; past
+        // either end it is against a round cap, so the normal is radial there.
+        let n = t > 0 && t < 1
+            ? faceN
+            : dist > 1e-6
+                ? vecMul(diff, 1 / dist)
+                : faceN;
+        // Signed depth: negative dot means the sweep has already carried the paddle
+        // through the ball, so push it back out the side it entered from.
+        let depth = reach - (diff.x * n.x + diff.y * n.y);
+        resolveCircleSurface(ball, n, depth, PADDLE_REST, PADDLE_FRICTION, this.getSurfaceVel(point, pivotX, pivotY));
+    }
+    update(dt) {
+        let dtSeconds = dt / 1000;
+        this.prevAngle = this.angle;
+        let target = this.active ? this.upAngle : this.restAngle;
+        let speed = this.active ? PADDLE_SPEED : PADDLE_RETURN;
+        let maxStep = speed * dtSeconds;
+        let diff = target - this.angle;
+        if (Math.abs(diff) <= maxStep) {
+            this.omega = dtSeconds > 0 ? diff / dtSeconds : 0;
+            this.angle = target;
+        }
+        else {
+            let dir = diff < 0 ? -1 : 1;
+            this.omega = dir * speed;
+            this.angle += dir * maxStep;
+        }
+        this.syncLine();
+    }
+}
+let TRIGGER_DEACTIVATE_WALL = 0;
+let TRIGGER_MOVE_DOOR = 1;
+/** Collectable: 5 coins of group 0 open all gates in section 4. */
+let TRIGGER_GATE_SECTION_4 = 2;
+/**
+ * Script attached to a trigger field or collectable. Occupancy / pickup is
+ * owned by the part; these hooks may mutate the section (walls, parts).
+ * `args` is the rest of the builder call after the trigger id.
+ */
+class Trigger {
+    args = [];
+    constructor(args) {
+        this.args = args;
+    }
+    onActivated(_section) { }
+    onDeactivated(_section) { }
+    onUpdate(_dt, _section) { }
+    onCollect(_section, _state, _groupType) { }
+}
+class DeactivateWallTrigger extends Trigger {
+    rest = 0.5;
+    disableIn = -1;
+    enableIn = -1;
+    disableWall(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall || wall.rest < 0) {
+            return;
+        }
+        this.rest = wall.rest;
+        wall.rest = -1;
+    }
+    enableWall(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        wall.rest = this.rest;
+    }
+    onActivated(section) {
+        this.enableIn = -1;
+        if (this.args[1] > 0) {
+            this.disableIn = this.args[1];
+            return;
+        }
+        this.disableWall(section);
+    }
+    onDeactivated(section) {
+        this.disableIn = -1;
+        if (this.args[2] > 0) {
+            this.enableIn = this.args[2];
+            return;
+        }
+        this.enableWall(section);
+    }
+    onUpdate(dt, section) {
+        if (this.disableIn >= 0) {
+            this.disableIn -= dt;
+            if (this.disableIn <= 0) {
+                this.disableIn = -1;
+                this.disableWall(section);
+            }
+        }
+        if (this.enableIn >= 0) {
+            this.enableIn -= dt;
+            if (this.enableIn <= 0) {
+                this.enableIn = -1;
+                this.enableWall(section);
+            }
+        }
+    }
+}
+class MoveDoorTrigger extends Trigger {
+    x0 = 0;
+    y0 = 0;
+    x1 = 0;
+    y1 = 0;
+    held = false;
+    onActivated(section) {
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        this.held = true;
+        this.x0 = wall.a.x;
+        this.y0 = wall.a.y;
+        this.x1 = wall.b.x;
+        this.y1 = wall.b.y;
+    }
+    onDeactivated(section) {
+        this.held = false;
+        let wall = section.walls[this.args[0]];
+        if (!wall) {
+            return;
+        }
+        wall.a.x = this.x0;
+        wall.a.y = this.y0;
+        wall.b.x = this.x1;
+        wall.b.y = this.y1;
+    }
+    onUpdate(dt, section) {
+        if (!this.held) {
+            return;
+        }
+        let s = dt / 1000;
+        // wall.a.x += this.args[1] * s;
+        // wall.a.y += this.args[2] * s;
+        // wall.b.x += this.args[1] * s;
+        // wall.b.y += this.args[2] * s;
+    }
+}
+/**
+ * Hardcoded collectable goal: after 5 group-0 coins, disable every gate wall
+ * (color >= 0) in section 4.
+ */
+class GateSection4Trigger extends Trigger {
+    onCollect(_section, state, groupType) {
+        if (groupType !== 0) {
+            return;
+        }
+        if ((state.collected[0] || 0) < 5) {
+            return;
+        }
+        let target = state.sections[4];
+        if (!target) {
+            return;
+        }
+        for (let i = 0; i < target.walls.length; i++) {
+            let wall = target.walls[i];
+            if (wall.color >= 0) {
+                wall.rest = -1;
+            }
+        }
+    }
+}
+let TRIGGERS = [];
+TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
+TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
+TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
+let BG = ['#555', '#466', '#645'];
+/** Gate wall stroke colors; builder `color` indexes this list. */
+let GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
+let B_WALLS = 0;
+let B_WALL_RESTI = 1;
+let B_LAUNCHER = 2;
+let B_WALL_GATE = 3;
+let B_FIELD = 4;
+let B_FLIPPER_LEFT = 5;
+let B_CIRCLE = 6;
+let B_CONVEYER = 7;
+let B_COLLECTABLE = 8;
+let B_FAN = 9;
+let SECTION_SIDE_BOTTOM = 0;
+let SECTION_SIDE_TOP = 1;
+let SECTION_SIDE_LEFT = 2;
+let SECTION_SIDE_RIGHT = 3;
+/**
+ * Builders turn a handful of numbers into geometry. Each may push walls, parts
+ * or both — a flipper pair owns its inlane slopes as much as its paddles — and
+ * they expand at runtime so the data stays small and stays retunable in one
+ * place.
+ */
+let BUILDERS = [];
+BUILDERS[B_WALLS] = (section, wallList) => {
+    for (let i = 0; i < wallList.length; i += 4) {
+        section.walls.push(lineCreate(wallList[i], wallList[i + 1], wallList[i + 2], wallList[i + 3]));
+    }
+};
+BUILDERS[B_WALL_RESTI] = (section, [x0, y0, x1, y1, rest]) => {
+    section.walls.push(lineCreate(x0, y0, x1, y1, rest));
+};
+BUILDERS[B_WALL_GATE] = (section, [x0, y0, x1, y1, color]) => {
+    let c = color | 0;
+    section.walls.push(lineCreate(x0, y0, x1, y1, 0.5, c < 0 ? 0 : c % GATE_COLORS.length));
+};
+BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
+    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle));
+};
+BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
+    s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
+};
+BUILDERS[B_FIELD] = (s, data) => {
+    let x = data[0];
+    let y = data[1];
+    let w = data[2];
+    let h = data[3];
+    let id = data[4];
+    let Ctor = TRIGGERS[id] || Trigger;
+    let field = new Field(x, y, w, h);
+    field.trigger = new Ctor(data.slice(5));
+    s.parts.push(field);
+};
+BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
+    let field = new Field(x, y, w, h, 0, Math.cos(angle) * power, Math.sin(angle) * power, maxSpeed);
+    field.drag = drag;
+    s.parts.push(field);
+};
+BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius, dx, dy, omega]) => {
+    section.parts.push(makeCircle(x, y, resolution, restitution, radius, dx, dy, omega));
+};
+BUILDERS[B_FAN] = (section, [x, y, paddles, restitution, radius, dx, dy, omega]) => {
+    section.parts.push(makeFan(x, y, paddles, restitution, radius, dx, dy, omega));
+};
+BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
+    let Ctor = TRIGGERS[id] || Trigger;
+    let coin = new Collectable(x, y, r, groupType);
+    coin.trigger = new Ctor([]);
+    s.parts.push(coin);
+};
+// assumes an edge can only have one hole in it at max
+let buildSectionEdges = (sections, links) => {
+    let walls = BUILDERS[B_WALLS];
+    for (let i = 0; i < sections.length; i++) {
+        let s = sections[i];
+        let { w, h } = s;
+        // bottom, top, left, right — index matches SECTION_SIDE_*
+        let edges = [
+            [0, h, w, h],
+            [0, 0, w, 0],
+            [0, 0, 0, h],
+            [w, 0, w, h],
+        ];
+        for (let e = 0; e < 4; e++) {
+            let [x0, y0, x1, y1] = edges[e];
+            let o = 0;
+            let g = 0;
+            for (let k = 0; k < links.length; k++) {
+                let l = links[k];
+                if (l[0] === i && l[1] === e) {
+                    o = l[2];
+                    g = o + l[3];
+                    break;
+                }
+            }
+            if (g) {
+                walls(s, y0 === y1
+                    ? [x0, y0, o, y0, g, y0, x1, y0]
+                    : [x0, y0, x0, o, x0, g, x0, y1]);
+            }
+            else {
+                walls(s, [x0, y0, x1, y1]);
+            }
+        }
+    }
+};
+let buildLevel = (sectionData, links) => {
+    let sections = sectionData.map((d, i) => sectionCreate(i, d[0], d[1], d[2], d[3], BG[d[4]]));
+    buildSectionEdges(sections, links);
+    for (let i = 0; i < sectionData.length; i++) {
+        let calls = sectionData[i][5];
+        for (let j = 0; j < calls.length; j++) {
+            BUILDERS[calls[j][0]](sections[i], calls[j].slice(1));
+        }
+    }
+    return sections;
+};
 let LAUNCHER_LEN = 24;
 class PartElement extends UiElement {
     part;
@@ -1144,6 +1762,24 @@ class PartElement extends UiElement {
     build() {
         let part = this.part;
         this.setPos(part.x, part.y);
+        if (part.type === PART_COLLECTABLE) {
+            let coin = part;
+            let d = coin.r * 2;
+            let el = createElement(DIV);
+            setStyle(el, {
+                position: 'absolute',
+                left: px(coin.x - coin.r),
+                top: px(coin.y - coin.r),
+                width: px(d),
+                height: px(d),
+                'border-radius': '50%',
+                background: '#fc8',
+                [POINTER_EVENTS]: 'none',
+            });
+            this.attach(el);
+            this.render(0);
+            return;
+        }
         if (part.type === PART_FIELD) {
             let field = part;
             this.width = field.w;
@@ -1221,6 +1857,17 @@ class PartElement extends UiElement {
     update(_dt) {
         let part = this.part;
         let first = this.lineEls[0];
+        if (part.type === PART_COLLECTABLE) {
+            let coin = part;
+            if (this.el) {
+                setStyle(this.el, {
+                    display: coin.taken ? 'none' : 'block',
+                    left: px(coin.x - coin.r),
+                    top: px(coin.y - coin.r),
+                });
+            }
+            return;
+        }
         if (part.type === PART_PADDLE) {
             if (first) {
                 let line = part.getLine();
@@ -1302,15 +1949,23 @@ class BoardSection extends UiElement {
             inset: '0',
         });
         for (let wall of section.walls) {
-            svg.appendChild(createSvgElement(LINE, {
+            let gate = wall.color >= 0;
+            let stroke = gate
+                ? GATE_COLORS[wall.color % GATE_COLORS.length] || '#fc8'
+                : '#888';
+            let attrs = {
                 x1: stringify(wall.a.x),
                 y1: stringify(wall.a.y),
                 x2: stringify(wall.b.x),
                 y2: stringify(wall.b.y),
-                stroke: '#888',
-                'stroke-width': '4',
+                stroke,
+                'stroke-width': gate ? '6' : '4',
                 'stroke-linecap': 'round',
-            }));
+            };
+            if (gate) {
+                attrs['stroke-dasharray'] = '10 6';
+            }
+            svg.appendChild(createSvgElement(LINE, attrs));
         }
         appendChild(el, svg);
         let host = this.parent && this.parent.getChildHostEl();
@@ -1574,523 +2229,6 @@ class SimUiLayer extends Layer {
         this.setControl(key, false);
     }
 }
-class Field extends Part {
-    w = 0;
-    h = 0;
-    permanent = true;
-    inside = false;
-    grav = 1;
-    ax = 0;
-    ay = 0;
-    drag = 0;
-    maxSpeed = 0;
-    trigger = null;
-    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
-        super(x, y, PART_FIELD);
-        this.active = true;
-        this.w = w;
-        this.h = h;
-        this.grav = grav;
-        this.ax = ax;
-        this.ay = ay;
-        this.maxSpeed = maxSpeed;
-    }
-    unactivate() {
-        if (!this.permanent) {
-            this.active = false;
-        }
-    }
-    contains(px, py, ox, oy) {
-        let x = this.x + ox;
-        let y = this.y + oy;
-        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
-    }
-    onEnter() { }
-    onExit() { }
-    preBall(ball, ox, oy, dtSeconds, g, section) {
-        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
-        if (inNow && !this.inside) {
-            this.onEnter();
-            if (this.trigger) {
-                this.trigger.onActivated(section);
-            }
-        }
-        else if (!inNow && this.inside) {
-            this.onExit();
-            if (this.trigger) {
-                this.trigger.onDeactivated(section);
-            }
-        }
-        this.inside = inNow;
-        if (this.trigger) {
-            this.trigger.onUpdate(dtSeconds * 1000, section);
-        }
-        if (!inNow) {
-            return g;
-        }
-        if (this.trigger) {
-            return g;
-        }
-        // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
-        // motion so the ball settles into the stream instead of skating across it.
-        let forceLen = Math.hypot(this.ax, this.ay);
-        if (this.grav === 0 && forceLen > 0) {
-            let nx = this.ax / forceLen;
-            let ny = this.ay / forceLen;
-            let along = ball.vel.x * nx + ball.vel.y * ny;
-            let catchRate = this.drag > 0 ? this.drag : 4;
-            let damp = Math.max(0, 1 - catchRate * dtSeconds);
-            let newAlong = along + forceLen * dtSeconds;
-            if (this.maxSpeed > 0) {
-                if (newAlong > this.maxSpeed) {
-                    newAlong = this.maxSpeed;
-                }
-                else if (newAlong < -this.maxSpeed) {
-                    newAlong = -this.maxSpeed;
-                }
-            }
-            ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
-            ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
-            return 0;
-        }
-        ball.vel.x += this.ax * dtSeconds;
-        ball.vel.y += this.ay * dtSeconds;
-        if (this.drag > 0) {
-            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
-        }
-        if (this.maxSpeed > 0) {
-            let speed = vecLen(ball.vel);
-            if (speed > this.maxSpeed) {
-                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
-            }
-        }
-        return g * this.grav;
-    }
-}
-class Launcher extends Part {
-    dir;
-    force = 0;
-    range = 0;
-    fired = false;
-    constructor(x, y, control, dx, dy, force, range) {
-        super(x, y, PART_LAUNCHER, control);
-        this.dir = vecNorm(vecCreate(dx, dy));
-        this.force = force;
-        this.range = range;
-    }
-    unactivate() {
-        this.active = false;
-        this.fired = false;
-    }
-    affectBall(ball, ox, oy) {
-        if (!this.active || this.fired) {
-            return;
-        }
-        let dx = ball.pos.x - (this.x + ox);
-        let dy = ball.pos.y - (this.y + oy);
-        if (dx * dx + dy * dy > this.range * this.range) {
-            return;
-        }
-        ball.vel = vecMul(this.dir, this.force);
-        this.fired = true;
-    }
-}
-let FLASH_MS = 120;
-class Obstacle extends Part {
-    vx = 0;
-    vy = 0;
-    angle = 0;
-    omega = 0;
-    r = 0;
-    walls = [];
-    worldWalls = [];
-    alwaysSolid = true;
-    touching = false;
-    flash = 0;
-    constructor(x, y, type, walls, vx = 0, vy = 0, omega = 0) {
-        super(x, y, type);
-        this.vx = vx;
-        this.vy = vy;
-        this.omega = omega;
-        this.walls = walls;
-        for (let i = 0; i < walls.length; i++) {
-            this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
-        }
-    }
-    onHit() {
-        this.activate();
-        this.flash = FLASH_MS;
-    }
-    update(dt, section) {
-        let dtSeconds = dt / 1000;
-        if (this.flash > 0) {
-            this.flash -= dt;
-            if (this.flash <= 0) {
-                this.unactivate();
-            }
-        }
-        this.x += this.vx * dtSeconds;
-        this.y += this.vy * dtSeconds;
-        this.angle += this.omega * dtSeconds;
-        let r = this.r;
-        if (this.x < r) {
-            this.x = r;
-            if (this.vx < 0) {
-                this.vx = -this.vx;
-            }
-        }
-        else if (this.x > section.w - r) {
-            this.x = section.w - r;
-            if (this.vx > 0) {
-                this.vx = -this.vx;
-            }
-        }
-        if (this.y < r) {
-            this.y = r;
-            if (this.vy < 0) {
-                this.vy = -this.vy;
-            }
-        }
-        else if (this.y > section.h - r) {
-            this.y = section.h - r;
-            if (this.vy > 0) {
-                this.vy = -this.vy;
-            }
-        }
-    }
-    affectBall(ball, ox, oy) {
-        if (!this.active && !this.alwaysSolid) {
-            this.touching = false;
-            return;
-        }
-        let wx = this.x + ox;
-        let wy = this.y + oy;
-        let ca = Math.cos(this.angle);
-        let sa = Math.sin(this.angle);
-        for (let i = 0; i < this.walls.length; i++) {
-            let w = this.walls[i];
-            lineSet(this.worldWalls[i], w.a.x * ca - w.a.y * sa + wx, w.a.x * sa + w.a.y * ca + wy, w.b.x * ca - w.b.y * sa + wx, w.b.x * sa + w.b.y * ca + wy);
-        }
-        let hit = resolveBallWalls(ball, this.worldWalls, vecCreate(this.vx - this.omega * (ball.pos.y - wy), this.vy + this.omega * (ball.pos.x - wx)));
-        if (hit && !this.touching) {
-            this.onHit();
-        }
-        this.touching = hit;
-    }
-}
-let makeCircleWalls = (r, n, rest) => {
-    let walls = [];
-    for (let i = 0; i < n; i++) {
-        let a0 = (i / n) * Math.PI * 2;
-        let a1 = ((i + 1) / n) * Math.PI * 2;
-        walls.push(lineCreate(r * Math.cos(a0), r * Math.sin(a0), r * Math.cos(a1), r * Math.sin(a1), rest));
-    }
-    return walls;
-};
-let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
-    o.r = radius;
-    return o;
-};
-/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
-let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
-    o.r = r;
-    return o;
-};
-class Paddle extends Part {
-    angle = 0;
-    prevAngle = 0;
-    restAngle = 0;
-    upAngle = 0;
-    len = PADDLE_LEN;
-    omega = 0;
-    line;
-    worldLine;
-    constructor(x, y, control, restAngle, upAngle) {
-        super(x, y, PART_PADDLE, control);
-        this.restAngle = restAngle;
-        this.upAngle = upAngle;
-        this.angle = restAngle;
-        this.prevAngle = restAngle;
-        this.line = lineCreate(x, y, x, y);
-        this.worldLine = lineCreate(x, y, x, y, PADDLE_REST);
-        this.syncLine();
-    }
-    syncLine() {
-        lineSet(this.line, this.x, this.y, this.x + this.len * Math.cos(this.angle), this.y + this.len * Math.sin(this.angle));
-    }
-    getLine() {
-        return this.line;
-    }
-    /** Velocity of the paddle's surface at a world point: omega cross r. */
-    getSurfaceVel(p, pivotX, pivotY) {
-        return vecCreate(-this.omega * (p.y - pivotY), this.omega * (p.x - pivotX));
-    }
-    /**
-     * Which face of the paddle a world point lies on, +1 or -1, measured against
-     * the paddle at `angle`.
-     */
-    sideOf(p, pivotX, pivotY, angle) {
-        let cross = Math.cos(angle) * (p.y - pivotY) - Math.sin(angle) * (p.x - pivotX);
-        return cross < 0 ? -1 : 1;
-    }
-    affectBall(ball, ox, oy) {
-        let pivotX = this.x + ox;
-        let pivotY = this.y + oy;
-        let dirX = Math.cos(this.angle);
-        let dirY = Math.sin(this.angle);
-        lineSet(this.worldLine, pivotX, pivotY, pivotX + this.len * dirX, pivotY + this.len * dirY);
-        let reach = ball.r + PADDLE_HALF_WIDTH;
-        let { point, t } = lineClosestPointT(this.worldLine, ball.pos);
-        let diff = vecSub(ball.pos, point);
-        let dist = vecLen(diff);
-        if (dist >= reach) {
-            return;
-        }
-        // Orient the normal by the face the ball was on *before* this step's sweep.
-        // Deriving it from the current position flips it the moment the paddle
-        // rotates past the ball's centre, and the correction then fires the ball
-        // back into the swept path to be hit again — the stick-and-drag artifact.
-        let side = this.sideOf(ball.pos, pivotX, pivotY, this.prevAngle);
-        let faceN = vecCreate(-dirY * side, dirX * side);
-        // Along the paddle's length the contact is against its flat face; past
-        // either end it is against a round cap, so the normal is radial there.
-        let n = t > 0 && t < 1
-            ? faceN
-            : dist > 1e-6
-                ? vecMul(diff, 1 / dist)
-                : faceN;
-        // Signed depth: negative dot means the sweep has already carried the paddle
-        // through the ball, so push it back out the side it entered from.
-        let depth = reach - (diff.x * n.x + diff.y * n.y);
-        resolveCircleSurface(ball, n, depth, PADDLE_REST, PADDLE_FRICTION, this.getSurfaceVel(point, pivotX, pivotY));
-    }
-    update(dt) {
-        let dtSeconds = dt / 1000;
-        this.prevAngle = this.angle;
-        let target = this.active ? this.upAngle : this.restAngle;
-        let speed = this.active ? PADDLE_SPEED : PADDLE_RETURN;
-        let maxStep = speed * dtSeconds;
-        let diff = target - this.angle;
-        if (Math.abs(diff) <= maxStep) {
-            this.omega = dtSeconds > 0 ? diff / dtSeconds : 0;
-            this.angle = target;
-        }
-        else {
-            let dir = diff < 0 ? -1 : 1;
-            this.omega = dir * speed;
-            this.angle += dir * maxStep;
-        }
-        this.syncLine();
-    }
-}
-let TRIGGER_DEACTIVATE_WALL = 0;
-let TRIGGER_MOVE_DOOR = 1;
-/**
- * Script attached to a trigger field. Occupancy is owned by the field; these
- * hooks may mutate the section (walls, parts) while the ball is inside.
- * `args` is the rest of the builder call after the trigger id.
- */
-class Trigger {
-    args = [];
-    constructor(args) {
-        this.args = args;
-    }
-    onActivated(_section) { }
-    onDeactivated(_section) { }
-    onUpdate(_dt, _section) { }
-}
-class DeactivateWallTrigger extends Trigger {
-    rest = 0.5;
-    disableIn = -1;
-    enableIn = -1;
-    disableWall(section) {
-        let wall = section.walls[this.args[0]];
-        if (!wall || wall.rest < 0) {
-            return;
-        }
-        this.rest = wall.rest;
-        wall.rest = -1;
-    }
-    enableWall(section) {
-        let wall = section.walls[this.args[0]];
-        if (!wall) {
-            return;
-        }
-        wall.rest = this.rest;
-    }
-    onActivated(section) {
-        this.enableIn = -1;
-        if (this.args[1] > 0) {
-            this.disableIn = this.args[1];
-            return;
-        }
-        this.disableWall(section);
-    }
-    onDeactivated(section) {
-        this.disableIn = -1;
-        if (this.args[2] > 0) {
-            this.enableIn = this.args[2];
-            return;
-        }
-        this.enableWall(section);
-    }
-    onUpdate(dt, section) {
-        if (this.disableIn >= 0) {
-            this.disableIn -= dt;
-            if (this.disableIn <= 0) {
-                this.disableIn = -1;
-                this.disableWall(section);
-            }
-        }
-        if (this.enableIn >= 0) {
-            this.enableIn -= dt;
-            if (this.enableIn <= 0) {
-                this.enableIn = -1;
-                this.enableWall(section);
-            }
-        }
-    }
-}
-class MoveDoorTrigger extends Trigger {
-    x0 = 0;
-    y0 = 0;
-    x1 = 0;
-    y1 = 0;
-    held = false;
-    onActivated(section) {
-        let wall = section.walls[this.args[0]];
-        if (!wall) {
-            return;
-        }
-        this.held = true;
-        this.x0 = wall.a.x;
-        this.y0 = wall.a.y;
-        this.x1 = wall.b.x;
-        this.y1 = wall.b.y;
-    }
-    onDeactivated(section) {
-        this.held = false;
-        let wall = section.walls[this.args[0]];
-        if (!wall) {
-            return;
-        }
-        wall.a.x = this.x0;
-        wall.a.y = this.y0;
-        wall.b.x = this.x1;
-        wall.b.y = this.y1;
-    }
-    onUpdate(dt, section) {
-        if (!this.held) {
-            return;
-        }
-        let s = dt / 1000;
-        // wall.a.x += this.args[1] * s;
-        // wall.a.y += this.args[2] * s;
-        // wall.b.x += this.args[1] * s;
-        // wall.b.y += this.args[2] * s;
-    }
-}
-let TRIGGERS = [];
-TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
-TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
-let BG = ['#555', '#466', '#645'];
-let B_WALLS = 0;
-let B_LAUNCHER = 2;
-// let B_BUMPER = 3;
-let B_FIELD = 4;
-let B_FLIPPER_LEFT = 5;
-let B_CIRCLE = 6;
-let B_CONVEYER = 7;
-let SECTION_SIDE_BOTTOM = 0;
-let SECTION_SIDE_TOP = 1;
-let SECTION_SIDE_LEFT = 2;
-let SECTION_SIDE_RIGHT = 3;
-/**
- * Builders turn a handful of numbers into geometry. Each may push walls, parts
- * or both — a flipper pair owns its inlane slopes as much as its paddles — and
- * they expand at runtime so the data stays small and stays retunable in one
- * place.
- */
-let BUILDERS = [];
-BUILDERS[B_WALLS] = (section, wallList) => {
-    for (let i = 0; i < wallList.length; i += 4) {
-        section.walls.push(lineCreate(wallList[i], wallList[i + 1], wallList[i + 2], wallList[i + 3]));
-    }
-};
-BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
-    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle));
-};
-BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range]) => {
-    s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range));
-};
-BUILDERS[B_FIELD] = (s, data) => {
-    let x = data[0];
-    let y = data[1];
-    let w = data[2];
-    let h = data[3];
-    let id = data[4];
-    let Ctor = TRIGGERS[id] || Trigger;
-    let field = new Field(x, y, w, h);
-    field.trigger = new Ctor(data.slice(5));
-    s.parts.push(field);
-};
-BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
-    let field = new Field(x, y, w, h, 0, Math.cos(angle) * power, Math.sin(angle) * power, maxSpeed);
-    field.drag = drag;
-    s.parts.push(field);
-};
-BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius, dx, dy, omega]) => {
-    section.parts.push(makeCircle(x, y, resolution, restitution, radius, dx, dy, omega));
-};
-// assumes an edge can only have one hole in it at max
-let buildSectionEdges = (sections, links) => {
-    let walls = BUILDERS[B_WALLS];
-    for (let i = 0; i < sections.length; i++) {
-        let s = sections[i];
-        let { w, h } = s;
-        // bottom, top, left, right — index matches SECTION_SIDE_*
-        let edges = [
-            [0, h, w, h],
-            [0, 0, w, 0],
-            [0, 0, 0, h],
-            [w, 0, w, h],
-        ];
-        for (let e = 0; e < 4; e++) {
-            let [x0, y0, x1, y1] = edges[e];
-            let o = 0;
-            let g = 0;
-            for (let k = 0; k < links.length; k++) {
-                let l = links[k];
-                if (l[0] === i && l[1] === e) {
-                    o = l[2];
-                    g = o + l[3];
-                    break;
-                }
-            }
-            if (g) {
-                walls(s, y0 === y1
-                    ? [x0, y0, o, y0, g, y0, x1, y0]
-                    : [x0, y0, x0, o, x0, g, x0, y1]);
-            }
-            else {
-                walls(s, [x0, y0, x1, y1]);
-            }
-        }
-    }
-};
-let buildLevel = (sectionData, links) => {
-    let sections = sectionData.map((d, i) => sectionCreate(i, d[0], d[1], d[2], d[3], BG[d[4]]));
-    buildSectionEdges(sections, links);
-    for (let i = 0; i < sectionData.length; i++) {
-        let calls = sectionData[i][5];
-        for (let j = 0; j < calls.length; j++) {
-            BUILDERS[calls[j][0]](sections[i], calls[j].slice(1));
-        }
-    }
-    return sections;
-};
 /**
  * x, y, w, h, bg, builder calls.
  * Generated by the editor.
@@ -2145,7 +2283,6 @@ let SECTIONS = [
                 101, 17, 153, 0,
                 253, 72, 359, 72,
                 389, 73, 400, 73,
-                354, 376, 400, 376,
                 240, 15, 185, 0,
                 359, 72, 359, 128,
                 389, 73, 389, 130,
@@ -2156,12 +2293,13 @@ let SECTIONS = [
             ],
             [B_LAUNCHER, 135, 370, -0.7071, -0.7071, 1300, 36],
             [B_CONVEYER, 176, 341, 173, 39, 3.1416, 320, 400, 35, 6],
-            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 19, 800, 500],
+            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 26, 800, 500],
             [B_CONVEYER, 254, 45, 104, 23, 0.1444, 400, 160, 6],
             [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1],
             [B_FLIPPER_LEFT, 235, 271, 0.7, 0, 0],
             [B_CONVEYER, 173, 160, 30, 68, 1.5708, 400, 160, 6],
             [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2],
+            [B_WALL_GATE, 354, 376, 400, 376, 2],
         ],
     ],
     [
@@ -2179,7 +2317,7 @@ let SECTIONS = [
                 93, 368, 61, 400,
                 0, 339, 61, 400,
                 82, 84, 82, 278,
-                459, 312, 475, 400
+                93, 368, 116, 399
             ],
             [B_CONVEYER, 35, 87, 32, 191, 1.5708, 400, 160, 6],
             [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970, 36],
@@ -2198,13 +2336,9 @@ let SECTIONS = [
         107,
         0,
         [
-            [
-                B_WALLS,
-                588, 56, 4, 105,
-                116, 46, 61, 100,
-                116, 45, 116, 2
-            ],
-            [B_FIELD, 72, 48, 63, 56, TRIGGER_DEACTIVATE_WALL, 7, 800, 800],
+            [B_WALLS, 588, 56, 4, 105, 116, 45, 116, 2],
+            [B_FIELD, 72, 48, 63, 56, TRIGGER_DEACTIVATE_WALL, 8, 800, 800],
+            [B_WALL_GATE, 116, 46, 61, 100, 2],
         ],
     ],
     [
@@ -2219,11 +2353,10 @@ let SECTIONS = [
                 482, 676, 482, 49,
                 471, 0, 509, 38,
                 349, 676, 0, 640,
-                483, 47, 495, 26,
                 334, 1, 271, 64,
                 271, 64, 207, 0,
                 271, 63, 253, 130,
-                253, 214, 253, 129,
+                253, 219, 253, 129,
                 304, 237, 410, 265,
                 304, 236, 359, 219,
                 410, 265, 360, 219,
@@ -2234,36 +2367,48 @@ let SECTIONS = [
                 452, 514, 452, 429,
                 72, 522, 72, 437,
                 36, 437, 36, 643,
-                164, 520, 125, 453,
                 125, 452, 125, 521,
                 165, 522, 125, 522,
                 383, 449, 383, 518,
                 383, 518, 343, 518,
-                344, 516, 383, 450,
                 56, 196, 35, 198,
                 34, 199, 34, 334,
                 119, 285, 58, 196,
                 170, 248, 56, 161,
                 55, 161, 33, 161,
-                31, 161, 0, 193,
-                30, 160, 0, 128,
                 17, 641, 0, 591,
                 36, 592, 19, 641,
-                34, 334, 119, 285
+                34, 334, 119, 285,
+                481, 287, 449, 342,
+                481, 398, 450, 343,
+                197, 218, 197, 161
             ],
-            [B_FLIPPER_LEFT, 336, 588, 0.45, -0.55, 1],
-            [B_FLIPPER_LEFT, 175, 588, 0.45, -0.55, 0],
+            [B_FLIPPER_LEFT, 332, 585, 0.45, -0.55, 1],
+            [B_FLIPPER_LEFT, 179, 586, 0.45, -0.55, 0],
             [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, 2],
-            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 8, 0, 400],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 39, 0, 400],
             [B_CONVEYER, 344, 643, 139, 26, 1.5708, 400, 160, 6],
             [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
-            [B_LAUNCHER, 18, 607, -0, -1, 1250, 36],
-            [B_FIELD, 6, 514, 15, 108, TRIGGER_DEACTIVATE_WALL, 36, 0, 1000],
-            [B_FIELD, 15, 517, 16, 110, TRIGGER_DEACTIVATE_WALL, 35, 0, 1000],
-            [B_CIRCLE, 104, 376, 10, 1.2, 25, 0, 0, -1.6],
+            [B_LAUNCHER, 18, 607, 0, -1, 1250, 36],
+            [B_FIELD, 6, 514, 15, 108, TRIGGER_DEACTIVATE_WALL, 41, 0, 1000],
+            [B_FIELD, 15, 517, 16, 110, TRIGGER_DEACTIVATE_WALL, 40, 0, 1000],
+            [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
+            [B_WALL_RESTI, 127, 457, 162, 518, 1.2],
+            [B_WALL_RESTI, 345, 514, 381, 452, 1.2],
+            [B_WALL_GATE, 30, 160, 0, 128, 4],
+            [B_WALL_GATE, 31, 161, 0, 193, 4],
+            [B_WALL_GATE, 483, 48, 495, 27, 2],
+            [B_WALL_GATE, 95, 248, 129, 219, 5],
+            [B_FAN, 144, 101, 4, 1, 72, 0, 0, -1.35],
+            [B_CONVEYER, 202, 162, 47, 58, -1.5708, 400, 175, 6],
+            [B_COLLECTABLE, 120, 79, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 41, 141, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 364, 112, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 284, 210, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 236, 70, 10, 0, TRIGGER_GATE_SECTION_4],
         ],
     ],
     [329, -1476, 270, 400, 2, []],
@@ -2274,17 +2419,17 @@ let LINKS = [
     [1, SECTION_SIDE_BOTTOM, 172, 227],
     [1, SECTION_SIDE_RIGHT, 129, 138],
     [2, SECTION_SIDE_LEFT, 129, 138],
-    [2, SECTION_SIDE_BOTTOM, 476, 112],
-    [3, SECTION_SIDE_TOP, 476, 112],
+    [2, SECTION_SIDE_BOTTOM, 117, 470],
+    [3, SECTION_SIDE_TOP, 117, 470],
     [0, SECTION_SIDE_RIGHT, 0, 107],
     [3, SECTION_SIDE_LEFT, 0, 107],
     [2, SECTION_SIDE_TOP, 412, 176],
     [4, SECTION_SIDE_BOTTOM, 334, 176],
-    [4, SECTION_SIDE_TOP, 0, 121],
-    [5, SECTION_SIDE_BOTTOM, 149, 121],
+    [4, SECTION_SIDE_TOP, 0, 33],
+    [5, SECTION_SIDE_BOTTOM, 149, 33],
 ];
 /** world x, y */
-let START = [907, -627];
+let START = [882, -602];
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
     return {
@@ -2294,6 +2439,7 @@ let createState = () => {
         input: [false, false, false],
         startX: START[0],
         startY: START[1],
+        collected: [],
     };
 };
 class StateManager {

@@ -11,6 +11,8 @@ export type State = {
   input: boolean[];
   startX: number;
   startY: number;
+  /** Counts of collected items keyed by groupType. */
+  collected: number[];
 };
 
 export const createState = (): State => {
@@ -22,5 +24,6 @@ export const createState = (): State => {
     input: [false, false, false],
     startX: START[0],
     startY: START[1],
+    collected: [],
   };
 };

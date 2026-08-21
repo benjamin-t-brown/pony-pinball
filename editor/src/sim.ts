@@ -21,6 +21,7 @@ export const createPlayState = (
     input: [false, false, false],
     startX: x,
     startY: y,
+    collected: [],
   };
 };
 

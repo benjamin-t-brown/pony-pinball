@@ -12,6 +12,8 @@ export type Line = {
   a: Vec;
   b: Vec;
   rest: number;
+  /** Palette index for gate walls; -1 = normal wall. */
+  color: number;
 };
 
 // Extra distance the solver pushes a body past the surface, so the next step
@@ -68,11 +70,13 @@ export const lineCreate = (
   y1: number,
   x2: number,
   y2: number,
-  rest = 0.5
+  rest = 0.5,
+  color = -1
 ): Line => ({
   a: vecCreate(x1, y1),
   b: vecCreate(x2, y2),
   rest,
+  color,
 });
 
 export const lineSet = (

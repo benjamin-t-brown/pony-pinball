@@ -1,22 +1,28 @@
 import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
 import {
   TRIGGER_DEACTIVATE_WALL,
+  TRIGGER_GATE_SECTION_4,
   TRIGGER_MOVE_DOOR,
 } from '@game/model/Trigger';
 import type { SectionData } from './types';
 
 const BUILDER_NAMES: Record<number, string> = {
   0: 'B_WALLS',
+  1: 'B_WALL_RESTI',
   2: 'B_LAUNCHER',
+  3: 'B_WALL_GATE',
   4: 'B_FIELD',
   5: 'B_FLIPPER_LEFT',
   6: 'B_CIRCLE',
   7: 'B_CONVEYER',
+  8: 'B_COLLECTABLE',
+  9: 'B_FAN',
 };
 
 const TRIGGER_NAMES: Record<number, string> = {
   [TRIGGER_DEACTIVATE_WALL]: 'TRIGGER_DEACTIVATE_WALL',
   [TRIGGER_MOVE_DOOR]: 'TRIGGER_MOVE_DOOR',
+  [TRIGGER_GATE_SECTION_4]: 'TRIGGER_GATE_SECTION_4',
 };
 
 const SIDE_NAMES = [
@@ -48,7 +54,7 @@ const formatCall = (call: number[], indent: string) => {
     lines.push(`${indent}]`);
     return lines.join('\n');
   }
-  if (id === 4) {
+  if (id === 4 || id === 8) {
     const trig = TRIGGER_NAMES[args[4]] || formatNum(args[4]);
     const nums = [
       ...args.slice(0, 4).map(formatNum),
@@ -68,9 +74,17 @@ const roundCall = (call: number[]) => {
     }
     return next;
   }
-  if (next[0] === 4) {
-    const end = next[5] === 1 ? 7 : next.length;
-    for (let i = 1; i < end && i < next.length; i++) {
+  if (next[0] === 1 || next[0] === 3) {
+    for (let i = 1; i <= 4 && i < next.length; i++) {
+      next[i] = Math.round(next[i]);
+    }
+    if (next[0] === 3 && next.length > 5) {
+      next[5] = Math.round(next[5]);
+    }
+    return next;
+  }
+  if (next[0] === 4 || next[0] === 8) {
+    for (let i = 1; i < next.length; i++) {
       next[i] = Math.round(next[i]);
     }
     return next;
@@ -137,7 +151,7 @@ export const generateLevelsTs = (
       if (name) {
         builderNames.add(name);
       }
-      if (call[0] === 4) {
+      if (call[0] === 4 || call[0] === 8) {
         const trig = TRIGGER_NAMES[call[5]];
         if (trig) {
           triggerNames.add(trig);

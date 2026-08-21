@@ -217,8 +217,9 @@ export const flattenSectionWalls = (
       if (n < walls.length) {
         lineSet(walls[n], x0, y0, x1, y1);
         walls[n].rest = wall.rest;
+        walls[n].color = wall.color;
       } else {
-        walls.push(lineCreate(x0, y0, x1, y1, wall.rest));
+        walls.push(lineCreate(x0, y0, x1, y1, wall.rest, wall.color));
       }
       n++;
     }

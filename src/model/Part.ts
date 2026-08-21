@@ -11,6 +11,7 @@ export const PART_PADDLE = 0;
 export const PART_LAUNCHER = 1;
 export const PART_OBSTACLE = 2;
 export const PART_FIELD = 3;
+export const PART_COLLECTABLE = 4;
 
 /**
  * Everything that lives in a Section and can touch the ball: paddles,
@@ -53,7 +54,8 @@ export class Part {
     _oy: number,
     _dtSeconds: number,
     g: number,
-    _section: Section
+    _section: Section,
+    _state?: { collected: number[]; sections: Section[] }
   ) {
     return g;
   }

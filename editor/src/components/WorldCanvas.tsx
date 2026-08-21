@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { B_CIRCLE, B_CONVEYER, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_WALLS } from '@game/model/builders';
+import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_WALL_RESTI, B_WALLS, GATE_COLORS } from '@game/model/builders';
 import {
+  PART_COLLECTABLE,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
@@ -8,6 +9,7 @@ import {
 import {
   PADDLE_LEN,
 } from '@game/model/constants';
+import type { Collectable } from '@game/model/parts/Collectable';
 import type { Field } from '@game/model/parts/Field';
 import type { Launcher } from '@game/model/parts/Launcher';
 import type { Obstacle } from '@game/model/parts/Obstacle';
@@ -40,9 +42,11 @@ import {
   clampOpening,
   DEFAULT_OPENING_WIDTH,
   openingSpan,
+  openingsToLinks,
 } from '../openings';
 import { placeDefaults, triggerDefFor } from '../schema';
 import type { Cam, Opening, SectionData, Selection, Tool } from '../types';
+import { isSegmentWallCall, restiWallIndices } from '../wallRefs';
 
 type Drag =
   | { kind: 'pan'; lx: number; ly: number }
@@ -56,7 +60,7 @@ type Drag =
       oy: number;
     }
   | { kind: 'resize'; index: number; handle: Handle; orig: SectionData }
-  | { kind: 'wall'; section: number; x0: number; y0: number }
+  | { kind: 'wall'; section: number; x0: number; y0: number; id: number }
   | { kind: 'field'; section: number; x0: number; y0: number; id: number }
   | {
       kind: 'resizeField';
@@ -282,8 +286,12 @@ const hitsCall = (
     }
     return false;
   }
-  if (call[0] === B_CIRCLE) {
+  if (call[0] === B_CIRCLE || call[0] === B_FAN) {
     const r = call[5];
+    return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
+  }
+  if (call[0] === B_COLLECTABLE) {
+    const r = call[3] ?? 14;
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
   if (isRectBuilder(call[0])) {
@@ -326,6 +334,23 @@ const hitTest = (
               segment: (k - 1) / 4,
             };
           }
+        }
+      } else if (isSegmentWallCall(call[0]) && call.length >= 5) {
+        const d = distToSegment(
+          wx,
+          wy,
+          s[0] + call[1],
+          s[1] + call[2],
+          s[0] + call[3],
+          s[1] + call[4]
+        );
+        if (d < slop) {
+          return {
+            kind: 'wall',
+            section: si,
+            call: ci,
+            segment: 0,
+          };
         }
       } else if (hitsCall(s, call, wx, wy, slop)) {
         return { kind: 'call', section: si, call: ci };
@@ -726,8 +751,14 @@ export const WorldCanvas = ({
       }
       const raw = toLocal(sections[si], wx, wy);
       const local = clampLocal(sections[si], raw.x, raw.y);
-      if (tool.id === B_WALLS) {
-        dragRef.current = { kind: 'wall', section: si, x0: local.x, y0: local.y };
+      if (tool.id === B_WALLS || isSegmentWallCall(tool.id)) {
+        dragRef.current = {
+          kind: 'wall',
+          section: si,
+          x0: local.x,
+          y0: local.y,
+          id: tool.id,
+        };
         setWallGhost({ x0: wx, y0: wy, x1: wx, y1: wy });
         return;
       }
@@ -1254,15 +1285,33 @@ export const WorldCanvas = ({
       }
       if (Math.hypot(local.x - drag.x0, local.y - drag.y0) >= 2) {
         const next = cloneSections(sections);
-        const ci = ensureWallsCall(next[drag.section]);
-        next[drag.section][5][ci].push(drag.x0, drag.y0, local.x, local.y);
-        onSections(next);
-        onSelection({
-          kind: 'wall',
-          section: drag.section,
-          call: ci,
-          segment: Math.floor((next[drag.section][5][ci].length - 5) / 4),
-        });
+        if (isSegmentWallCall(drag.id)) {
+          next[drag.section][5].push([
+            drag.id,
+            drag.x0,
+            drag.y0,
+            local.x,
+            local.y,
+            drag.id === B_WALL_RESTI ? 0.5 : 0,
+          ]);
+          onSections(next);
+          onSelection({
+            kind: 'wall',
+            section: drag.section,
+            call: next[drag.section][5].length - 1,
+            segment: 0,
+          });
+        } else {
+          const ci = ensureWallsCall(next[drag.section]);
+          next[drag.section][5][ci].push(drag.x0, drag.y0, local.x, local.y);
+          onSections(next);
+          onSelection({
+            kind: 'wall',
+            section: drag.section,
+            call: ci,
+            segment: Math.floor((next[drag.section][5][ci].length - 5) / 4),
+          });
+        }
       }
     }
     setGhost(null);
@@ -1283,9 +1332,15 @@ export const WorldCanvas = ({
   let triggerWallSection = -1;
   if (selection && selection.kind === 'call') {
     const call = sections[selection.section]?.[5][selection.call];
-    if (call && call[0] === B_FIELD) {
+    if (call && (call[0] === B_FIELD || call[0] === B_COLLECTABLE)) {
       const trig = triggerDefFor(call[5] ?? 0);
       const walls = new Set<number>();
+      let wallSection = selection.section;
+      for (let a = 0; a < trig.args.length; a++) {
+        if (trig.args[a] === 'section') {
+          wallSection = call[6 + a] ?? wallSection;
+        }
+      }
       for (let a = 0; a < trig.args.length; a++) {
         if (trig.args[a] === 'wall') {
           const wi = call[6 + a];
@@ -1296,10 +1351,12 @@ export const WorldCanvas = ({
       }
       if (walls.size) {
         triggerWalls = walls;
-        triggerWallSection = selection.section;
+        triggerWallSection = wallSection;
       }
     }
   }
+
+  const links = openingsToLinks(sections, openings);
 
   return (
     <div
@@ -1323,6 +1380,11 @@ export const WorldCanvas = ({
               }
               highlightWalls={
                 triggerWallSection === section.id ? triggerWalls : null
+              }
+              restiWalls={
+                sections[section.id]
+                  ? restiWallIndices(sections[section.id], section.id, links)
+                  : null
               }
             />
           ))}
@@ -1689,10 +1751,12 @@ const SectionPreview = ({
   section,
   selected,
   highlightWalls,
+  restiWalls,
 }: {
   section: Section;
   selected: boolean;
   highlightWalls: Set<number> | null;
+  restiWalls: Set<number> | null;
 }) => {
   return (
     <g transform={`translate(${section.x} ${section.y})`}>
@@ -1708,6 +1772,10 @@ const SectionPreview = ({
       </text>
       {section.walls.map((w, i) => {
         const lit = highlightWalls && highlightWalls.has(i);
+        const resti = restiWalls && restiWalls.has(i);
+        const gate = w.color >= 0;
+        const gateStroke =
+          GATE_COLORS[w.color % GATE_COLORS.length] || '#fc8';
         return (
           <line
             key={'w' + i}
@@ -1720,9 +1788,14 @@ const SectionPreview = ({
                 ? '#fc8'
                 : w.rest < 0
                   ? 'rgba(136,136,136,0.2)'
-                  : '#888'
+                  : gate
+                    ? gateStroke
+                    : resti
+                      ? '#fff'
+                      : '#888'
             }
-            strokeWidth={lit ? 7 : 4}
+            strokeWidth={lit ? 7 : gate ? 6 : 4}
+            strokeDasharray={gate && !lit ? '10 6' : undefined}
             strokeLinecap="round"
           />
         );
@@ -1760,6 +1833,22 @@ const conveyerArrowMarks = (
 };
 
 const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
+  if (part.type === PART_COLLECTABLE) {
+    const coin = part as Collectable;
+    if (coin.taken) {
+      return null;
+    }
+    return (
+      <circle
+        cx={coin.x}
+        cy={coin.y}
+        r={coin.r}
+        fill="#fc8"
+        stroke="#a80"
+        strokeWidth={2}
+      />
+    );
+  }
   if (part.type === PART_FIELD) {
     const field = part as Field;
     const conveyer = !field.trigger && field.grav === 0;

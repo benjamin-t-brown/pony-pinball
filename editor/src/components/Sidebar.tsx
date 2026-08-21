@@ -94,8 +94,10 @@ export const Sidebar = ({
       />
       <BuilderForm
         sections={sections}
+        openings={openings}
         selection={selection}
         onChange={onSections}
+        onSelection={onSelection}
       />
       <OpeningForm
         sections={sections}

@@ -10,6 +10,7 @@ import {
   stringify,
 } from '../dom';
 import type { Section } from '../model/Section';
+import { GATE_COLORS } from '../model/builders';
 import { PartElement } from './PartElement';
 import { UiElement } from './UiElement';
 
@@ -48,17 +49,23 @@ export class BoardSection extends UiElement {
     });
 
     for (const wall of section.walls) {
-      svg.appendChild(
-        createSvgElement(LINE, {
-          x1: stringify(wall.a.x),
-          y1: stringify(wall.a.y),
-          x2: stringify(wall.b.x),
-          y2: stringify(wall.b.y),
-          stroke: '#888',
-          'stroke-width': '4',
-          'stroke-linecap': 'round',
-        })
-      );
+      const gate = wall.color >= 0;
+      const stroke = gate
+        ? GATE_COLORS[wall.color % GATE_COLORS.length] || '#fc8'
+        : '#888';
+      const attrs: Record<string, string> = {
+        x1: stringify(wall.a.x),
+        y1: stringify(wall.a.y),
+        x2: stringify(wall.b.x),
+        y2: stringify(wall.b.y),
+        stroke,
+        'stroke-width': gate ? '6' : '4',
+        'stroke-linecap': 'round',
+      };
+      if (gate) {
+        attrs['stroke-dasharray'] = '10 6';
+      }
+      svg.appendChild(createSvgElement(LINE, attrs));
     }
     appendChild(el, svg as unknown as HTMLElement);
 

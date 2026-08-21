@@ -1,22 +1,28 @@
 import { lineCreate } from '../sim/physics';
 import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
+import { Collectable } from './parts/Collectable';
 import { Field } from './parts/Field';
 import { Launcher } from './parts/Launcher';
-import { makeCircle } from './parts/Obstacle';
+import { makeCircle, makeFan } from './parts/Obstacle';
 import { Paddle } from './parts/Paddle';
 import { type Section, sectionCreate } from './Section';
 import { TRIGGERS, Trigger } from './Trigger';
 
 export const BG = ['#555', '#466', '#645'];
+/** Gate wall stroke colors; builder `color` indexes this list. */
+export const GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
 
 export const B_WALLS = 0;
+export const B_WALL_RESTI = 1;
 export const B_LAUNCHER = 2;
-// export const B_BUMPER = 3;
+export const B_WALL_GATE = 3;
 export const B_FIELD = 4;
 export const B_FLIPPER_LEFT = 5;
 export const B_CIRCLE = 6;
 export const B_CONVEYER = 7;
+export const B_COLLECTABLE = 8;
+export const B_FAN = 9;
 
 export const SECTION_SIDE_BOTTOM = 0;
 export const SECTION_SIDE_TOP = 1;
@@ -37,6 +43,17 @@ BUILDERS[B_WALLS] = (section, wallList) => {
       lineCreate(wallList[i], wallList[i + 1], wallList[i + 2], wallList[i + 3])
     );
   }
+};
+
+BUILDERS[B_WALL_RESTI] = (section, [x0, y0, x1, y1, rest]) => {
+  section.walls.push(lineCreate(x0, y0, x1, y1, rest));
+};
+
+BUILDERS[B_WALL_GATE] = (section, [x0, y0, x1, y1, color]) => {
+  const c = color | 0;
+  section.walls.push(
+    lineCreate(x0, y0, x1, y1, 0.5, c < 0 ? 0 : c % GATE_COLORS.length)
+  );
 };
 
 BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped]) => {
@@ -89,6 +106,22 @@ BUILDERS[B_CIRCLE] = (
   section.parts.push(
     makeCircle(x, y, resolution, restitution, radius, dx, dy, omega)
   );
+};
+
+BUILDERS[B_FAN] = (
+  section,
+  [x, y, paddles, restitution, radius, dx, dy, omega]
+) => {
+  section.parts.push(
+    makeFan(x, y, paddles, restitution, radius, dx, dy, omega)
+  );
+};
+
+BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
+  const Ctor = TRIGGERS[id] || Trigger;
+  const coin = new Collectable(x, y, r, groupType);
+  coin.trigger = new Ctor([]);
+  s.parts.push(coin);
 };
 
 // assumes an edge can only have one hole in it at max

@@ -57,7 +57,8 @@ export class Field extends Part {
     oy: number,
     dtSeconds: number,
     g: number,
-    section: Section
+    section: Section,
+    _state?: { collected: number[]; sections: Section[] }
   ) {
     const inNow =
       this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);

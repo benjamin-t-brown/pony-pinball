@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { B_WALLS, buildLevel } from '@game/model/builders';
+import { B_WALL_GATE, B_WALL_RESTI, B_WALLS, buildLevel } from '@game/model/builders';
 import {
   CONTROL_LEFT,
   CONTROL_RIGHT,
@@ -22,7 +22,7 @@ import {
 import { createPlayState, dropBall } from './sim';
 import type { Cam, Opening, SectionData, Selection, Tool } from './types';
 import { validateLevel } from './validation';
-import { builtWallIndex, remapTriggerWalls } from './wallRefs';
+import { builtWallIndex, isSegmentWallCall, remapTriggerWalls } from './wallRefs';
 
 const PHYSICS_DT_MS = 4;
 
@@ -296,7 +296,20 @@ export const App = () => {
     }
     if (selection.kind === 'call') {
       const next = cloneSections(sections);
-      next[selection.section][5].splice(selection.call, 1);
+      const call = sections[selection.section][5][selection.call];
+      if (call && isSegmentWallCall(call[0])) {
+        const wallIndex = builtWallIndex(
+          sections[selection.section],
+          selection.section,
+          selection.call,
+          0,
+          openingsToLinks(sections, openings)
+        );
+        next[selection.section][5].splice(selection.call, 1);
+        remapTriggerWalls(next[selection.section][5], wallIndex, selection.section);
+      } else {
+        next[selection.section][5].splice(selection.call, 1);
+      }
       markDirty(next);
       setSelection(null);
       return;
@@ -304,7 +317,6 @@ export const App = () => {
     if (selection.kind === 'wall') {
       const next = cloneSections(sections);
       const call = next[selection.section][5][selection.call];
-      const k = 1 + selection.segment * 4;
       const wallIndex = builtWallIndex(
         sections[selection.section],
         selection.section,
@@ -312,11 +324,16 @@ export const App = () => {
         selection.segment,
         openingsToLinks(sections, openings)
       );
-      call.splice(k, 4);
-      if (call.length <= 1) {
+      if (isSegmentWallCall(call[0])) {
         next[selection.section][5].splice(selection.call, 1);
+      } else {
+        const k = 1 + selection.segment * 4;
+        call.splice(k, 4);
+        if (call.length <= 1) {
+          next[selection.section][5].splice(selection.call, 1);
+        }
       }
-      remapTriggerWalls(next[selection.section][5], wallIndex);
+      remapTriggerWalls(next[selection.section][5], wallIndex, selection.section);
       markDirty(next);
       setSelection(null);
     }
@@ -344,8 +361,17 @@ export const App = () => {
         return;
       }
       const copy = src.slice();
-      copy[1] = local.x;
-      copy[2] = local.y;
+      if (src[0] === B_WALL_RESTI || src[0] === B_WALL_GATE) {
+        const dx = src[3] - src[1];
+        const dy = src[4] - src[2];
+        copy[1] = local.x;
+        copy[2] = local.y;
+        copy[3] = local.x + dx;
+        copy[4] = local.y + dy;
+      } else {
+        copy[1] = local.x;
+        copy[2] = local.y;
+      }
       next[si][5].push(copy);
       markDirty(next);
       setSelection({ kind: 'call', section: si, call: next[si][5].length - 1 });
@@ -363,6 +389,24 @@ export const App = () => {
     const x1 = local.x + dx;
     const y1 = local.y + dy;
     const shift = clampDeltaInRect(x0, y0, x1, y1, 0, 0, dest[2], dest[3]);
+    if (isSegmentWallCall(src[0])) {
+      next[si][5].push([
+        src[0],
+        x0 + shift.dx,
+        y0 + shift.dy,
+        x1 + shift.dx,
+        y1 + shift.dy,
+        src[5] ?? (src[0] === B_WALL_RESTI ? 0.5 : 0),
+      ]);
+      markDirty(next);
+      setSelection({
+        kind: 'wall',
+        section: si,
+        call: next[si][5].length - 1,
+        segment: 0,
+      });
+      return;
+    }
     let ci = -1;
     for (let i = 0; i < next[si][5].length; i++) {
       if (next[si][5][i][0] === B_WALLS) {

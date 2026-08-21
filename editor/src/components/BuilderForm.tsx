@@ -1,15 +1,38 @@
-import { B_FIELD, B_WALLS } from '@game/model/builders';
-import type { SectionData, Selection } from '../types';
+import {
+  B_COLLECTABLE,
+  B_FIELD,
+  B_WALL_GATE,
+  B_WALL_RESTI,
+  B_WALLS,
+  GATE_COLORS,
+} from '@game/model/builders';
+import type { Opening, SectionData, Selection } from '../types';
 import { defFor, TRIGGER_DEFS, triggerDefFor } from '../schema';
 import { cloneSections } from '../geometry';
+import { openingsToLinks } from '../openings';
+import { convertWallKind } from '../wallRefs';
 
 type Props = {
   sections: SectionData[];
+  openings: Opening[];
   selection: Selection;
   onChange: (sections: SectionData[]) => void;
+  onSelection: (selection: Selection) => void;
 };
 
-export const BuilderForm = ({ sections, selection, onChange }: Props) => {
+const WALL_KINDS = [
+  { id: B_WALLS, label: 'Walls' },
+  { id: B_WALL_RESTI, label: 'Wall resti' },
+  { id: B_WALL_GATE, label: 'Wall gate' },
+];
+
+export const BuilderForm = ({
+  sections,
+  openings,
+  selection,
+  onChange,
+  onSelection,
+}: Props) => {
   if (!selection || (selection.kind !== 'call' && selection.kind !== 'wall')) {
     return null;
   }
@@ -35,9 +58,25 @@ export const BuilderForm = ({ sections, selection, onChange }: Props) => {
 
   if (selection.kind === 'wall') {
     const k = 1 + selection.segment * 4;
+    const title =
+      call[0] === B_WALL_RESTI
+        ? 'Wall resti'
+        : call[0] === B_WALL_GATE
+          ? 'Wall gate'
+          : 'Wall segment';
+    const convertTo = (kind: number) => {
+      const result = convertWallKind(
+        sections,
+        selection,
+        kind,
+        openingsToLinks(sections, openings)
+      );
+      onChange(result.sections);
+      onSelection(result.selection);
+    };
     return (
       <div>
-        <h2>Wall segment</h2>
+        <h2>{title}</h2>
         {['x0', 'y0', 'x1', 'y1'].map((name, i) => (
           <div className="field" key={name}>
             <label>{name}</label>
@@ -50,12 +89,69 @@ export const BuilderForm = ({ sections, selection, onChange }: Props) => {
             />
           </div>
         ))}
+        {call[0] === B_WALL_RESTI ? (
+          <div className="field">
+            <label>restitution</label>
+            <input
+              type="number"
+              step={0.05}
+              value={call[5] ?? 0.5}
+              onChange={e => {
+                setArg(5, Number(e.target.value));
+              }}
+            />
+          </div>
+        ) : null}
+        {call[0] === B_WALL_GATE ? (
+          <div className="field">
+            <label>color</label>
+            <select
+              value={call[5] ?? 0}
+              onChange={e => {
+                setArg(5, Number(e.target.value), true);
+              }}
+            >
+              {GATE_COLORS.map((c, i) => (
+                <option key={c} value={i}>
+                  {i}: {c}
+                </option>
+              ))}
+            </select>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 18,
+                height: 18,
+                marginLeft: 8,
+                verticalAlign: 'middle',
+                background: GATE_COLORS[(call[5] ?? 0) % GATE_COLORS.length],
+                border: '1px solid #000',
+              }}
+            />
+          </div>
+        ) : null}
+        <p className="status">Convert to</p>
+        <div className="row">
+          {WALL_KINDS.map(kind => (
+            <button
+              key={kind.id}
+              type="button"
+              disabled={call[0] === kind.id}
+              onClick={() => {
+                convertTo(kind.id);
+              }}
+            >
+              {kind.label}
+            </button>
+          ))}
+        </div>
       </div>
     );
   }
 
   const def = defFor(call[0]);
-  const trig = call[0] === B_FIELD ? triggerDefFor(call[5]) : null;
+  const hasTrigger = call[0] === B_FIELD || call[0] === B_COLLECTABLE;
+  const trig = hasTrigger ? triggerDefFor(call[5]) : null;
   const params = def
     ? def.params
     : call.slice(1).map((_n: number, i: number) => ({ name: `arg${i}` }));
@@ -89,6 +185,19 @@ export const BuilderForm = ({ sections, selection, onChange }: Props) => {
                   </option>
                 ))}
               </select>
+            ) : param.name === 'color' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                {GATE_COLORS.map((c, ci) => (
+                  <option key={c} value={ci}>
+                    {ci}: {c}
+                  </option>
+                ))}
+              </select>
             ) : (
               <input
                 type="number"
@@ -103,8 +212,15 @@ export const BuilderForm = ({ sections, selection, onChange }: Props) => {
                       param.name === 'w' ||
                       param.name === 'h' ||
                       param.name === 'wall' ||
+                      param.name === 'section' ||
+                      param.name === 'needed' ||
+                      param.name === 'groupType' ||
                       param.name === 'onDelay' ||
-                      param.name === 'offDelay'
+                      param.name === 'offDelay' ||
+                      param.name === 'x0' ||
+                      param.name === 'y0' ||
+                      param.name === 'x1' ||
+                      param.name === 'y1'
                   );
                 }}
               />

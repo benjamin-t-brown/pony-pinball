@@ -73,7 +73,7 @@ export const updateParts = (state: State, dt: number) => {
 export const preBallParts = (ball: Ball, state: State, dtSeconds: number) => {
   let g = GRAVITY;
   forEachPart(state.sections, (part, section) => {
-    g = part.preBall(ball, section.x, section.y, dtSeconds, g, section);
+    g = part.preBall(ball, section.x, section.y, dtSeconds, g, section, state);
   });
   return g;
 };

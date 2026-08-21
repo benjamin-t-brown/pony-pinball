@@ -1,13 +1,19 @@
 import {
   B_CIRCLE,
+  B_COLLECTABLE,
   B_CONVEYER,
+  B_FAN,
   B_FIELD,
   B_FLIPPER_LEFT,
   B_LAUNCHER,
+  B_WALL_GATE,
+  B_WALL_RESTI,
   B_WALLS,
+  GATE_COLORS,
 } from '@game/model/builders';
 import {
   TRIGGER_DEACTIVATE_WALL,
+  TRIGGER_GATE_SECTION_4,
   TRIGGER_MOVE_DOOR,
 } from '@game/model/Trigger';
 import {
@@ -35,6 +41,30 @@ export const BUILDER_DEFS: BuilderDef[] = [
     name: 'Walls',
     place: 'segment',
     params: [],
+  },
+  {
+    id: B_WALL_RESTI,
+    name: 'Wall resti',
+    place: 'segment',
+    params: [
+      { name: 'x0' },
+      { name: 'y0' },
+      { name: 'x1' },
+      { name: 'y1' },
+      { name: 'restitution', step: 0.05 },
+    ],
+  },
+  {
+    id: B_WALL_GATE,
+    name: 'Wall gate',
+    place: 'segment',
+    params: [
+      { name: 'x0' },
+      { name: 'y0' },
+      { name: 'x1' },
+      { name: 'y1' },
+      { name: 'color', step: 1 },
+    ],
   },
   {
     id: B_FLIPPER_LEFT,
@@ -103,7 +133,36 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'omega', step: 0.05 },
     ],
   },
+  {
+    id: B_FAN,
+    name: 'Fan',
+    place: 'point',
+    params: [
+      { name: 'x' },
+      { name: 'y' },
+      { name: 'paddles', step: 1 },
+      { name: 'restitution', step: 0.05 },
+      { name: 'radius' },
+      { name: 'dx' },
+      { name: 'dy' },
+      { name: 'omega', step: 0.05 },
+    ],
+  },
+  {
+    id: B_COLLECTABLE,
+    name: 'Collectable',
+    place: 'point',
+    params: [
+      { name: 'x' },
+      { name: 'y' },
+      { name: 'radius' },
+      { name: 'groupType', step: 1 },
+      { name: 'trigger', step: 1 },
+    ],
+  },
 ];
+
+export { GATE_COLORS };
 
 export const TRIGGER_DEFS = [
   {
@@ -115,6 +174,11 @@ export const TRIGGER_DEFS = [
     id: TRIGGER_MOVE_DOOR,
     name: 'TRIGGER_MOVE_DOOR',
     args: ['wall', 'dx', 'dy'],
+  },
+  {
+    id: TRIGGER_GATE_SECTION_4,
+    name: 'TRIGGER_GATE_SECTION_4',
+    args: [],
   },
 ];
 
@@ -137,6 +201,9 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_CIRCLE) {
     return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0];
   }
+  if (id === B_FAN) {
+    return [B_FAN, x, y, 4, 1, 40, 0, 0, 1];
+  }
   if (id === B_FIELD) {
     const trig = triggerDefFor(TRIGGER_DEACTIVATE_WALL);
     const extra = [];
@@ -147,6 +214,15 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
   }
   if (id === B_CONVEYER) {
     return [B_CONVEYER, x, y, 80, 80, 0, 400, 160, 6];
+  }
+  if (id === B_WALL_RESTI) {
+    return [B_WALL_RESTI, x, y, x + 40, y, 0.5];
+  }
+  if (id === B_WALL_GATE) {
+    return [B_WALL_GATE, x, y, x + 40, y, 0];
+  }
+  if (id === B_COLLECTABLE) {
+    return [B_COLLECTABLE, x, y, 14, 0, TRIGGER_GATE_SECTION_4];
   }
   return [id, x, y];
 };
@@ -167,6 +243,12 @@ export const ensureCallArgs = (call: number[]) => {
       next.push(0);
     }
     next.length = n;
+  }
+  if (call[0] === B_COLLECTABLE) {
+    next.length = 6;
+  }
+  if (call[0] === B_WALL_RESTI || call[0] === B_WALL_GATE) {
+    next.length = 6;
   }
   return next;
 };
