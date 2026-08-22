@@ -6,6 +6,7 @@ import {
   B_FIELD,
   B_FLIPPER_LEFT,
   B_LAUNCHER,
+  B_PORTAL,
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
@@ -166,6 +167,19 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'trigger', step: 1 },
     ],
   },
+  {
+    id: B_PORTAL,
+    name: 'Portal',
+    place: 'segment',
+    params: [
+      { name: 'x0' },
+      { name: 'y0' },
+      { name: 'x1' },
+      { name: 'y1' },
+      { name: 'radius' },
+      { name: 'color', step: 1 },
+    ],
+  },
 ];
 
 export { GATE_COLORS };
@@ -240,6 +254,9 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_COLLECTABLE) {
     return [B_COLLECTABLE, x, y, 14, 0, TRIGGER_GATE_SECTION_4];
   }
+  if (id === B_PORTAL) {
+    return [B_PORTAL, x, y, x + 80, y, 18, 0];
+  }
   return [id, x, y];
 };
 
@@ -265,6 +282,9 @@ export const ensureCallArgs = (call: number[]) => {
   }
   if (call[0] === B_WALL_RESTI || call[0] === B_WALL_GATE) {
     next.length = 6;
+  }
+  if (call[0] === B_PORTAL) {
+    next.length = 7;
   }
   return next;
 };

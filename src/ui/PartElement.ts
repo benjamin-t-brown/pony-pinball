@@ -12,23 +12,78 @@ import {
   setStyle,
   stringify,
 } from '../dom';
+import { GATE_COLORS } from '../model/builders';
 import type { Collectable } from '../model/parts/Collectable';
 import type { Field } from '../model/parts/Field';
 import type { Launcher } from '../model/parts/Launcher';
 import type { Obstacle } from '../model/parts/Obstacle';
 import type { Paddle } from '../model/parts/Paddle';
+import type { Portal } from '../model/parts/Portal';
 import {
   PART_COLLECTABLE,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
+  PART_PORTAL,
   type Part,
 } from '../model/Part';
 import { UiElement } from './UiElement';
 
+const spiralD = (maxR: number) => {
+  let d = '';
+  const steps = 36;
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * Math.PI * 5;
+    const r = (i / steps) * maxR;
+    const x = Math.cos(t) * r;
+    const y = Math.sin(t) * r;
+    d += (i ? 'L' : 'M') + stringify(x) + ' ' + stringify(y);
+  }
+  return d;
+};
+
+const addPortalMouth = (
+  host: SVGSVGElement,
+  cx: number,
+  cy: number,
+  r: number,
+  fill: string
+) => {
+  const rx = r * 0.55;
+  const ry = r;
+  const g = createSvgElement('g', {
+    transform: 'translate(' + stringify(cx) + ' ' + stringify(cy) + ')',
+  });
+  g.appendChild(
+    createSvgElement('ellipse', {
+      cx: '0',
+      cy: '0',
+      rx: stringify(rx),
+      ry: stringify(ry),
+      fill,
+      stroke: '#fff',
+      'stroke-width': '2',
+    })
+  );
+  const spin = createSvgElement('g');
+  spin.appendChild(
+    createSvgElement('path', {
+      d: spiralD(rx * 0.85),
+      fill: 'none',
+      stroke: '#000',
+      'stroke-width': '1.5',
+      'stroke-linecap': 'round',
+    })
+  );
+  g.appendChild(spin);
+  host.appendChild(g);
+  return spin;
+};
+
 export class PartElement extends UiElement {
   part: Part;
   lineEls: SVGLineElement[] = [];
+  spiralEls: SVGElement[] = [];
 
   constructor(part: Part, parent?: UiElement) {
     super(parent);
@@ -68,6 +123,29 @@ export class PartElement extends UiElement {
   build() {
     const part = this.part;
     this.setPos(part.x, part.y);
+
+    if (part.type === PART_PORTAL) {
+      const portal = part as Portal;
+      const fill = GATE_COLORS[portal.color] || GATE_COLORS[0];
+      const svg = createSvgElement(SVG, {
+        width: '1',
+        height: '1',
+      }) as SVGSVGElement;
+      setStyle(svg as unknown as HTMLElement, {
+        position: 'absolute',
+        left: '0',
+        top: '0',
+        overflow: 'visible',
+        [POINTER_EVENTS]: 'none',
+      });
+      this.spiralEls.push(addPortalMouth(svg, portal.x, portal.y, portal.r, fill));
+      this.spiralEls.push(
+        addPortalMouth(svg, portal.x2, portal.y2, portal.r, fill)
+      );
+      this.attach(svg as unknown as HTMLElement);
+      this.render(0);
+      return;
+    }
 
     if (part.type === PART_COLLECTABLE) {
       const coin = part as Collectable;
@@ -186,6 +264,19 @@ export class PartElement extends UiElement {
   update(_dt: number) {
     const part = this.part;
     const first = this.lineEls[0] as unknown as HTMLElement;
+
+    if (part.type === PART_PORTAL) {
+      const portal = part as Portal;
+      const deg = (portal.angle * 180) / Math.PI;
+      for (let i = 0; i < this.spiralEls.length; i++) {
+        setAttribute(
+          this.spiralEls[i] as unknown as HTMLElement,
+          'transform',
+          'rotate(' + stringify(deg) + ')'
+        );
+      }
+      return;
+    }
 
     if (part.type === PART_COLLECTABLE) {
       const coin = part as Collectable;

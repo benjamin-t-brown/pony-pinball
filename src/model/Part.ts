@@ -12,6 +12,7 @@ export const PART_LAUNCHER = 1;
 export const PART_OBSTACLE = 2;
 export const PART_FIELD = 3;
 export const PART_COLLECTABLE = 4;
+export const PART_PORTAL = 5;
 
 /**
  * Everything that lives in a Section and can touch the ball: paddles,

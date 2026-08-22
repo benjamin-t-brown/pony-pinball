@@ -7,6 +7,7 @@ import { Field } from './parts/Field';
 import { Launcher } from './parts/Launcher';
 import { makeCircle, makeFan } from './parts/Obstacle';
 import { Paddle } from './parts/Paddle';
+import { Portal } from './parts/Portal';
 import { type Section, sectionCreate } from './Section';
 import { TRIGGERS, Trigger } from './Trigger';
 
@@ -24,6 +25,7 @@ export const B_CIRCLE = 6;
 export const B_CONVEYER = 7;
 export const B_COLLECTABLE = 8;
 export const B_FAN = 9;
+export const B_PORTAL = 10;
 
 export const SECTION_SIDE_BOTTOM = 0;
 export const SECTION_SIDE_TOP = 1;
@@ -139,6 +141,13 @@ BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
   const coin = new Collectable(x, y, r, groupType);
   coin.trigger = new Ctor([]);
   s.parts.push(coin);
+};
+
+BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, r, color]) => {
+  const c = color | 0;
+  s.parts.push(
+    new Portal(x0, y0, x1, y1, r, c < 0 ? 0 : c % GATE_COLORS.length)
+  );
 };
 
 // assumes an edge can only have one hole in it at max

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_WALL_RESTI, B_WALLS, GATE_COLORS } from '@game/model/builders';
+import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_PORTAL, B_WALL_RESTI, B_WALLS, GATE_COLORS } from '@game/model/builders';
 import {
   PART_COLLECTABLE,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
+  PART_PORTAL,
 } from '@game/model/Part';
 import {
   PADDLE_LEN,
@@ -15,6 +16,7 @@ import type { Field } from '@game/model/parts/Field';
 import type { Launcher } from '@game/model/parts/Launcher';
 import type { Obstacle } from '@game/model/parts/Obstacle';
 import type { Paddle } from '@game/model/parts/Paddle';
+import type { Portal } from '@game/model/parts/Portal';
 import type { Section } from '@game/model/Section';
 import type { State } from '@game/state/State';
 import {
@@ -81,8 +83,16 @@ type Drag =
       call: number;
       ox: number;
       oy: number;
+      ox1: number;
+      oy1: number;
       x0: number;
       y0: number;
+    }
+  | {
+      kind: 'moveCallEnd';
+      section: number;
+      call: number;
+      end: 0 | 1;
     }
   | {
       kind: 'moveWall';
@@ -265,6 +275,14 @@ const callVisualSegment = (section: SectionData, call: number[]) => {
       y1: origin.y - (dy / len) * draw,
     };
   }
+  if (call[0] === B_PORTAL && call.length >= 5) {
+    return {
+      x0: origin.x,
+      y0: origin.y,
+      x1: section[0] + call[3],
+      y1: section[1] + call[4],
+    };
+  }
   return null;
 };
 
@@ -280,6 +298,16 @@ const hitsCall = (
   }
   const origin = callOrigin(section, call);
   const fat = Math.max(slop, 8);
+  if (call[0] === B_PORTAL && call.length >= 5) {
+    const r = (call[5] ?? 18) + slop;
+    const x1 = section[0] + call[3];
+    const y1 = section[1] + call[4];
+    return (
+      Math.hypot(wx - origin.x, wy - origin.y) < r ||
+      Math.hypot(wx - x1, wy - y1) < r ||
+      distToSegment(wx, wy, origin.x, origin.y, x1, y1) < fat
+    );
+  }
   const segment = callVisualSegment(section, call);
   if (segment) {
     if (distToSegment(wx, wy, segment.x0, segment.y0, segment.x1, segment.y1) < fat) {
@@ -465,6 +493,35 @@ const hitWallEnd = (
   if (!ends) {
     return null;
   }
+  const r = 8;
+  let best: 0 | 1 | null = null;
+  let bestD = r;
+  for (let i = 0; i < 2; i++) {
+    const hx = (ends[i].x - cam.x) * cam.scale;
+    const hy = (ends[i].y - cam.y) * cam.scale;
+    const d = Math.hypot(sx - hx, sy - hy);
+    if (d <= bestD) {
+      bestD = d;
+      best = i as 0 | 1;
+    }
+  }
+  return best;
+};
+
+const hitPortalEnd = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+): 0 | 1 | null => {
+  if (call[0] !== B_PORTAL || call.length < 5) {
+    return null;
+  }
+  const ends = [
+    { x: section[0] + call[1], y: section[1] + call[2] },
+    { x: section[0] + call[3], y: section[1] + call[4] },
+  ];
   const r = 8;
   let best: 0 | 1 | null = null;
   let bestD = r;
@@ -759,7 +816,7 @@ export const WorldCanvas = ({
       }
       const raw = toLocal(sections[si], wx, wy);
       const local = clampLocal(sections[si], raw.x, raw.y);
-      if (tool.id === B_WALLS || isSegmentWallCall(tool.id)) {
+      if (tool.id === B_WALLS || isSegmentWallCall(tool.id) || tool.id === B_PORTAL) {
         dragRef.current = {
           kind: 'wall',
           section: si,
@@ -797,6 +854,16 @@ export const WorldCanvas = ({
             kind: 'rotateAim',
             section: selection.section,
             call: selection.call,
+          };
+          return;
+        }
+        const portalEnd = hitPortalEnd(s, call, sx, sy, cam);
+        if (portalEnd !== null) {
+          dragRef.current = {
+            kind: 'moveCallEnd',
+            section: selection.section,
+            call: selection.call,
+            end: portalEnd,
           };
           return;
         }
@@ -896,15 +963,27 @@ export const WorldCanvas = ({
             call: hit.call,
           };
         } else {
-          dragRef.current = {
-            kind: 'moveCall',
-            section: hit.section,
-            call: hit.call,
-            ox: call[1],
-            oy: call[2],
-            x0: wx,
-            y0: wy,
-          };
+          const portalEnd = hitPortalEnd(s, call, sx, sy, cam);
+          if (portalEnd !== null) {
+            dragRef.current = {
+              kind: 'moveCallEnd',
+              section: hit.section,
+              call: hit.call,
+              end: portalEnd,
+            };
+          } else {
+            dragRef.current = {
+              kind: 'moveCall',
+              section: hit.section,
+              call: hit.call,
+              ox: call[1],
+              oy: call[2],
+              ox1: call[3] ?? call[1],
+              oy1: call[4] ?? call[2],
+              x0: wx,
+              y0: wy,
+            };
+          }
         }
       }
     }
@@ -1129,11 +1208,9 @@ export const WorldCanvas = ({
       if (!s) {
         return;
       }
-      const local = clampLocal(
-        s,
-        drag.ox + (wx - drag.x0),
-        drag.oy + (wy - drag.y0)
-      );
+      const dx = wx - drag.x0;
+      const dy = wy - drag.y0;
+      const local = clampLocal(s, drag.ox + dx, drag.oy + dy);
       const next = cloneSections(sections);
       const call = next[drag.section][5][drag.call];
       if (call && call.length >= 3) {
@@ -1141,10 +1218,50 @@ export const WorldCanvas = ({
           const box = clampRectLocal(s, local.x, local.y, call[3], call[4]);
           call[1] = box.x;
           call[2] = box.y;
+        } else if (call[0] === B_PORTAL) {
+          const shifted = clampDeltaInRect(
+            drag.ox,
+            drag.oy,
+            drag.ox1,
+            drag.oy1,
+            dx,
+            dy,
+            s[2],
+            s[3]
+          );
+          call[1] = px(drag.ox + shifted.dx);
+          call[2] = px(drag.oy + shifted.dy);
+          call[3] = px(drag.ox1 + shifted.dx);
+          call[4] = px(drag.oy1 + shifted.dy);
         } else {
           call[1] = local.x;
           call[2] = local.y;
         }
+        onSections(next);
+      }
+      return;
+    }
+    if (drag.kind === 'moveCallEnd') {
+      const s = sections[drag.section];
+      if (!s) {
+        return;
+      }
+      const raw = toLocal(s, wx, wy);
+      let local = clampLocal(s, raw.x, raw.y);
+      if (e.shiftKey) {
+        const src = s[5][drag.call];
+        const other = 1 - drag.end;
+        const ox = src[1 + other * 2];
+        const oy = src[2 + other * 2];
+        const snapped = snapPolar(ox, oy, local.x, local.y);
+        local = clampLocal(s, snapped.x, snapped.y);
+      }
+      const next = cloneSections(sections);
+      const call = next[drag.section][5][drag.call];
+      const k = 1 + drag.end * 2;
+      if (call && call.length > k + 1) {
+        call[k] = local.x;
+        call[k + 1] = local.y;
         onSections(next);
       }
       return;
@@ -1293,7 +1410,18 @@ export const WorldCanvas = ({
       }
       if (Math.hypot(local.x - drag.x0, local.y - drag.y0) >= 2) {
         const next = cloneSections(sections);
-        if (isSegmentWallCall(drag.id)) {
+        if (drag.id === B_PORTAL) {
+          const call = placeDefaults(B_PORTAL, drag.x0, drag.y0);
+          call[3] = local.x;
+          call[4] = local.y;
+          next[drag.section][5].push(call);
+          onSections(next);
+          onSelection({
+            kind: 'call',
+            section: drag.section,
+            call: next[drag.section][5].length - 1,
+          });
+        } else if (isSegmentWallCall(drag.id)) {
           next[drag.section][5].push([
             drag.id,
             drag.x0,
@@ -1707,6 +1835,17 @@ const callMarker = (
           strokeWidth={1 / scale}
         />
       ) : null}
+      {call[0] === B_PORTAL && call.length >= 5 ? (
+        <rect
+          x={s[0] + call[3] - hs}
+          y={s[1] + call[4] - hs}
+          width={hs * 2}
+          height={hs * 2}
+          fill="#fff"
+          stroke="#000"
+          strokeWidth={1 / scale}
+        />
+      ) : null}
     </g>
   );
 };
@@ -1846,6 +1985,61 @@ const conveyerArrowMarks = (
 };
 
 const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
+  if (part.type === PART_PORTAL) {
+    const portal = part as Portal;
+    const fill = GATE_COLORS[portal.color] || GATE_COLORS[0];
+    const rx = portal.r * 0.55;
+    const ry = portal.r;
+    const mouths = [
+      { x: portal.x, y: portal.y },
+      { x: portal.x2, y: portal.y2 },
+    ];
+    const deg = (portal.angle * 180) / Math.PI;
+    let spiral = '';
+    const steps = 36;
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * Math.PI * 5;
+      const r = (i / steps) * rx * 0.85;
+      spiral +=
+        (i ? 'L' : 'M') + Math.cos(t) * r + ' ' + Math.sin(t) * r;
+    }
+    return (
+      <g>
+        <line
+          x1={portal.x}
+          y1={portal.y}
+          x2={portal.x2}
+          y2={portal.y2}
+          stroke={fill}
+          strokeWidth={1}
+          strokeDasharray="4 4"
+          opacity={0.5}
+        />
+        {mouths.map((m, i) => (
+          <g key={i} transform={`translate(${m.x} ${m.y})`}>
+            <ellipse
+              cx={0}
+              cy={0}
+              rx={rx}
+              ry={ry}
+              fill={fill}
+              stroke="#fff"
+              strokeWidth={2}
+            />
+            <g transform={`rotate(${deg})`}>
+              <path
+                d={spiral}
+                fill="none"
+                stroke="#000"
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              />
+            </g>
+          </g>
+        ))}
+      </g>
+    );
+  }
   if (part.type === PART_COLLECTABLE) {
     const coin = part as Collectable;
     if (coin.taken) {

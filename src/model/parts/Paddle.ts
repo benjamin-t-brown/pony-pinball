@@ -20,6 +20,7 @@ import {
   PADDLE_SPEED,
 } from '../constants';
 import { PART_PADDLE, Part } from '../Part';
+import { playSound, SOUND_PADDLE_FLIPPER } from '../../zzfx';
 
 export class Paddle extends Part {
   angle = 0;
@@ -62,6 +63,13 @@ export class Paddle extends Part {
 
   getLine() {
     return this.line;
+  }
+
+  activate() {
+    if (!this.active) {
+      playSound(SOUND_PADDLE_FLIPPER);
+    }
+    this.active = true;
   }
 
   /** Velocity of the paddle's surface at a world point: omega cross r. */
