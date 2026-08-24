@@ -13,16 +13,37 @@ import {
   LAUNCHER_LEN,
 } from '@game/model/constants';
 import type { Collectable } from '@game/model/parts/Collectable';
-import type { Decoration } from '@game/model/parts/Decoration';
 import {
   CHEVRON_D,
+  DEC_ICON,
+  DEC_RAINBOW,
+  HAT_D,
+  ICON_HAT,
+  ICON_PONY,
+  PONY_D,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
+  TEX_ARROWS,
+  WAND_D,
+  decorationFill,
+  decorationLightAt,
+  decorationLightCount,
   getTextureClass,
+  lightAnimation,
+  type Decoration,
 } from '@game/model/parts/Decoration';
 import type { Field } from '@game/model/parts/Field';
+import { MoveBallTrigger } from '@game/model/Trigger';
 import type { Launcher } from '@game/model/parts/Launcher';
-import type { Obstacle } from '@game/model/parts/Obstacle';
+import {
+  CIRCLE_DIAMOND,
+  CIRCLE_STAR,
+  DIAMOND_D,
+  STAR_D,
+  circleFill,
+  obstacleStroke,
+  type Obstacle,
+} from '@game/model/parts/Obstacle';
 import type { Paddle } from '@game/model/parts/Paddle';
 import type { Portal } from '@game/model/parts/Portal';
 import type { Section } from '@game/model/Section';
@@ -46,6 +67,7 @@ import {
   snapRect,
   SNAP_PX,
   ANGLE_SNAP,
+  roundAngle,
   toLocal,
   type Handle,
 } from '../geometry';
@@ -55,7 +77,8 @@ import {
   openingSpan,
   openingsToLinks,
 } from '../openings';
-import { placeDefaults, triggerDefFor } from '../schema';
+import { isDecLightLine, isDecRainbow, isMoveBallField, placeDefaults, triggerDefFor } from '../schema';
+import { collectPlayEls, syncPlayVisuals } from '../playVisuals';
 import type { Cam, Opening, SectionData, Selection, Tool } from '../types';
 import { isSegmentWallCall, restiWallIndices } from '../wallRefs';
 
@@ -222,8 +245,17 @@ const hitTriangleTip = (
 const DEC_AIM_LEN = 18;
 
 const decorationTipWorld = (section: SectionData, call: number[]) => {
-  const ox = section[0] + call[1];
-  const oy = section[1] + call[2];
+  let lx = call[1];
+  let ly = call[2];
+  if (isDecLightLine(call) && call.length >= 12) {
+    const n = call[9] < 1 ? 1 : call[9] | 0;
+    if (n <= 1) {
+      lx = (call[1] + call[10]) * 0.5;
+      ly = (call[2] + call[11]) * 0.5;
+    }
+  }
+  const ox = section[0] + lx;
+  const oy = section[1] + ly;
   const scale = call[3] || 1;
   const rot = call[4] || 0;
   const len = DEC_AIM_LEN * scale;
@@ -353,6 +385,14 @@ const callVisualSegment = (section: SectionData, call: number[]) => {
       y1: section[1] + call[4],
     };
   }
+  if (isDecLightLine(call) && call.length >= 12) {
+    return {
+      x0: origin.x,
+      y0: origin.y,
+      x1: section[0] + call[10],
+      y1: section[1] + call[11],
+    };
+  }
   return null;
 };
 
@@ -401,6 +441,21 @@ const hitsCall = (
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
   if (call[0] === B_DECORATION) {
+    if (isDecLightLine(call) && call.length >= 12) {
+      const x1 = section[0] + call[10];
+      const y1 = section[1] + call[11];
+      return distToSegment(wx, wy, origin.x, origin.y, x1, y1) < fat;
+    }
+    if (isDecRainbow(call) && call.length >= 9) {
+      const w = call[7];
+      const h = call[8];
+      return (
+        wx >= origin.x - slop &&
+        wx <= origin.x + w + slop &&
+        wy >= origin.y - slop &&
+        wy <= origin.y + h + slop
+      );
+    }
     const r = Math.max(12, (call[3] || 1) * 12);
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
@@ -431,7 +486,7 @@ const hitTest = (
 ): Selection => {
   for (let si = sections.length - 1; si >= 0; si--) {
     const s = sections[si];
-    const calls = s[5];
+    const calls = s[4];
     for (let ci = calls.length - 1; ci >= 0; ci--) {
       const call = calls[ci];
       if (call[0] === B_WALLS) {
@@ -502,7 +557,7 @@ const wallWorldEnds = (
   segment: number
 ) => {
   const s = sections[section];
-  const c = s && s[5][call];
+  const c = s && s[4][call];
   if (!s || !c) {
     return null;
   }
@@ -590,19 +645,37 @@ const hitWallEnd = (
   return best;
 };
 
-const hitPortalEnd = (
+const callEndLocal = (call: number[], end: 0 | 1) => {
+  if (call[0] === B_PORTAL && call.length >= 5) {
+    return {
+      xi: 1 + end * 2,
+      yi: 2 + end * 2,
+    };
+  }
+  if (isDecLightLine(call) && call.length >= 12) {
+    return {
+      xi: end ? 10 : 1,
+      yi: end ? 11 : 2,
+    };
+  }
+  return null;
+};
+
+const hitCallEnd = (
   section: SectionData,
   call: number[],
   sx: number,
   sy: number,
   cam: Cam
 ): 0 | 1 | null => {
-  if (call[0] !== B_PORTAL || call.length < 5) {
+  const a = callEndLocal(call, 0);
+  const b = callEndLocal(call, 1);
+  if (!a || !b) {
     return null;
   }
   const ends = [
-    { x: section[0] + call[1], y: section[1] + call[2] },
-    { x: section[0] + call[3], y: section[1] + call[4] },
+    { x: section[0] + call[a.xi], y: section[1] + call[a.yi] },
+    { x: section[0] + call[b.xi], y: section[1] + call[b.yi] },
   ];
   const r = 8;
   let best: 0 | 1 | null = null;
@@ -638,7 +711,7 @@ const hitHandle = (
 };
 
 const fieldWorld = (section: SectionData, call: number[]): SectionData => {
-  return [section[0] + call[1], section[1] + call[2], call[3], call[4], 0, []];
+  return [section[0] + call[1], section[1] + call[2], call[3], call[4], []];
 };
 
 const fieldCorners = (rect: SectionData) => {
@@ -664,12 +737,12 @@ const hitFieldHandle = (
 };
 
 const ensureWallsCall = (section: SectionData) => {
-  for (let i = 0; i < section[5].length; i++) {
-    if (section[5][i][0] === B_WALLS) {
+  for (let i = 0; i < section[4].length; i++) {
+    if (section[4][i][0] === B_WALLS) {
       return i;
     }
   }
-  section[5].unshift([B_WALLS]);
+  section[4].unshift([B_WALLS]);
   return 0;
 };
 
@@ -703,7 +776,6 @@ export const WorldCanvas = ({
   const pendingCam = useRef<Cam | null>(null);
   const [draftRev, setDraftRev] = useState(0);
   const [liveCam, setLiveCam] = useState<Cam | null>(null);
-  const [playFrame, setPlayFrame] = useState(0);
   const [showWallIds, setShowWallIds] = useState(false);
 
   const viewCam = liveCam ?? cam;
@@ -801,22 +873,27 @@ export const WorldCanvas = ({
     } catch {
       return [];
     }
-  }, [playing, sim, playFrame, viewSections, viewOpenings, draftRev, sections, openings]);
+  }, [playing, sim, viewSections, viewOpenings, draftRev, sections, openings]);
 
   useEffect(() => {
-    if (!playing) {
+    if (!playing || !sim) {
       return;
     }
+    const root = wrapRef.current;
+    if (!root) {
+      return;
+    }
+    const cache = collectPlayEls(root);
     let id = 0;
     const loop = () => {
-      setPlayFrame(n => n + 1);
+      syncPlayVisuals(cache, sim);
       id = requestAnimationFrame(loop);
     };
     id = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(id);
     };
-  }, [playing]);
+  }, [playing, sim]);
 
   useEffect(() => {
     if (!dragRef.current) {
@@ -1039,15 +1116,15 @@ export const WorldCanvas = ({
         return;
       }
       const next = cloneSections(viewSections);
-      next[si][5].push(placeDefaults(tool.id, local.x, local.y));
+      next[si][4].push(placeDefaults(tool.id, local.x, local.y));
       onSections(next);
-      onSelection({ kind: 'call', section: si, call: next[si][5].length - 1 });
+      onSelection({ kind: 'call', section: si, call: next[si][4].length - 1 });
       return;
     }
 
     if (selection && selection.kind === 'call') {
       const s = viewSections[selection.section];
-      const call = s && s[5][selection.call];
+      const call = s && s[4][selection.call];
       if (s && call) {
         if (hitAimTip(s, call, sx, sy, viewCam)) {
           dragRef.current = {
@@ -1057,7 +1134,7 @@ export const WorldCanvas = ({
           };
           return;
         }
-        const portalEnd = hitPortalEnd(s, call, sx, sy, viewCam);
+        const portalEnd = hitCallEnd(s, call, sx, sy, viewCam);
         if (portalEnd !== null) {
           dragRef.current = {
             kind: 'moveCallEnd',
@@ -1098,7 +1175,6 @@ export const WorldCanvas = ({
               section[2],
               section[3],
               section[4],
-              section[5],
             ],
           };
           return;
@@ -1154,7 +1230,7 @@ export const WorldCanvas = ({
     }
     if (hit && hit.kind === 'call') {
       const s = viewSections[hit.section];
-      const call = s && s[5][hit.call];
+      const call = s && s[4][hit.call];
       if (call && call[0] !== B_WALLS && call.length >= 3) {
         if (hitAimTip(s, call, sx, sy, viewCam)) {
           dragRef.current = {
@@ -1163,7 +1239,7 @@ export const WorldCanvas = ({
             call: hit.call,
           };
         } else {
-          const portalEnd = hitPortalEnd(s, call, sx, sy, viewCam);
+          const portalEnd = hitCallEnd(s, call, sx, sy, viewCam);
           if (portalEnd !== null) {
             dragRef.current = {
               kind: 'moveCallEnd',
@@ -1178,8 +1254,12 @@ export const WorldCanvas = ({
               call: hit.call,
               ox: call[1],
               oy: call[2],
-              ox1: call[3] ?? call[1],
-              oy1: call[4] ?? call[2],
+              ox1: isDecLightLine(call)
+                ? call[10] ?? call[1]
+                : call[3] ?? call[1],
+              oy1: isDecLightLine(call)
+                ? call[11] ?? call[2]
+                : call[4] ?? call[2],
               x0: wx,
               y0: wy,
             };
@@ -1188,7 +1268,7 @@ export const WorldCanvas = ({
       }
     }
     if (hit && hit.kind === 'wall') {
-      const call = viewSections[hit.section][5][hit.call];
+      const call = viewSections[hit.section][4][hit.call];
       const k = 1 + hit.segment * 4;
       if (call && call.length >= k + 4) {
         const end = hitWallEnd(viewSections, hit, sx, sy, viewCam);
@@ -1342,14 +1422,14 @@ export const WorldCanvas = ({
       }
       const p = toLocal(s, wx, wy);
       const raw = applyHandle(
-        [drag.orig[0], drag.orig[1], drag.orig[2], drag.orig[3], 0, []],
+        [drag.orig[0], drag.orig[1], drag.orig[2], drag.orig[3], []],
         drag.handle,
         p.x,
         p.y
       );
       const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
       const next = beginDraftSections();
-      const call = next[drag.section][5][drag.call];
+      const call = next[drag.section][4][drag.call];
       if (call) {
         call[1] = clamped.x;
         call[2] = clamped.y;
@@ -1361,12 +1441,12 @@ export const WorldCanvas = ({
     }
     if (drag.kind === 'rotateAim') {
       const s = viewSections[drag.section];
-      const call = s && s[5][drag.call];
+      const call = s && s[4][drag.call];
       if (!s || !call) {
         return;
       }
       const next = beginDraftSections();
-      const nextCall = next[drag.section][5][drag.call];
+      const nextCall = next[drag.section][4][drag.call];
       if (call[0] === B_CONVEYER) {
         const cx = s[0] + call[1] + call[3] / 2;
         const cy = s[1] + call[2] + call[4] / 2;
@@ -1374,7 +1454,7 @@ export const WorldCanvas = ({
         if (e.shiftKey) {
           ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
         }
-        nextCall[5] = ang;
+        nextCall[5] = roundAngle(ang);
       } else if (call[0] === B_LAUNCHER) {
         const ox = s[0] + call[1];
         const oy = s[1] + call[2];
@@ -1383,8 +1463,9 @@ export const WorldCanvas = ({
         if (e.shiftKey) {
           ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
         }
-        nextCall[3] = -Math.cos(ang);
-        nextCall[4] = -Math.sin(ang);
+        ang = roundAngle(ang);
+        nextCall[3] = roundAngle(-Math.cos(ang));
+        nextCall[4] = roundAngle(-Math.sin(ang));
       } else if (call[0] === B_TRIANGLE) {
         const ox = s[0] + call[1];
         const oy = s[1] + call[2];
@@ -1392,15 +1473,14 @@ export const WorldCanvas = ({
         if (e.shiftKey) {
           ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
         }
-        nextCall[5] = ang;
+        nextCall[5] = roundAngle(ang);
       } else if (call[0] === B_DECORATION) {
-        const ox = s[0] + call[1];
-        const oy = s[1] + call[2];
-        let ang = Math.atan2(wy - oy, wx - ox);
+        const tip = decorationTipWorld(s, call);
+        let ang = Math.atan2(wy - tip.oy, wx - tip.ox);
         if (e.shiftKey) {
           ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
         }
-        nextCall[4] = ang;
+        nextCall[4] = roundAngle(ang);
       }
       bumpDraft();
       return;
@@ -1435,7 +1515,7 @@ export const WorldCanvas = ({
       const dy = wy - drag.y0;
       const local = clampLocal(s, drag.ox + dx, drag.oy + dy);
       const next = beginDraftSections();
-      const call = next[drag.section][5][drag.call];
+      const call = next[drag.section][4][drag.call];
       if (call && call.length >= 3) {
         if (isRectBuilder(call[0])) {
           const box = clampRectLocal(s, local.x, local.y, call[3], call[4]);
@@ -1456,6 +1536,21 @@ export const WorldCanvas = ({
           call[2] = px(drag.oy + shifted.dy);
           call[3] = px(drag.ox1 + shifted.dx);
           call[4] = px(drag.oy1 + shifted.dy);
+        } else if (isDecLightLine(call)) {
+          const shifted = clampDeltaInRect(
+            drag.ox,
+            drag.oy,
+            drag.ox1,
+            drag.oy1,
+            dx,
+            dy,
+            s[2],
+            s[3]
+          );
+          call[1] = px(drag.ox + shifted.dx);
+          call[2] = px(drag.oy + shifted.dy);
+          call[10] = px(drag.ox1 + shifted.dx);
+          call[11] = px(drag.oy1 + shifted.dy);
         } else {
           call[1] = local.x;
           call[2] = local.y;
@@ -1472,19 +1567,24 @@ export const WorldCanvas = ({
       const raw = toLocal(s, wx, wy);
       let local = clampLocal(s, raw.x, raw.y);
       if (e.shiftKey) {
-        const src = s[5][drag.call];
-        const other = 1 - drag.end;
-        const ox = src[1 + other * 2];
-        const oy = src[2 + other * 2];
-        const snapped = snapPolar(ox, oy, local.x, local.y);
-        local = clampLocal(s, snapped.x, snapped.y);
+        const src = s[4][drag.call];
+        const other = callEndLocal(src, (1 - drag.end) as 0 | 1);
+        if (other) {
+          const snapped = snapPolar(
+            src[other.xi],
+            src[other.yi],
+            local.x,
+            local.y
+          );
+          local = clampLocal(s, snapped.x, snapped.y);
+        }
       }
       const next = beginDraftSections();
-      const call = next[drag.section][5][drag.call];
-      const k = 1 + drag.end * 2;
-      if (call && call.length > k + 1) {
-        call[k] = local.x;
-        call[k + 1] = local.y;
+      const call = next[drag.section][4][drag.call];
+      const at = call && callEndLocal(call, drag.end);
+      if (at) {
+        call[at.xi] = local.x;
+        call[at.yi] = local.y;
         bumpDraft();
       }
       return;
@@ -1505,7 +1605,7 @@ export const WorldCanvas = ({
         s[3]
       );
       const next = beginDraftSections();
-      const call = next[drag.section][5][drag.call];
+      const call = next[drag.section][4][drag.call];
       const k = 1 + drag.segment * 4;
       if (call && call.length >= k + 4) {
         call[k] = px(drag.ox0 + shifted.dx);
@@ -1524,7 +1624,7 @@ export const WorldCanvas = ({
       const raw = toLocal(s, wx, wy);
       let local = clampLocal(s, raw.x, raw.y);
       if (e.shiftKey) {
-        const src = s[5][drag.call];
+        const src = s[4][drag.call];
         const base = 1 + drag.segment * 4;
         const other = 1 - drag.end;
         const ox = src[base + other * 2];
@@ -1533,7 +1633,7 @@ export const WorldCanvas = ({
         local = clampLocal(s, snapped.x, snapped.y);
       }
       const next = beginDraftSections();
-      const call = next[drag.section][5][drag.call];
+      const call = next[drag.section][4][drag.call];
       const k = 1 + drag.segment * 4 + drag.end * 2;
       if (call && call.length > k + 1) {
         call[k] = local.x;
@@ -1632,7 +1732,7 @@ export const WorldCanvas = ({
         snapDist
       );
       const next = cloneSections(sections);
-      next.push([snapped.x, snapped.y, snapped.w, snapped.h, 0, []]);
+      next.push([snapped.x, snapped.y, snapped.w, snapped.h, []]);
       onSections(next);
       onSelection({ kind: 'section', index: next.length - 1 });
     }
@@ -1648,12 +1748,12 @@ export const WorldCanvas = ({
         const call = placeDefaults(drag.id, clamped.x, clamped.y);
         call[3] = clamped.w;
         call[4] = clamped.h;
-        next[drag.section][5].push(call);
+        next[drag.section][4].push(call);
         onSections(next);
         onSelection({
           kind: 'call',
           section: drag.section,
-          call: next[drag.section][5].length - 1,
+          call: next[drag.section][4].length - 1,
         });
         onTool({ kind: 'select' });
       }
@@ -1673,15 +1773,15 @@ export const WorldCanvas = ({
           const call = placeDefaults(B_PORTAL, drag.x0, drag.y0);
           call[3] = local.x;
           call[4] = local.y;
-          next[drag.section][5].push(call);
+          next[drag.section][4].push(call);
           onSections(next);
           onSelection({
             kind: 'call',
             section: drag.section,
-            call: next[drag.section][5].length - 1,
+            call: next[drag.section][4].length - 1,
           });
         } else if (isSegmentWallCall(drag.id)) {
-          next[drag.section][5].push([
+          next[drag.section][4].push([
             drag.id,
             drag.x0,
             drag.y0,
@@ -1693,18 +1793,18 @@ export const WorldCanvas = ({
           onSelection({
             kind: 'wall',
             section: drag.section,
-            call: next[drag.section][5].length - 1,
+            call: next[drag.section][4].length - 1,
             segment: 0,
           });
         } else {
           const ci = ensureWallsCall(next[drag.section]);
-          next[drag.section][5][ci].push(drag.x0, drag.y0, local.x, local.y);
+          next[drag.section][4][ci].push(drag.x0, drag.y0, local.x, local.y);
           onSections(next);
           onSelection({
             kind: 'wall',
             section: drag.section,
             call: ci,
-            segment: Math.floor((next[drag.section][5][ci].length - 5) / 4),
+            segment: Math.floor((next[drag.section][4][ci].length - 5) / 4),
           });
         }
       }
@@ -1723,15 +1823,20 @@ export const WorldCanvas = ({
 
   let triggerWalls: Set<number> | null = null;
   let triggerWallSection = -1;
+  let triggerParts: Set<number> | null = null;
+  let triggerPartSection = -1;
   if (selection && selection.kind === 'call') {
-    const call = viewSections[selection.section]?.[5][selection.call];
+    const call = viewSections[selection.section]?.[4][selection.call];
     if (call && (call[0] === B_FIELD || call[0] === B_COLLECTABLE)) {
       const trig = triggerDefFor(call[5] ?? 0);
       const walls = new Set<number>();
+      const parts = new Set<number>();
       let wallSection = selection.section;
+      let partSection = selection.section;
       for (let a = 0; a < trig.args.length; a++) {
         if (trig.args[a] === 'section') {
           wallSection = call[6 + a] ?? wallSection;
+          partSection = call[6 + a] ?? partSection;
         }
       }
       for (let a = 0; a < trig.args.length; a++) {
@@ -1741,10 +1846,20 @@ export const WorldCanvas = ({
             walls.add(wi);
           }
         }
+        if (trig.args[a] === 'part') {
+          const pi = call[6 + a];
+          if (pi >= 0) {
+            parts.add(pi);
+          }
+        }
       }
       if (walls.size) {
         triggerWalls = walls;
         triggerWallSection = wallSection;
+      }
+      if (parts.size) {
+        triggerParts = parts;
+        triggerPartSection = partSection;
       }
     }
   }
@@ -1763,12 +1878,11 @@ export const WorldCanvas = ({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      <svg>
+      <svg key={playing ? 'play' : 'edit'}>
         <g transform={`scale(${viewCam.scale}) translate(${-viewCam.x} ${-viewCam.y})`}>
           {viewBuilt.map(section => (
             <SectionPreview
               key={section.id}
-              frame={playing ? playFrame : 0}
               section={section}
               selected={
                 !!selection &&
@@ -1777,6 +1891,9 @@ export const WorldCanvas = ({
               }
               highlightWalls={
                 triggerWallSection === section.id ? triggerWalls : null
+              }
+              highlightParts={
+                triggerPartSection === section.id ? triggerParts : null
               }
               restiWalls={
                 viewSections[section.id]
@@ -1804,6 +1921,33 @@ export const WorldCanvas = ({
                     {i}
                   </text>
                 ))
+              )
+            : null}
+          {showWallIds
+            ? viewBuilt.map(section =>
+                section.parts.map((part, i) => {
+                  if (part.type !== PART_DECORATION) {
+                    return null;
+                  }
+                  const p = decorationLightAt(part as Decoration, 0);
+                  return (
+                    <text
+                      key={'pi' + section.id + '-' + i}
+                      x={p.x + section.x}
+                      y={p.y + section.y}
+                      fill="#8cf"
+                      stroke="#000"
+                      strokeWidth={3 / viewCam.scale}
+                      paintOrder="stroke"
+                      fontSize={12 / viewCam.scale}
+                      fontWeight="bold"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                    >
+                      {i}
+                    </text>
+                  );
+                })
               )
             : null}
           {viewOpenings.map((o, i) => {
@@ -1877,12 +2021,12 @@ export const WorldCanvas = ({
           selection.kind === 'call' &&
           !playing &&
           viewSections[selection.section] &&
-          viewSections[selection.section][5][selection.call] &&
-          isRectBuilder(viewSections[selection.section][5][selection.call][0])
+          viewSections[selection.section][4][selection.call] &&
+          isRectBuilder(viewSections[selection.section][4][selection.call][0])
             ? fieldCorners(
                 fieldWorld(
                   viewSections[selection.section],
-                  viewSections[selection.section][5][selection.call]
+                  viewSections[selection.section][4][selection.call]
                 )
               ).map(h => (
                 <rect
@@ -1918,6 +2062,7 @@ export const WorldCanvas = ({
             ? sim.balls.map((ball, i) => (
                 <circle
                   key={'ball' + i}
+                  data-live="ball"
                   cx={ball.pos.x}
                   cy={ball.pos.y}
                   r={ball.r}
@@ -1989,7 +2134,7 @@ const callMarker = (
   scale: number
 ) => {
   const s = sections[si];
-  const call = s && s[5][ci];
+  const call = s && s[4][ci];
   if (!call || call.length < 3) {
     return null;
   }
@@ -2028,6 +2173,40 @@ const callMarker = (
           stroke="#fc8"
           strokeWidth={2 / scale}
         />
+      ) : null}
+      {isDecRainbow(call) && call.length >= 9 ? (
+        <rect
+          x={origin.x}
+          y={origin.y}
+          width={call[7]}
+          height={call[8]}
+          fill="none"
+          stroke="#fc8"
+          strokeWidth={2 / scale}
+        />
+      ) : null}
+      {isMoveBallField(call) && call.length >= 10 ? (
+        <g>
+          <rect
+            x={s[0] + (call[6] || 0)}
+            y={s[1] + (call[7] || 0)}
+            width={call[8] > 0 ? call[8] : 0}
+            height={call[9] > 0 ? call[9] : 0}
+            fill="none"
+            stroke="#c8f"
+            strokeWidth={2 / scale}
+            strokeDasharray={`${6 / scale} ${4 / scale}`}
+          />
+          <line
+            x1={origin.x + call[3] * 0.5}
+            y1={origin.y + call[4] * 0.5}
+            x2={s[0] + (call[6] || 0) + (call[8] > 0 ? call[8] : 0) * 0.5}
+            y2={s[1] + (call[7] || 0) + (call[9] > 0 ? call[9] : 0) * 0.5}
+            stroke="#c8f"
+            strokeWidth={2 / scale}
+            strokeDasharray={`${4 / scale} ${4 / scale}`}
+          />
+        </g>
       ) : null}
       {call[0] === B_CONVEYER
         ? (() => {
@@ -2173,6 +2352,17 @@ const callMarker = (
           strokeWidth={1 / scale}
         />
       ) : null}
+      {isDecLightLine(call) && call.length >= 12 ? (
+        <rect
+          x={s[0] + call[10] - hs}
+          y={s[1] + call[11] - hs}
+          width={hs * 2}
+          height={hs * 2}
+          fill="#fff"
+          stroke="#000"
+          strokeWidth={1 / scale}
+        />
+      ) : null}
     </g>
   );
 };
@@ -2183,7 +2373,7 @@ const wallMarker = (
   scale: number
 ) => {
   const s = sections[selection.section];
-  const call = s && s[5][selection.call];
+  const call = s && s[4][selection.call];
   if (!call) {
     return null;
   }
@@ -2227,30 +2417,61 @@ const wallMarker = (
 };
 
 const SectionPreview = memo(({
-  frame,
   section,
   selected,
   highlightWalls,
+  highlightParts,
   restiWalls,
 }: {
-  frame: number;
   section: Section;
   selected: boolean;
   highlightWalls: Set<number> | null;
+  highlightParts: Set<number> | null;
   restiWalls: Set<number> | null;
 }) => {
   return (
     <g transform={`translate(${section.x} ${section.y})`}>
+      <foreignObject
+        width={section.w}
+        height={section.h}
+        pointerEvents="none"
+      >
+        <div
+          className="sb"
+          style={{ width: section.w, height: section.h }}
+        />
+      </foreignObject>
       <rect
         width={section.w}
         height={section.h}
-        fill={section.bg}
+        fill="none"
         stroke={selected ? '#fff' : 'none'}
         strokeWidth={selected ? 3 : 0}
       />
       <text x={8} y={18} fill="#fff" fontSize={14} fontWeight="bold">
         {section.id}
       </text>
+      {section.fills.map((f, i) => (
+        <path
+          key={'f' + i}
+          d={
+            'M' +
+            f[0] +
+            ' ' +
+            f[1] +
+            'L' +
+            f[2] +
+            ' ' +
+            f[3] +
+            'L' +
+            f[4] +
+            ' ' +
+            f[5] +
+            'Z'
+          }
+          fill={GATE_COLORS[(f[6] | 0) % GATE_COLORS.length]}
+        />
+      ))}
       {section.walls.map((w, i) => {
         const lit = highlightWalls && highlightWalls.has(i);
         const resti = restiWalls && restiWalls.has(i);
@@ -2260,6 +2481,9 @@ const SectionPreview = memo(({
         return (
           <line
             key={'w' + i}
+            data-live="wall"
+            data-s={section.id}
+            data-i={i}
             x1={w.a.x}
             y1={w.a.y}
             x2={w.b.x}
@@ -2282,8 +2506,33 @@ const SectionPreview = memo(({
         );
       })}
       {section.parts.map((part, i) => (
-        <PartPreview key={'p' + i} part={part} />
+        <PartPreview key={'p' + i} part={part} sectionId={section.id} index={i} />
       ))}
+      {highlightParts
+        ? section.parts.map((part, i) => {
+            if (!highlightParts.has(i) || part.type !== PART_DECORATION) {
+              return null;
+            }
+            const dec = part as Decoration;
+            const n = decorationLightCount(dec);
+            const marks = [];
+            for (let k = 0; k < n; k++) {
+              const p = decorationLightAt(dec, k);
+              marks.push(
+                <circle
+                  key={k}
+                  cx={p.x}
+                  cy={p.y}
+                  r={14}
+                  fill="none"
+                  stroke="#fc8"
+                  strokeWidth={3}
+                />
+              );
+            }
+            return <g key={'hp' + i}>{marks}</g>;
+          })
+        : null}
     </g>
   );
 });
@@ -2313,7 +2562,15 @@ const conveyerArrowMarks = (
   );
 };
 
-const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
+const PartPreview = ({
+  part,
+  sectionId,
+  index,
+}: {
+  part: Section['parts'][number];
+  sectionId: number;
+  index: number;
+}) => {
   if (part.type === PART_PORTAL) {
     const portal = part as Portal;
     const fill = GATE_COLORS[portal.color] || GATE_COLORS[0];
@@ -2355,7 +2612,7 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
               stroke="#fff"
               strokeWidth={2}
             />
-            <g transform={`rotate(${deg})`}>
+            <g data-live="portal" data-s={sectionId} data-i={index} transform={`rotate(${deg})`}>
               <path
                 d={spiral}
                 fill="none"
@@ -2371,84 +2628,178 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
   }
   if (part.type === PART_COLLECTABLE) {
     const coin = part as Collectable;
-    if (coin.taken) {
-      return null;
-    }
     return (
       <circle
+        data-live="coin"
+        data-s={sectionId}
+        data-i={index}
         cx={coin.x}
         cy={coin.y}
         r={coin.r}
         fill="#fc8"
         stroke="#a80"
         strokeWidth={2}
+        style={coin.taken ? { display: 'none' } : undefined}
       />
     );
   }
   if (part.type === PART_DECORATION) {
     const dec = part as Decoration;
+    const rot = (dec.rot * 180) / Math.PI;
+    if (dec.decorationType === DEC_RAINBOW) {
+      return (
+        <foreignObject
+          x={dec.x}
+          y={dec.y}
+          width={dec.x1}
+          height={dec.y1}
+          overflow="hidden"
+          transform={`rotate(${rot} ${dec.x} ${dec.y})`}
+        >
+          <div className="tr" style={{ width: '100%', height: '100%' }} />
+        </foreignObject>
+      );
+    }
+    if (dec.decorationType === DEC_ICON) {
+      const fill = decorationFill(dec.texture);
+      const glyph = dec.shape % 3;
+      return (
+        <g
+          transform={`translate(${dec.x} ${dec.y}) rotate(${rot}) scale(${dec.scale})`}
+          opacity={dec.opacity}
+        >
+          {glyph === ICON_HAT ? (
+            <>
+              <path d={HAT_D} fill={fill} />
+              <circle cx={0} cy={-9.2} r={2.2} fill={fill} />
+            </>
+          ) : glyph === ICON_PONY ? (
+            <path d={PONY_D} fill={fill} />
+          ) : (
+            <>
+              <path d={WAND_D} fill={fill} />
+              <g transform="translate(5.2 -6.8) scale(4.2)">
+                <path d={STAR_D} fill={fill} />
+              </g>
+            </>
+          )}
+        </g>
+      );
+    }
+    const n = decorationLightCount(dec);
+    const lights = [];
+    for (let i = 0; i < n; i++) {
+      const p = decorationLightAt(dec, i);
+      lights.push(
+        <g
+          key={i}
+          className={getTextureClass(dec.texture)}
+          style={{
+            animation: lightAnimation(dec),
+            animationDelay: i * dec.delay + 'ms',
+          }}
+          transform={`translate(${p.x} ${p.y}) rotate(${rot}) scale(${dec.scale})`}
+        >
+          {dec.shape === SHAPE_CIRCLE ? (
+            <circle r={8} fill="none" strokeWidth={3} />
+          ) : dec.shape === SHAPE_SQUARE ? (
+            <rect
+              x={-8}
+              y={-8}
+              width={16}
+              height={16}
+              fill="none"
+              strokeWidth={3}
+            />
+          ) : (
+            <path
+              d={CHEVRON_D}
+              fill="none"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          )}
+        </g>
+      );
+    }
     return (
       <g
-        className={getTextureClass(dec.texture)}
-        style={
-          dec.interval > 0
-            ? {
-                animation: `k ${dec.interval}ms step-end infinite`,
-              }
-            : undefined
-        }
-        transform={`translate(${dec.x} ${dec.y}) rotate(${(dec.rot * 180) / Math.PI}) scale(${dec.scale})`}
+        data-live="light"
+        data-s={sectionId}
+        data-i={index}
+        data-on={dec.active ? '1' : '0'}
+        opacity={dec.active ? 1 : 0.2}
       >
-        {dec.shape === SHAPE_CIRCLE ? (
-          <circle r={8} fill="none" strokeWidth={3} />
-        ) : dec.shape === SHAPE_SQUARE ? (
-          <rect
-            x={-8}
-            y={-8}
-            width={16}
-            height={16}
-            fill="none"
-            strokeWidth={3}
-          />
-        ) : (
-          <path
-            d={CHEVRON_D}
-            fill="none"
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        )}
+        {lights}
       </g>
     );
   }
   if (part.type === PART_FIELD) {
     const field = part as Field;
     const conveyer = !field.trigger && field.grav === 0;
-    const fill = conveyer
-      ? field.inside
-        ? 'rgba(240,200,80,0.4)'
-        : 'rgba(200,160,50,0.22)'
-      : field.inside
-        ? 'rgba(120,200,255,0.35)'
-        : 'rgba(70,140,220,0.18)';
     const forceLen = Math.hypot(field.ax, field.ay);
-    const cx = field.x + field.w / 2;
-    const cy = field.y + field.h / 2;
-    const ca = forceLen > 0 ? field.ax / forceLen : 1;
-    const sa = forceLen > 0 ? field.ay / forceLen : 0;
+    if (conveyer && forceLen > 0) {
+      const deg = (Math.atan2(field.ay, field.ax) * 180) / Math.PI;
+      return (
+        <foreignObject
+          x={field.x}
+          y={field.y}
+          width={field.w}
+          height={field.h}
+          overflow="hidden"
+        >
+          <div
+            className={getTextureClass(TEX_ARROWS)}
+            style={{
+              width: '100%',
+              height: '100%',
+              ['--r' as string]: deg + 'deg',
+            }}
+          />
+        </foreignObject>
+      );
+    }
+    const fill = field.inside
+      ? 'rgba(120,200,255,0.35)'
+      : 'rgba(70,140,220,0.18)';
+    const dest =
+      field.trigger instanceof MoveBallTrigger ? field.trigger.args : null;
     return (
       <g>
         <rect
+          data-live="field"
+          data-s={sectionId}
+          data-i={index}
           x={field.x}
           y={field.y}
           width={field.w}
           height={field.h}
           fill={fill}
         />
-        {conveyer && forceLen > 0
-          ? conveyerArrowMarks(cx, cy, ca, sa, CONVEYER_ARROW_LEN, '#fc8', 3)
-          : null}
+        {dest ? (
+          <>
+            <rect
+              x={dest[0] || 0}
+              y={dest[1] || 0}
+              width={dest[2] > 0 ? dest[2] : 0}
+              height={dest[3] > 0 ? dest[3] : 0}
+              fill="rgba(200,128,255,0.12)"
+              stroke="#c8f"
+              strokeWidth={2}
+              strokeDasharray="6 4"
+            />
+            <line
+              x1={field.x + field.w * 0.5}
+              y1={field.y + field.h * 0.5}
+              x2={(dest[0] || 0) + (dest[2] > 0 ? dest[2] : 0) * 0.5}
+              y2={(dest[1] || 0) + (dest[3] > 0 ? dest[3] : 0) * 0.5}
+              stroke="#c8f"
+              strokeWidth={2}
+              strokeDasharray="4 4"
+            />
+          </>
+        ) : null}
       </g>
     );
   }
@@ -2457,6 +2808,9 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
     const line = paddle.getLine();
     return (
       <line
+        data-live="paddle"
+        data-s={sectionId}
+        data-i={index}
         x1={line.a.x}
         y1={line.a.y}
         x2={line.b.x}
@@ -2483,38 +2837,64 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
           strokeWidth={8}
           strokeLinecap="round"
         />
-        {fill > 0 ? (
-          <line
-            x1={launcher.x}
-            y1={launcher.y}
-            x2={launcher.x - launcher.dir.x * fill}
-            y2={launcher.y - launcher.dir.y * fill}
-            stroke={t >= 1 ? '#fc8' : '#fa6'}
-            strokeWidth={8}
-            strokeLinecap="round"
-          />
-        ) : null}
+        <line
+          data-live="launcher"
+          data-s={sectionId}
+          data-i={index}
+          x1={launcher.x}
+          y1={launcher.y}
+          x2={launcher.x - launcher.dir.x * fill}
+          y2={launcher.y - launcher.dir.y * fill}
+          stroke={t >= 1 ? '#fc8' : '#fa6'}
+          strokeWidth={8}
+          strokeLinecap="round"
+        />
       </g>
     );
   }
   const obstacle = part as Obstacle;
-  const ca = Math.cos(obstacle.angle);
-  const sa = Math.sin(obstacle.angle);
+  const glyph =
+    obstacle.isCircle ? (
+      <>
+        <circle r={obstacle.r} fill={circleFill(obstacle.active, obstacle.color)} />
+        <g transform={`scale(${obstacle.r * 0.7})`}>
+          {obstacle.icon % 3 === CIRCLE_STAR ? (
+            <path d={STAR_D} fill="#123" />
+          ) : obstacle.icon % 3 === CIRCLE_DIAMOND ? (
+            <path d={DIAMOND_D} fill="#123" />
+          ) : (
+            <>
+              <circle cx={-0.32} cy={-0.22} r={0.13} fill="#123" />
+              <circle cx={0.32} cy={-0.22} r={0.13} fill="#123" />
+              <path
+                d="M-.4.22A.48.48 0 0 0 .4.22"
+                fill="none"
+                stroke="#123"
+                strokeWidth={0.12}
+                strokeLinecap="round"
+              />
+            </>
+          )}
+        </g>
+      </>
+    ) : null;
   return (
-    <g>
+    <g
+      data-live="obstacle"
+      data-s={sectionId}
+      data-i={index}
+      transform={`translate(${obstacle.x} ${obstacle.y}) rotate(${(obstacle.angle * 180) / Math.PI})`}
+    >
+      {glyph}
       {obstacle.walls.map((w, i) => {
-        const x1 = w.a.x * ca - w.a.y * sa + obstacle.x;
-        const y1 = w.a.x * sa + w.a.y * ca + obstacle.y;
-        const x2 = w.b.x * ca - w.b.y * sa + obstacle.x;
-        const y2 = w.b.x * sa + w.b.y * ca + obstacle.y;
         return (
           <line
             key={i}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
-            stroke={obstacle.active ? '#fc8' : '#888'}
+            x1={w.a.x}
+            y1={w.a.y}
+            x2={w.b.x}
+            y2={w.b.y}
+            stroke={obstacleStroke(obstacle)}
             strokeWidth={4}
             strokeLinecap="round"
           />

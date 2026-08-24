@@ -6,6 +6,7 @@ import {
   createElement,
   createSvgElement,
   px,
+  setAttribute,
   setStyle,
   stringify,
 } from '../dom';
@@ -16,6 +17,7 @@ import { UiElement } from './UiElement';
 
 export class BoardSection extends UiElement {
   section: Section;
+  wallEls: SVGLineElement[] = [];
 
   constructor(section: Section, parent?: UiElement) {
     super(parent);
@@ -28,13 +30,13 @@ export class BoardSection extends UiElement {
   build() {
     const section = this.section;
     const el = createElement(DIV);
+    el.className = 'sb';
     setStyle(el, {
       position: 'absolute',
       left: px(section.x),
       top: px(section.y),
       width: px(section.w),
       height: px(section.h),
-      background: section.bg,
     });
 
     const svg = createSvgElement(SVG, {
@@ -46,6 +48,29 @@ export class BoardSection extends UiElement {
       position: 'absolute',
       inset: '0',
     });
+
+    for (let i = 0; i < section.fills.length; i++) {
+      const f = section.fills[i];
+      svg.appendChild(
+        createSvgElement('path', {
+          'd':
+            'M' +
+            stringify(f[0]) +
+            ' ' +
+            stringify(f[1]) +
+            'L' +
+            stringify(f[2]) +
+            ' ' +
+            stringify(f[3]) +
+            'L' +
+            stringify(f[4]) +
+            ' ' +
+            stringify(f[5]) +
+            'Z',
+          fill: GATE_COLORS[(f[6] | 0) % GATE_COLORS.length],
+        })
+      );
+    }
 
     for (const wall of section.walls) {
       const gate = wall.color >= 0;
@@ -64,7 +89,9 @@ export class BoardSection extends UiElement {
       if (gate) {
         attrs['stroke-dasharray'] = '10 6';
       }
-      svg.appendChild(createSvgElement(LINE, attrs));
+      const line = createSvgElement(LINE, attrs) as SVGLineElement;
+      svg.appendChild(line);
+      this.wallEls.push(line);
     }
     appendChild(el, svg as unknown as HTMLElement);
 
@@ -82,6 +109,18 @@ export class BoardSection extends UiElement {
   }
 
   render(dt: number) {
+    const walls = this.section.walls;
+    for (let i = 0; i < this.wallEls.length; i++) {
+      const wall = walls[i];
+      const gate = wall.color >= 0;
+      const stroke =
+        wall.rest < 0
+          ? 'rgba(136,136,136,0.2)'
+          : gate
+            ? GATE_COLORS[wall.color % GATE_COLORS.length] || '#fc8'
+            : '#888';
+      setAttribute(this.wallEls[i] as unknown as HTMLElement, 'stroke', stroke);
+    }
     super.render(dt);
   }
 }

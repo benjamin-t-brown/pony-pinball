@@ -19,6 +19,9 @@ export class SimUiLayer extends Layer {
 
   setControl(key: string, down: boolean) {
     const state = getState();
+    if (!state.playing) {
+      return;
+    }
     if (key === 'KeyZ' || key === 'ArrowLeft') {
       state.input[CONTROL_LEFT] = down;
     } else if (key === 'Slash' || key === 'ArrowRight') {

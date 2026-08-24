@@ -23,8 +23,7 @@ export const cloneSections = (sections: SectionData[]): SectionData[] => {
     d[1],
     d[2],
     d[3],
-    d[4],
-    d[5].map(c => c.slice()),
+    d[4].map(c => c.slice()),
   ]);
 };
 
@@ -85,6 +84,10 @@ export const px = (n: number) => {
 
 /** 15° steps: 0, 15, 30, 45, 60, 75, 90, … */
 export const ANGLE_SNAP = Math.PI / 12;
+
+export const roundAngle = (n: number) => {
+  return Math.round(n * 10000) / 10000;
+};
 
 export const snapPolar = (x0: number, y0: number, x1: number, y1: number) => {
   const dx = x1 - x0;

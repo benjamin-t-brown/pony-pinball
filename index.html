@@ -17,6 +17,16 @@
         height: 100dvh;
         overflow: hidden;
         background-color: #333;
+        background-image: radial-gradient(circle at center, #444, #333),
+          repeating-radial-gradient(
+            circle at center,
+            #444,
+            #444,
+            10px,
+            transparent 20px,
+            transparent 10px
+          );
+        background-blend-mode: soft-light;
       }
       #game-container,
       #game {

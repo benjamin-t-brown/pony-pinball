@@ -1,9 +1,18 @@
+import { PART_DECORATION } from './Part';
 import type { Section } from './Section';
+import { type Ball } from './Ball';
+import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../zzfx';
 
 export const TRIGGER_DEACTIVATE_WALL = 0;
 export const TRIGGER_MOVE_DOOR = 1;
 /** Collectable: 5 coins of group 0 open all gates in section 4. */
 export const TRIGGER_GATE_SECTION_4 = 2;
+/** Field: turn a decoration light on while occupied, off when left. */
+export const TRIGGER_ACTIVATE_LIGHT = 3;
+/** Field: warp the ball to a random point in a dest rect (section-local). */
+export const TRIGGER_MOVE_BALL = 4;
+/** Field: play a zzfx sound when the ball enters. */
+export const TRIGGER_PLAY_SOUND = 5;
 
 export type CollectState = {
   collected: number[];
@@ -22,7 +31,7 @@ export class Trigger {
     this.args = args;
   }
 
-  onActivated(_section: Section) {}
+  onActivated(_section: Section, _ball?: Ball) {}
 
   onDeactivated(_section: Section) {}
 
@@ -133,17 +142,18 @@ export class MoveDoorTrigger extends Trigger {
 }
 
 /**
- * Hardcoded collectable goal: after 5 group-0 coins, disable every gate wall
- * (color >= 0) in section 4.
+ * Hardcoded collectable goal: after 5 group-0 coins, disable wall 39 and
+ * turn on light 22 in section 4.
  */
 export class GateSection4Trigger extends Trigger {
   onCollect(_section: Section, state: CollectState, groupType: number) {
     if (groupType !== 0) {
       return;
     }
-    const needed = 5;
+    const needed = 6;
     const section = 4;
-    const wallIndex = 45;
+    const wallIndex = 39;
+    const lightIndex = 22;
     if ((state.collected[0] || 0) < needed) {
       return;
     }
@@ -153,7 +163,109 @@ export class GateSection4Trigger extends Trigger {
     }
     if (target.walls[wallIndex].rest !== -1) {
       target.walls[wallIndex].rest = -1;
+      playSound(SOUND_SECRET);
     }
+    const light = target.parts[lightIndex];
+    if (light && light.type === PART_DECORATION) {
+      light.activate();
+    }
+  }
+}
+
+export class ActivateLightTrigger extends Trigger {
+  disableIn = -1;
+  enableIn = -1;
+
+  lightPart(section: Section) {
+    const part = section.parts[this.args[0]];
+    if (!part || part.type !== PART_DECORATION) {
+      return null;
+    }
+    return part;
+  }
+
+  enableLight(section: Section) {
+    const part = this.lightPart(section);
+    if (part) {
+      part.activate();
+    }
+  }
+
+  disableLight(section: Section) {
+    const part = this.lightPart(section);
+    if (part) {
+      part.unactivate();
+    }
+  }
+
+  onActivated(section: Section) {
+    this.disableIn = -1;
+    if (this.args[1] > 0) {
+      this.enableIn = this.args[1];
+      return;
+    }
+    this.enableLight(section);
+  }
+
+  onDeactivated(section: Section) {
+    this.enableIn = -1;
+    if (this.args[2] > 0) {
+      this.disableIn = this.args[2];
+      return;
+    }
+    this.disableLight(section);
+  }
+
+  onUpdate(dt: number, section: Section) {
+    if (this.enableIn >= 0) {
+      this.enableIn -= dt;
+      if (this.enableIn <= 0) {
+        this.enableIn = -1;
+        this.enableLight(section);
+      }
+    }
+    if (this.disableIn >= 0) {
+      this.disableIn -= dt;
+      if (this.disableIn <= 0) {
+        this.disableIn = -1;
+        this.disableLight(section);
+      }
+    }
+  }
+}
+
+export class MoveBallTrigger extends Trigger {
+  onActivated(section: Section, ball?: Ball) {
+    if (!ball) {
+      return;
+    }
+    const x = this.args[0] || 0;
+    const y = this.args[1] || 0;
+    const w = this.args[2] > 0 ? this.args[2] : 0;
+    const h = this.args[3] > 0 ? this.args[3] : 0;
+    const r = ball.r;
+    const rw = w - 2 * r;
+    const rh = h - 2 * r;
+    const tx =
+      rw > 0
+        ? section.x + x + r + Math.random() * rw
+        : section.x + x + w * 0.5;
+    const ty =
+      rh > 0
+        ? section.y + y + r + Math.random() * rh
+        : section.y + y + h * 0.5;
+    ball.pos.x = tx;
+    ball.pos.y = ty;
+  }
+}
+
+export class PlaySoundTrigger extends Trigger {
+  onActivated() {
+    const id = this.args[0] | 0;
+    if (id < 0 || id > SOUND_GAME_WIN) {
+      return;
+    }
+    playSound(id);
   }
 }
 
@@ -161,3 +273,6 @@ export const TRIGGERS: (typeof Trigger)[] = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
 TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
 TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
+TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
+TRIGGERS[TRIGGER_MOVE_BALL] = MoveBallTrigger;
+TRIGGERS[TRIGGER_PLAY_SOUND] = PlaySoundTrigger;

@@ -421,6 +421,7 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
 // zzfx(...[3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105]); // portal in
 // zzfx(...[3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105]); // portal out
 // zzfx(...[1.1,,70,.16,.32,.06,4,1.9,,38,-360,.01,.09,.1,.5,.3,,.77,.02,.08,-1487]); // hit fan
+// zzfx(...[1.2,,652,.37,.01,.02,2,1.8,-13,-11,14,.1,.08,,,,.48,.92,.06,.26,728]); // game win
 // prettier-ignore
 const SOUNDS = [
   [.5,,106,,,.004,3,3.2,1,,,,,,37,,,.97,.16,,-1153], // gate closed
@@ -439,6 +440,7 @@ const SOUNDS = [
   [3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal in
   [3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal out
   [1.1,,70,.16,.32,.06,4,1.9,,38,-360,.01,.09,.1,.5,.3,,.77,.02,.08,-1487], // hit fan
+  [1.2,,652,.37,.01,.02,2,1.8,-13,-11,14,.1,.08,,,,.48,.92,.06,.26,728], // game win
 ];
 
 export const SOUND_GATE_CLOSED = 0;
@@ -457,6 +459,7 @@ export const SOUND_PADDLE_FLIPPER_DOWN = 12;
 export const SOUND_PORTAL_IN = 13;
 export const SOUND_PORTAL_OUT = 14;
 export const SOUND_HIT_FAN = 15;
+export const SOUND_GAME_WIN = 16;
 
 const soundsPlayedThisTick = {};
 

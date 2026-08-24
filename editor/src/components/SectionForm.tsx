@@ -1,4 +1,3 @@
-import { BG } from '@game/model/builders';
 import type { SectionData, Selection } from '../types';
 import { cloneSections } from '../geometry';
 
@@ -18,12 +17,12 @@ export const SectionForm = ({
   const index = selection && selection.kind === 'section' ? selection.index : -1;
   const section = index >= 0 ? sections[index] : null;
 
-  const setField = (field: 0 | 1 | 2 | 3 | 4, value: number) => {
+  const setField = (field: 0 | 1 | 2 | 3, value: number) => {
     if (index < 0) {
       return;
     }
     const next = cloneSections(sections);
-    next[index][field] = field === 4 ? value : Math.round(value);
+    next[index][field] = Math.round(value);
     onChange(next);
   };
 
@@ -57,21 +56,6 @@ export const SectionForm = ({
               />
             </div>
           ))}
-          <div className="field">
-            <label>bg</label>
-            <div className="swatches">
-              {BG.map((color, i) => (
-                <button
-                  key={color}
-                  className={'swatch' + (section[4] === i ? ' active' : '')}
-                  style={{ background: color }}
-                  onClick={() => {
-                    setField(4, i);
-                  }}
-                />
-              ))}
-            </div>
-          </div>
         </>
       ) : (
         <p className="status">Select a section to edit its rect.</p>

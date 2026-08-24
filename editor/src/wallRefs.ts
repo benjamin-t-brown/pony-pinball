@@ -43,6 +43,32 @@ export const wallsAddedByCall = (call: number[]) => {
   return 0;
 };
 
+export const partsAddedByCall = (call: number[]) => {
+  const id = call[0];
+  if (
+    id === B_WALLS ||
+    id === B_WALL_RESTI ||
+    id === B_WALL_GATE ||
+    id === B_TRIANGLE
+  ) {
+    return 0;
+  }
+  return 1;
+};
+
+/** Index into section.parts after build for a part-producing call. */
+export const builtPartIndex = (section: SectionData, callIndex: number) => {
+  let index = 0;
+  const calls = section[4];
+  for (let i = 0; i < callIndex; i++) {
+    const call = calls[i];
+    if (call) {
+      index += partsAddedByCall(call);
+    }
+  }
+  return index;
+};
+
 /** Index into section.walls after build for a wall-producing call segment. */
 export const builtWallIndex = (
   section: SectionData,
@@ -52,7 +78,7 @@ export const builtWallIndex = (
   links: number[][]
 ) => {
   let index = edgeWallCount(sectionIndex, links);
-  const calls = section[5];
+  const calls = section[4];
   for (let i = 0; i < callIndex; i++) {
     const call = calls[i];
     if (call) {
@@ -70,7 +96,7 @@ export const restiWallIndices = (
 ) => {
   const walls = new Set<number>();
   let index = edgeWallCount(sectionIndex, links);
-  const calls = section[5];
+  const calls = section[4];
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i];
     if (!call) {
@@ -171,13 +197,62 @@ export const remapWallRefMove = (
   });
 };
 
+const forEachPartRefInSection = (
+  calls: number[][],
+  sectionIndex: number,
+  fn: (call: number[], argIndex: number) => void
+) => {
+  for (let i = 0; i < calls.length; i++) {
+    const call = calls[i];
+    if (!call) {
+      continue;
+    }
+    if (call[0] !== B_FIELD && call[0] !== B_COLLECTABLE) {
+      continue;
+    }
+    const trig = triggerDefFor(call[5] ?? 0);
+    let targetSection = sectionIndex;
+    let hasSection = false;
+    for (let a = 0; a < trig.args.length; a++) {
+      if (trig.args[a] === 'section') {
+        hasSection = true;
+        targetSection = call[6 + a] ?? targetSection;
+      }
+    }
+    if (hasSection && targetSection !== sectionIndex) {
+      continue;
+    }
+    for (let a = 0; a < trig.args.length; a++) {
+      if (trig.args[a] === 'part') {
+        fn(call, 6 + a);
+      }
+    }
+  }
+};
+
+/** Shift / clear trigger part args after a built part is removed. */
+export const remapTriggerParts = (
+  calls: number[][],
+  deleted: number,
+  sectionIndex = 0
+) => {
+  forEachPartRefInSection(calls, sectionIndex, (call, k) => {
+    const part = call[k];
+    if (part === deleted) {
+      call[k] = -1;
+    } else if (part > deleted) {
+      call[k] = part - 1;
+    }
+  });
+};
+
 const ensureWallsCallIndex = (section: SectionData) => {
-  for (let i = 0; i < section[5].length; i++) {
-    if (section[5][i][0] === B_WALLS) {
+  for (let i = 0; i < section[4].length; i++) {
+    if (section[4][i][0] === B_WALLS) {
       return i;
     }
   }
-  section[5].unshift([B_WALLS]);
+  section[4].unshift([B_WALLS]);
   return 0;
 };
 
@@ -206,7 +281,7 @@ export const convertWallKind = (
   if (!section) {
     return { sections, selection: { kind: 'wall', ...selection } };
   }
-  const call = section[5][selection.call];
+  const call = section[4][selection.call];
   if (!call) {
     return { sections, selection: { kind: 'wall', ...selection } };
   }
@@ -227,11 +302,10 @@ export const convertWallKind = (
     s[1],
     s[2],
     s[3],
-    s[4],
-    s[5].map(c => c.slice()),
+    s[4].map(c => c.slice()),
   ]) as SectionData[];
   const dest = next[si];
-  const srcCall = dest[5][selection.call];
+  const srcCall = dest[4][selection.call];
   const k = 1 + selection.segment * 4;
   const x0 = srcCall[k];
   const y0 = srcCall[k + 1];
@@ -255,12 +329,12 @@ export const convertWallKind = (
   }
 
   if (isSegmentWallCall(fromKind) && targetKind === B_WALLS) {
-    dest[5].splice(selection.call, 1);
+    dest[4].splice(selection.call, 1);
     const ci = ensureWallsCallIndex(dest);
-    dest[5][ci].push(x0, y0, x1, y1);
-    const segment = Math.floor((dest[5][ci].length - 5) / 4);
+    dest[4][ci].push(x0, y0, x1, y1);
+    const segment = Math.floor((dest[4][ci].length - 5) / 4);
     const newIndex = builtWallIndex(dest, si, ci, segment, links);
-    remapWallRefMove(dest[5], si, oldIndex, newIndex);
+    remapWallRefMove(dest[4], si, oldIndex, newIndex);
     return {
       sections: next,
       selection: { kind: 'wall', section: si, call: ci, segment },
@@ -270,12 +344,12 @@ export const convertWallKind = (
   if (fromKind === B_WALLS && isSegmentWallCall(targetKind)) {
     srcCall.splice(k, 4);
     if (srcCall.length <= 1) {
-      dest[5].splice(selection.call, 1);
+      dest[4].splice(selection.call, 1);
     }
-    dest[5].push([targetKind, x0, y0, x1, y1, defaultExtra(targetKind)]);
-    const ci = dest[5].length - 1;
+    dest[4].push([targetKind, x0, y0, x1, y1, defaultExtra(targetKind)]);
+    const ci = dest[4].length - 1;
     const newIndex = builtWallIndex(dest, si, ci, 0, links);
-    remapWallRefMove(dest[5], si, oldIndex, newIndex);
+    remapWallRefMove(dest[4], si, oldIndex, newIndex);
     return {
       sections: next,
       selection: { kind: 'wall', section: si, call: ci, segment: 0 },

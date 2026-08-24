@@ -2,6 +2,7 @@ import type { Circle, Line } from '../../sim/physics';
 import { lineCreate, lineSet, vecCreate } from '../../sim/physics';
 import { resolveBallWalls } from '../../sim/updateSimulation';
 import type { Section } from '../Section';
+import { GATE_COLORS } from '../constants';
 import { PART_OBSTACLE, Part } from '../Part';
 import { playSound, SOUND_HIT_FAN, SOUND_HIT_SMALL_CIRCLE } from '../../zzfx.js';
 
@@ -21,6 +22,8 @@ export class Obstacle extends Part {
   /** Closed n-gon circle (not fan spokes). */
   isCircle = false;
   isFan = false;
+  icon = 0;
+  color = 0;
 
   constructor(
     x: number,
@@ -151,6 +154,35 @@ export const makeFanWalls = (r: number, paddles: number, rest: number): Line[] =
   return walls;
 };
 
+export const CIRCLE_SMILE = 0;
+export const CIRCLE_STAR = 1;
+export const CIRCLE_DIAMOND = 2;
+
+export const STAR_D =
+  'M0-1L.24-.32.95-.31.38.12.59.81 0 .4-.59.81-.38.12-.95-.31-.24-.32Z';
+export const DIAMOND_D = 'M0-1L1 0 0 1-1 0Z';
+
+export const circleFill = (active: boolean, color = 0) => {
+  if (active) {
+    return '#fc8';
+  }
+  return GATE_COLORS[(color | 0) % GATE_COLORS.length];
+};
+
+export const circleStroke = (active: boolean) => {
+  return active ? '#fc8' : '#fff';
+};
+
+export const obstacleStroke = (o: Obstacle) => {
+  if (o.isCircle) {
+    return circleStroke(o.active);
+  }
+  if (o.isFan) {
+    return o.active ? '#fc8' : GATE_COLORS[1];
+  }
+  return o.active ? '#fc8' : '#888';
+};
+
 export const makeCircle = (
   x: number,
   y: number,
@@ -159,7 +191,9 @@ export const makeCircle = (
   radius: number,
   vx = 0,
   vy = 0,
-  omega = 0
+  omega = 0,
+  icon?: number,
+  color?: number
 ) => {
   const o = new Obstacle(
     x,
@@ -172,6 +206,16 @@ export const makeCircle = (
   );
   o.r = radius;
   o.isCircle = true;
+  if (icon == null) {
+    o.icon = ((x + y) | 0) % 3;
+  } else {
+    o.icon = icon | 0;
+  }
+  if (color == null) {
+    o.color = ((x + y) | 0) % GATE_COLORS.length;
+  } else {
+    o.color = color | 0;
+  }
   return o;
 };
 

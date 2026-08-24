@@ -21,7 +21,7 @@ import {
   vecLen,
   vecMul,
 } from './physics';
-import type { State } from '../state/State';
+import { idleBallPos, type State } from '../state/State';
 import {
   clearSoundsPlayedThisTick,
   playSound,
@@ -125,7 +125,12 @@ export const updateSimulation = (state: State, dt: number) => {
     clampBallSpeed(ball);
 
     if (ballIsOutOfBounds(ball, state.sections)) {
-      state.balls[i] = ballCreate(state.startX, state.startY);
+      if (state.playing) {
+        state.balls[i] = ballCreate(state.startX, state.startY);
+      } else {
+        const spawn = idleBallPos(state);
+        state.balls[i] = ballCreate(spawn.x, spawn.y);
+      }
     }
   }
   clearSoundsPlayedThisTick();

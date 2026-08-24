@@ -16,7 +16,7 @@ export type Section = {
   h: number;
   walls: Line[];
   parts: Part[];
-  bg: string;
+  fills: number[][];
 };
 
 export const sectionCreate = (
@@ -24,8 +24,7 @@ export const sectionCreate = (
   x: number,
   y: number,
   w: number,
-  h: number,
-  bg: string,
+  h: number
 ): Section => ({
   id,
   x,
@@ -34,7 +33,7 @@ export const sectionCreate = (
   h,
   walls: [],
   parts: [],
-  bg,
+  fills: [],
 });
 
 export const sectionContains = (section: Section, x: number, y: number) => {

@@ -16,14 +16,23 @@ import {
 } from '@game/model/builders';
 import {
   DEC_BLINKING_LIGHT,
+  DEC_BLINKING_LIGHT_LINE,
+  DEC_ICON,
+  DEC_RAINBOW,
+  ICON_HAT,
+  ICON_PONY,
+  ICON_WAND,
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
 } from '@game/model/parts/Decoration';
 import {
+  TRIGGER_ACTIVATE_LIGHT,
   TRIGGER_DEACTIVATE_WALL,
   TRIGGER_GATE_SECTION_4,
+  TRIGGER_MOVE_BALL,
   TRIGGER_MOVE_DOOR,
+  TRIGGER_PLAY_SOUND,
 } from '@game/model/Trigger';
 import {
   LAUNCHER_CHARGE_MS,
@@ -146,6 +155,8 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'dx' },
       { name: 'dy' },
       { name: 'omega', step: 0.05 },
+      { name: 'icon', step: 1 },
+      { name: 'color', step: 1 },
     ],
   },
   {
@@ -201,6 +212,7 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'resti0', step: 0.05 },
       { name: 'resti1', step: 0.05 },
       { name: 'resti2', step: 0.05 },
+      { name: 'color', step: 1 },
     ],
   },
   {
@@ -224,8 +236,35 @@ export const DECORATION_DEFS = [
   {
     id: DEC_BLINKING_LIGHT,
     name: 'Blinking light',
-    args: ['interval', 'shape'],
+    args: ['interval', 'shape', 'startOn'],
   },
+  {
+    id: DEC_BLINKING_LIGHT_LINE,
+    name: 'Blinking light line',
+    args: ['interval', 'shape', 'count', 'x1', 'y1', 'delay', 'startOn'],
+  },
+  {
+    id: DEC_ICON,
+    name: 'Icon',
+    args: ['glyph', 'opacity'],
+  },
+  {
+    id: DEC_RAINBOW,
+    name: 'Rainbow',
+    args: ['w', 'h'],
+  },
+];
+
+export const ICON_DEFS = [
+  { id: ICON_WAND, name: 'wand' },
+  { id: ICON_HAT, name: 'princess hat' },
+  { id: ICON_PONY, name: 'unicorn' },
+];
+
+export const CIRCLE_ICON_DEFS = [
+  { id: 0, name: 'smiley' },
+  { id: 1, name: 'star' },
+  { id: 2, name: 'diamond' },
 ];
 
 export const SHAPE_DEFS = [
@@ -233,6 +272,45 @@ export const SHAPE_DEFS = [
   { id: SHAPE_CIRCLE, name: 'circle' },
   { id: SHAPE_SQUARE, name: 'square' },
 ];
+
+export const isDecLightLine = (call: number[]) => {
+  return call[0] === B_DECORATION && (call[5] | 0) === DEC_BLINKING_LIGHT_LINE;
+};
+
+export const isDecRainbow = (call: number[]) => {
+  return call[0] === B_DECORATION && (call[5] | 0) === DEC_RAINBOW;
+};
+
+export const decArgDefault = (name: string, call: number[]) => {
+  if (name === 'interval') {
+    return 400;
+  }
+  if (name === 'count') {
+    return 5;
+  }
+  if (name === 'delay') {
+    return 0;
+  }
+  if (name === 'startOn') {
+    return 1;
+  }
+  if (name === 'x1') {
+    return (call[1] || 0) + 80;
+  }
+  if (name === 'y1') {
+    return call[2] || 0;
+  }
+  if (name === 'opacity') {
+    return 1;
+  }
+  if (name === 'w') {
+    return 80;
+  }
+  if (name === 'h') {
+    return 40;
+  }
+  return 0;
+};
 
 export const decorationDefFor = (id: number) => {
   for (let i = 0; i < DECORATION_DEFS.length; i++) {
@@ -259,7 +337,62 @@ export const TRIGGER_DEFS = [
     name: 'TRIGGER_GATE_SECTION_4',
     args: [],
   },
+  {
+    id: TRIGGER_ACTIVATE_LIGHT,
+    name: 'TRIGGER_ACTIVATE_LIGHT',
+    args: ['part', 'onDelay', 'offDelay'],
+  },
+  {
+    id: TRIGGER_MOVE_BALL,
+    name: 'TRIGGER_MOVE_BALL',
+    args: ['destX', 'destY', 'destW', 'destH'],
+  },
+  {
+    id: TRIGGER_PLAY_SOUND,
+    name: 'TRIGGER_PLAY_SOUND',
+    args: ['sound'],
+  },
 ];
+
+export const SOUND_DEFS = [
+  { id: 0, name: 'gate closed', key: 'SOUND_GATE_CLOSED' },
+  { id: 1, name: 'hit special wall', key: 'SOUND_HIT_SPECIAL_WALL' },
+  { id: 2, name: 'hit small circle', key: 'SOUND_HIT_SMALL_CIRCLE' },
+  { id: 3, name: 'launch', key: 'SOUND_LAUNCH' },
+  { id: 4, name: 'launch pull back', key: 'SOUND_LAUNCH_PULL_BACK' },
+  { id: 5, name: 'start game', key: 'SOUND_START_GAME' },
+  { id: 6, name: 'ball traveling', key: 'SOUND_BALL_TRAVELING' },
+  { id: 7, name: 'get coin', key: 'SOUND_GET_COIN' },
+  { id: 8, name: 'secret', key: 'SOUND_SECRET' },
+  { id: 9, name: 'gate open', key: 'SOUND_GATE_OPEN' },
+  { id: 10, name: 'paddle flipper', key: 'SOUND_PADDLE_FLIPPER' },
+  { id: 11, name: 'wall reappear', key: 'SOUND_WALL_REAPPEAR' },
+  { id: 12, name: 'paddle flipper down', key: 'SOUND_PADDLE_FLIPPER_DOWN' },
+  { id: 13, name: 'portal in', key: 'SOUND_PORTAL_IN' },
+  { id: 14, name: 'portal out', key: 'SOUND_PORTAL_OUT' },
+  { id: 15, name: 'hit fan', key: 'SOUND_HIT_FAN' },
+  { id: 16, name: 'game win', key: 'SOUND_GAME_WIN' },
+];
+
+export const isMoveBallField = (call: number[]) => {
+  return call[0] === B_FIELD && (call[5] | 0) === TRIGGER_MOVE_BALL;
+};
+
+export const triggerArgDefault = (name: string, call: number[]) => {
+  if (name === 'destX') {
+    return (call[1] || 0) + (call[3] || 80) + 40;
+  }
+  if (name === 'destY') {
+    return call[2] || 0;
+  }
+  if (name === 'destW' || name === 'destH') {
+    return 80;
+  }
+  if (name === 'sound') {
+    return 8;
+  }
+  return 0;
+};
 
 export const triggerDefFor = (id: number) => {
   for (let i = 0; i < TRIGGER_DEFS.length; i++) {
@@ -288,7 +421,19 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
     ];
   }
   if (id === B_CIRCLE) {
-    return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0];
+    return [
+      B_CIRCLE,
+      x,
+      y,
+      10,
+      1,
+      20,
+      0,
+      0,
+      0,
+      ((x + y) | 0) % 3,
+      ((x + y) | 0) % GATE_COLORS.length,
+    ];
   }
   if (id === B_FAN) {
     return [B_FAN, x, y, 4, 1, 40, 0, 0, 1];
@@ -317,13 +462,13 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
     return [B_PORTAL, x, y, x + 80, y, 18, 0];
   }
   if (id === B_TRIANGLE) {
-    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5];
+    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5, 0];
   }
   if (id === B_DECORATION) {
     const dec = decorationDefFor(DEC_BLINKING_LIGHT);
     const extra = [];
     for (let i = 0; i < dec.args.length; i++) {
-      extra.push(dec.args[i] === 'interval' ? 400 : 0);
+      extra.push(decArgDefault(dec.args[i], [B_DECORATION, x, y]));
     }
     return [B_DECORATION, x, y, 1, 0, DEC_BLINKING_LIGHT, 0, ...extra];
   }
@@ -343,7 +488,7 @@ export const ensureCallArgs = (call: number[]) => {
     const trig = triggerDefFor(next[5]);
     const n = 6 + trig.args.length;
     while (next.length < n) {
-      next.push(0);
+      next.push(triggerArgDefault(trig.args[next.length - 6], next));
     }
     next.length = n;
   }
@@ -357,13 +502,13 @@ export const ensureCallArgs = (call: number[]) => {
     next.length = 7;
   }
   if (call[0] === B_TRIANGLE) {
-    next.length = 9;
+    next.length = 10;
   }
   if (call[0] === B_DECORATION) {
     const dec = decorationDefFor(next[5]);
     const n = 7 + dec.args.length;
     while (next.length < n) {
-      next.push(dec.args[next.length - 7] === 'interval' ? 400 : 0);
+      next.push(decArgDefault(dec.args[next.length - 7], next));
     }
     next.length = n;
   }

@@ -1,4 +1,3 @@
-import { BG } from '@game/model/builders';
 import type { Opening, SectionData, Selection, Tool } from '../types';
 import type { Issue } from '../validation';
 import { BuilderForm } from './BuilderForm';
@@ -80,8 +79,7 @@ export const Sidebar = ({
         </button>
       </div>
       <p className="status">
-        Palette {BG.length} colors. {sections.length} sections, {openings.length}{' '}
-        openings.
+        {sections.length} sections, {openings.length} openings.
       </p>
       <BuilderPalette tool={tool} onTool={onTool} />
       <SectionForm

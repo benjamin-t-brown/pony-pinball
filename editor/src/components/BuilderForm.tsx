@@ -7,16 +7,22 @@ import {
   B_WALLS,
   GATE_COLORS,
 } from '@game/model/builders';
+import { DEC_ICON, DEC_RAINBOW, TEX_PALETTE } from '@game/model/parts/Decoration';
 import type { Opening, SectionData, Selection } from '../types';
 import {
   DECORATION_DEFS,
   SHAPE_DEFS,
+  CIRCLE_ICON_DEFS,
+  ICON_DEFS,
   decorationDefFor,
+  decArgDefault,
   defFor,
   TRIGGER_DEFS,
+  SOUND_DEFS,
+  triggerArgDefault,
   triggerDefFor,
 } from '../schema';
-import { cloneSections } from '../geometry';
+import { cloneSections, roundAngle } from '../geometry';
 import { openingsToLinks } from '../openings';
 import { convertWallKind } from '../wallRefs';
 
@@ -49,14 +55,14 @@ export const BuilderForm = ({
   if (!section) {
     return null;
   }
-  const call = section[5][selection.call];
+  const call = section[4][selection.call];
   if (!call) {
     return null;
   }
 
   const setArg = (index: number, value: number, round = false) => {
     const next = cloneSections(sections);
-    const nextCall = next[selection.section][5][selection.call];
+    const nextCall = next[selection.section][4][selection.call];
     while (nextCall.length <= index) {
       nextCall.push(0);
     }
@@ -173,7 +179,8 @@ export const BuilderForm = ({
   return (
     <div>
       <h2>{def ? def.name : `Builder ${call[0]}`}</h2>
-      {[...params, ...extra].map((param: { name: string; step?: number }, i: number) => (
+      {[...params, ...extra].map((param: { name: string; step?: number }, i: number) =>
+        param.name === 'texture' && (call[5] | 0) === DEC_RAINBOW ? null : (
           <div className="field" key={param.name + i}>
             <label>{param.name}</label>
             {param.name === 'trigger' ? (
@@ -182,14 +189,13 @@ export const BuilderForm = ({
                 onChange={e => {
                   const id = Number(e.target.value);
                   const next = cloneSections(sections);
-                  const nextCall = next[selection.section][5][selection.call];
+                  const nextCall = next[selection.section][4][selection.call];
                   nextCall[5] = id;
                   const names = triggerDefFor(id).args;
-                  const n = 6 + names.length;
-                  while (nextCall.length < n) {
-                    nextCall.push(0);
+                  nextCall.length = 6;
+                  for (let i = 0; i < names.length; i++) {
+                    nextCall.push(triggerArgDefault(names[i], nextCall));
                   }
-                  nextCall.length = n;
                   onChange(next);
                 }}
               >
@@ -205,16 +211,16 @@ export const BuilderForm = ({
                 onChange={e => {
                   const id = Number(e.target.value);
                   const next = cloneSections(sections);
-                  const nextCall = next[selection.section][5][selection.call];
+                  const nextCall = next[selection.section][4][selection.call];
                   nextCall[5] = id;
-                  const names = decorationDefFor(id).args;
-                  const n = 7 + names.length;
-                  while (nextCall.length < n) {
-                    nextCall.push(
-                      names[nextCall.length - 7] === 'interval' ? 400 : 0
-                    );
+                  if (id === DEC_ICON && nextCall[6] === TEX_PALETTE) {
+                    nextCall[6] = 0;
                   }
-                  nextCall.length = n;
+                  const names = decorationDefFor(id).args;
+                  nextCall.length = 7;
+                  for (let i = 0; i < names.length; i++) {
+                    nextCall.push(decArgDefault(names[i], nextCall));
+                  }
                   onChange(next);
                 }}
               >
@@ -225,18 +231,37 @@ export const BuilderForm = ({
                 ))}
               </select>
             ) : param.name === 'texture' ? (
-              <select
-                value={call[i + 1] ?? 0}
-                onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
-                }}
-              >
-                {GATE_COLORS.map((c, ti) => (
-                  <option key={c} value={ti}>
-                    {ti}: {c}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={call[i + 1] ?? 0}
+                  onChange={e => {
+                    setArg(i + 1, Number(e.target.value), true);
+                  }}
+                >
+                  {GATE_COLORS.map((c, ti) => (
+                    <option key={c} value={ti}>
+                      {ti}: {c}
+                    </option>
+                  ))}
+                  {(call[5] | 0) !== DEC_ICON ? (
+                    <option value={TEX_PALETTE}>all: palette</option>
+                  ) : null}
+                </select>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 18,
+                    height: 18,
+                    marginLeft: 8,
+                    verticalAlign: 'middle',
+                    background:
+                      (call[i + 1] ?? 0) === TEX_PALETTE
+                        ? 'linear-gradient(90deg,' + GATE_COLORS.join(',') + ')'
+                        : GATE_COLORS[(call[i + 1] ?? 0) % GATE_COLORS.length],
+                    border: '1px solid #000',
+                  }}
+                />
+              </>
             ) : param.name === 'shape' ? (
               <select
                 value={call[i + 1] ?? 0}
@@ -251,32 +276,112 @@ export const BuilderForm = ({
                 ))}
               </select>
             ) : param.name === 'color' ? (
+              <>
+                <select
+                  value={call[i + 1] ?? 0}
+                  onChange={e => {
+                    setArg(i + 1, Number(e.target.value), true);
+                  }}
+                >
+                  {GATE_COLORS.map((c, ci) => (
+                    <option key={c} value={ci}>
+                      {ci}: {c}
+                    </option>
+                  ))}
+                </select>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 18,
+                    height: 18,
+                    marginLeft: 8,
+                    verticalAlign: 'middle',
+                    background:
+                      GATE_COLORS[(call[i + 1] ?? 0) % GATE_COLORS.length],
+                    border: '1px solid #000',
+                  }}
+                />
+              </>
+            ) : param.name === 'icon' ? (
               <select
                 value={call[i + 1] ?? 0}
                 onChange={e => {
                   setArg(i + 1, Number(e.target.value), true);
                 }}
               >
-                {GATE_COLORS.map((c, ci) => (
-                  <option key={c} value={ci}>
-                    {ci}: {c}
+                {CIRCLE_ICON_DEFS.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : param.name === 'glyph' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                {ICON_DEFS.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            ) : param.name === 'startOn' ? (
+              <select
+                value={call[i + 1] ?? 1}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                <option value={1}>on</option>
+                <option value={0}>off</option>
+              </select>
+            ) : param.name === 'sound' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                {SOUND_DEFS.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </select>
             ) : (
               <input
                 type="number"
-                step={param.step ?? 1}
+                step={param.name === 'opacity' ? 0.05 : param.step ?? 1}
                 value={call[i + 1] ?? 0}
                 onChange={e => {
+                  const v = Number(e.target.value);
+                  if (
+                    param.name === 'rot' ||
+                    param.name === 'angle' ||
+                    param.name === 'restAngle' ||
+                    param.name === 'upAngle' ||
+                    param.name === 'startingRotation'
+                  ) {
+                    setArg(i + 1, roundAngle(v));
+                    return;
+                  }
                   setArg(
                     i + 1,
-                    Number(e.target.value),
+                    v,
                     param.name === 'x' ||
                       param.name === 'y' ||
                       param.name === 'w' ||
                       param.name === 'h' ||
+                      param.name === 'destX' ||
+                      param.name === 'destY' ||
+                      param.name === 'destW' ||
+                      param.name === 'destH' ||
                       param.name === 'wall' ||
+                      param.name === 'part' ||
+                      param.name === 'startOn' ||
                       param.name === 'section' ||
                       param.name === 'needed' ||
                       param.name === 'groupType' ||
@@ -289,7 +394,12 @@ export const BuilderForm = ({
                       param.name === 'interval' ||
                       param.name === 'decorationType' ||
                       param.name === 'texture' ||
-                      param.name === 'shape'
+                      param.name === 'shape' ||
+                      param.name === 'icon' ||
+                      param.name === 'glyph' ||
+                      param.name === 'color' ||
+                      param.name === 'count' ||
+                      param.name === 'delay'
                   );
                 }}
               />

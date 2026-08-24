@@ -12,7 +12,6 @@ import { Portal } from './parts/Portal';
 import { type Section, sectionCreate } from './Section';
 import { TRIGGERS, Trigger } from './Trigger';
 
-export const BG = ['#555', '#466', '#645'];
 export { GATE_COLORS };
 
 export const B_WALLS = 0;
@@ -122,10 +121,10 @@ BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
 
 BUILDERS[B_CIRCLE] = (
   section,
-  [x, y, resolution, restitution, radius, dx, dy, omega]
+  [x, y, resolution, restitution, radius, dx, dy, omega, icon, color]
 ) => {
   section.parts.push(
-    makeCircle(x, y, resolution, restitution, radius, dx, dy, omega)
+    makeCircle(x, y, resolution, restitution, radius, dx, dy, omega, icon, color)
   );
 };
 
@@ -177,9 +176,19 @@ export const triangleVerts = (
 
 BUILDERS[B_TRIANGLE] = (
   s,
-  [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2]
+  [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2, color]
 ) => {
   const v = triangleVerts(x, y, sideLen1, sideLen2, rot);
+  const c = color == null ? 0 : color | 0;
+  s.fills.push([
+    v.x0,
+    v.y0,
+    v.x1,
+    v.y1,
+    v.x2,
+    v.y2,
+    c < 0 ? 0 : c % GATE_COLORS.length,
+  ]);
   s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0));
   s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
   s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
@@ -243,11 +252,11 @@ export const buildLevel = (
   links: number[][]
 ): Section[] => {
   const sections = sectionData.map((d, i) =>
-    sectionCreate(i, d[0], d[1], d[2], d[3], BG[d[4]])
+    sectionCreate(i, d[0], d[1], d[2], d[3])
   );
   buildSectionEdges(sections, links);
   for (let i = 0; i < sectionData.length; i++) {
-    const calls = sectionData[i][5];
+    const calls = sectionData[i][4];
     for (let j = 0; j < calls.length; j++) {
       BUILDERS[calls[j][0]](sections[i], calls[j].slice(1));
     }

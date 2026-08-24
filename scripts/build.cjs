@@ -11,7 +11,7 @@ const Terser = require('terser');
 const { execFileSync } = require('child_process');
 // const ClosureCompiler = require('google-closure-compiler').compiler;
 
-const USE_ROAD_ROLLER = false;
+const USE_ROAD_ROLLER = true;
 const USE_RR_CONFIG = true;
 const USE_DISABLE_THROW = true;
 

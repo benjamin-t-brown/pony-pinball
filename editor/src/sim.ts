@@ -22,6 +22,13 @@ export const createPlayState = (
     startX: x,
     startY: y,
     collected: [],
+    playing: true,
+    playMs: 0,
+    lastMs: 0,
+    bestMs: 0,
+    prevBestMs: 0,
+    complete: false,
+    newBest: false,
   };
 };
 

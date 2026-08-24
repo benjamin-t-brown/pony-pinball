@@ -3,7 +3,6 @@ export type SectionData = [
   number,
   number,
   number,
-  number,
   number[][],
 ];
 

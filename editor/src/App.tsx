@@ -13,7 +13,7 @@ import { Sidebar } from './components/Sidebar';
 import { WorldCanvas } from './components/WorldCanvas';
 import { cloneSections, clampDeltaInRect, clampLocal, findSectionAt } from './geometry';
 import { roundLevel } from './generateLevels';
-import { ensureCallArgs } from './schema';
+import { ensureCallArgs, isDecLightLine } from './schema';
 import {
   linksToOpenings,
   openingsToLinks,
@@ -22,7 +22,7 @@ import {
 import { createPlayState, dropBall } from './sim';
 import type { Cam, Opening, SectionData, Selection, Tool } from './types';
 import { validateLevel } from './validation';
-import { builtWallIndex, isSegmentWallCall, remapTriggerWalls } from './wallRefs';
+import { builtPartIndex, builtWallIndex, isSegmentWallCall, partsAddedByCall, remapTriggerParts, remapTriggerWalls } from './wallRefs';
 
 const PHYSICS_DT_MS = 4;
 
@@ -101,7 +101,7 @@ export const App = () => {
     (data: { sections: SectionData[]; links: number[][]; start?: number[] }, fitted: boolean) => {
       const cloned = cloneSections(data.sections);
       for (let i = 0; i < cloned.length; i++) {
-        cloned[i][5] = cloned[i][5].map(ensureCallArgs);
+        cloned[i][4] = cloned[i][4].map(ensureCallArgs);
       }
       setSections(cloned);
       setOpenings(linksToOpenings(cloned, data.links));
@@ -294,7 +294,7 @@ export const App = () => {
     }
     if (selection.kind === 'call') {
       const next = cloneSections(sections);
-      const call = sections[selection.section][5][selection.call];
+      const call = sections[selection.section][4][selection.call];
       if (call && isSegmentWallCall(call[0])) {
         const wallIndex = builtWallIndex(
           sections[selection.section],
@@ -303,10 +303,22 @@ export const App = () => {
           0,
           openingsToLinks(sections, openings)
         );
-        next[selection.section][5].splice(selection.call, 1);
-        remapTriggerWalls(next[selection.section][5], wallIndex, selection.section);
+        next[selection.section][4].splice(selection.call, 1);
+        remapTriggerWalls(next[selection.section][4], wallIndex, selection.section);
       } else {
-        next[selection.section][5].splice(selection.call, 1);
+        const partIndex = builtPartIndex(
+          sections[selection.section],
+          selection.call
+        );
+        const added = call ? partsAddedByCall(call) : 0;
+        next[selection.section][4].splice(selection.call, 1);
+        if (added) {
+          remapTriggerParts(
+            next[selection.section][4],
+            partIndex,
+            selection.section
+          );
+        }
       }
       markDirty(next);
       setSelection(null);
@@ -314,7 +326,7 @@ export const App = () => {
     }
     if (selection.kind === 'wall') {
       const next = cloneSections(sections);
-      const call = next[selection.section][5][selection.call];
+      const call = next[selection.section][4][selection.call];
       const wallIndex = builtWallIndex(
         sections[selection.section],
         selection.section,
@@ -323,15 +335,15 @@ export const App = () => {
         openingsToLinks(sections, openings)
       );
       if (isSegmentWallCall(call[0])) {
-        next[selection.section][5].splice(selection.call, 1);
+        next[selection.section][4].splice(selection.call, 1);
       } else {
         const k = 1 + selection.segment * 4;
         call.splice(k, 4);
         if (call.length <= 1) {
-          next[selection.section][5].splice(selection.call, 1);
+          next[selection.section][4].splice(selection.call, 1);
         }
       }
-      remapTriggerWalls(next[selection.section][5], wallIndex, selection.section);
+      remapTriggerWalls(next[selection.section][4], wallIndex, selection.section);
       markDirty(next);
       setSelection(null);
     }
@@ -354,7 +366,7 @@ export const App = () => {
     const local = clampLocal(dest, wx - dest[0], wy - dest[1]);
     const next = cloneSections(sections);
     if (selection.kind === 'call') {
-      const src = sections[selection.section][5][selection.call];
+      const src = sections[selection.section][4][selection.call];
       if (!src || src[0] === B_WALLS) {
         return;
       }
@@ -366,16 +378,23 @@ export const App = () => {
         copy[2] = local.y;
         copy[3] = local.x + dx;
         copy[4] = local.y + dy;
+      } else if (isDecLightLine(src) && src.length >= 12) {
+        const dx = src[10] - src[1];
+        const dy = src[11] - src[2];
+        copy[1] = local.x;
+        copy[2] = local.y;
+        copy[10] = local.x + dx;
+        copy[11] = local.y + dy;
       } else {
         copy[1] = local.x;
         copy[2] = local.y;
       }
-      next[si][5].push(copy);
+      next[si][4].push(copy);
       markDirty(next);
-      setSelection({ kind: 'call', section: si, call: next[si][5].length - 1 });
+      setSelection({ kind: 'call', section: si, call: next[si][4].length - 1 });
       return;
     }
-    const src = sections[selection.section][5][selection.call];
+    const src = sections[selection.section][4][selection.call];
     const k = 1 + selection.segment * 4;
     if (!src || src.length < k + 4) {
       return;
@@ -388,7 +407,7 @@ export const App = () => {
     const y1 = local.y + dy;
     const shift = clampDeltaInRect(x0, y0, x1, y1, 0, 0, dest[2], dest[3]);
     if (isSegmentWallCall(src[0])) {
-      next[si][5].push([
+      next[si][4].push([
         src[0],
         x0 + shift.dx,
         y0 + shift.dy,
@@ -400,23 +419,23 @@ export const App = () => {
       setSelection({
         kind: 'wall',
         section: si,
-        call: next[si][5].length - 1,
+        call: next[si][4].length - 1,
         segment: 0,
       });
       return;
     }
     let ci = -1;
-    for (let i = 0; i < next[si][5].length; i++) {
-      if (next[si][5][i][0] === B_WALLS) {
+    for (let i = 0; i < next[si][4].length; i++) {
+      if (next[si][4][i][0] === B_WALLS) {
         ci = i;
         break;
       }
     }
     if (ci < 0) {
-      next[si][5].unshift([B_WALLS]);
+      next[si][4].unshift([B_WALLS]);
       ci = 0;
     }
-    next[si][5][ci].push(
+    next[si][4][ci].push(
       x0 + shift.dx,
       y0 + shift.dy,
       x1 + shift.dx,
@@ -427,7 +446,7 @@ export const App = () => {
       kind: 'wall',
       section: si,
       call: ci,
-      segment: Math.floor((next[si][5][ci].length - 5) / 4),
+      segment: Math.floor((next[si][4][ci].length - 5) / 4),
     });
   };
 
@@ -480,7 +499,7 @@ export const App = () => {
     const next = cloneSections(sections);
     const x = sections.length ? sections[sections.length - 1][0] + sections[sections.length - 1][2] : 0;
     const y = sections.length ? sections[sections.length - 1][1] : 0;
-    next.push([x, y, 400, 400, sections.length % 3, []]);
+    next.push([x, y, 400, 400, []]);
     markDirty(next);
     setSelection({ kind: 'section', index: next.length - 1 });
   };

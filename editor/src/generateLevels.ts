@@ -1,15 +1,32 @@
 import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
+import { roundAngle } from './geometry';
 import {
+  TRIGGER_ACTIVATE_LIGHT,
   TRIGGER_DEACTIVATE_WALL,
   TRIGGER_GATE_SECTION_4,
+  TRIGGER_MOVE_BALL,
   TRIGGER_MOVE_DOOR,
+  TRIGGER_PLAY_SOUND,
 } from '@game/model/Trigger';
 import {
   DEC_BLINKING_LIGHT,
+  DEC_BLINKING_LIGHT_LINE,
+  DEC_ICON,
+  DEC_RAINBOW,
+  ICON_HAT,
+  ICON_PONY,
+  ICON_WAND,
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
+  TEX_PALETTE,
 } from '@game/model/parts/Decoration';
+import {
+  CIRCLE_DIAMOND,
+  CIRCLE_SMILE,
+  CIRCLE_STAR,
+} from '@game/model/parts/Obstacle';
+import { SOUND_DEFS } from './schema';
 import type { SectionData } from './types';
 
 const BUILDER_NAMES: Record<number, string> = {
@@ -30,6 +47,15 @@ const BUILDER_NAMES: Record<number, string> = {
 
 const DEC_NAMES: Record<number, string> = {
   [DEC_BLINKING_LIGHT]: 'DEC_BLINKING_LIGHT',
+  [DEC_BLINKING_LIGHT_LINE]: 'DEC_BLINKING_LIGHT_LINE',
+  [DEC_ICON]: 'DEC_ICON',
+  [DEC_RAINBOW]: 'DEC_RAINBOW',
+};
+
+const ICON_NAMES: Record<number, string> = {
+  [ICON_WAND]: 'ICON_WAND',
+  [ICON_HAT]: 'ICON_HAT',
+  [ICON_PONY]: 'ICON_PONY',
 };
 
 const SHAPE_NAMES: Record<number, string> = {
@@ -38,11 +64,25 @@ const SHAPE_NAMES: Record<number, string> = {
   [SHAPE_SQUARE]: 'SHAPE_SQUARE',
 };
 
+const CIRCLE_ICON_NAMES: Record<number, string> = {
+  [CIRCLE_SMILE]: 'CIRCLE_SMILE',
+  [CIRCLE_STAR]: 'CIRCLE_STAR',
+  [CIRCLE_DIAMOND]: 'CIRCLE_DIAMOND',
+};
+
 const TRIGGER_NAMES: Record<number, string> = {
   [TRIGGER_DEACTIVATE_WALL]: 'TRIGGER_DEACTIVATE_WALL',
   [TRIGGER_MOVE_DOOR]: 'TRIGGER_MOVE_DOOR',
   [TRIGGER_GATE_SECTION_4]: 'TRIGGER_GATE_SECTION_4',
+  [TRIGGER_ACTIVATE_LIGHT]: 'TRIGGER_ACTIVATE_LIGHT',
+  [TRIGGER_MOVE_BALL]: 'TRIGGER_MOVE_BALL',
+  [TRIGGER_PLAY_SOUND]: 'TRIGGER_PLAY_SOUND',
 };
+
+const SOUND_NAMES: Record<number, string> = {};
+for (let i = 0; i < SOUND_DEFS.length; i++) {
+  SOUND_NAMES[SOUND_DEFS[i].id] = SOUND_DEFS[i].key;
+}
 
 const SIDE_NAMES = [
   'SECTION_SIDE_BOTTOM',
@@ -75,22 +115,60 @@ const formatCall = (call: number[], indent: string) => {
   }
   if (id === 4 || id === 8) {
     const trig = TRIGGER_NAMES[args[4]] || formatNum(args[4]);
+    const extra = args.slice(5).map((n, i) => {
+      if (args[4] === TRIGGER_PLAY_SOUND && i === 0) {
+        return SOUND_NAMES[n] || formatNum(n);
+      }
+      return formatNum(n);
+    });
     const nums = [
       ...args.slice(0, 4).map(formatNum),
       trig,
-      ...args.slice(5).map(formatNum),
+      ...extra,
+    ];
+    return `${indent}[${[name, ...nums].join(', ')}]`;
+  }
+  if (id === 6 && args.length > 8) {
+    const icon = CIRCLE_ICON_NAMES[args[8]] || formatNum(args[8]);
+    const nums = [
+      ...args.slice(0, 8).map(formatNum),
+      icon,
+      ...args.slice(9).map(formatNum),
     ];
     return `${indent}[${[name, ...nums].join(', ')}]`;
   }
   if (id === 12) {
     const dec = DEC_NAMES[args[4]] || formatNum(args[4]);
+    const tex =
+      args[5] === TEX_PALETTE ? 'TEX_PALETTE' : formatNum(args[5]);
+    if (args[4] === DEC_ICON) {
+      const glyph = ICON_NAMES[args[6]] || formatNum(args[6] ?? 0);
+      const nums = [
+        ...args.slice(0, 4).map(formatNum),
+        dec,
+        tex,
+        glyph,
+        ...args.slice(7).map(formatNum),
+      ];
+      return `${indent}[${[name, ...nums].join(', ')}]`;
+    }
+    if (args[4] === DEC_RAINBOW) {
+      const nums = [
+        ...args.slice(0, 4).map(formatNum),
+        dec,
+        formatNum(args[5]),
+        ...args.slice(6).map(formatNum),
+      ];
+      return `${indent}[${[name, ...nums].join(', ')}]`;
+    }
     const shape = SHAPE_NAMES[args[7]] || formatNum(args[7] ?? 0);
     const nums = [
       ...args.slice(0, 4).map(formatNum),
       dec,
-      formatNum(args[5]),
+      tex,
       formatNum(args[6]),
       shape,
+      ...args.slice(8).map(formatNum),
     ];
     return `${indent}[${[name, ...nums].join(', ')}]`;
   }
@@ -139,6 +217,12 @@ const roundCall = (call: number[]) => {
     if (next.length > 4) {
       next[4] = Math.round(next[4]);
     }
+    if (next.length > 5) {
+      next[5] = roundAngle(next[5]);
+    }
+    if (next.length > 9) {
+      next[9] = Math.round(next[9]);
+    }
     return next;
   }
   if (next[0] === 12) {
@@ -147,6 +231,9 @@ const roundCall = (call: number[]) => {
     }
     if (next.length > 2) {
       next[2] = Math.round(next[2]);
+    }
+    if (next.length > 4) {
+      next[4] = roundAngle(next[4]);
     }
     if (next.length > 5) {
       next[5] = Math.round(next[5]);
@@ -157,8 +244,23 @@ const roundCall = (call: number[]) => {
     if (next.length > 7) {
       next[7] = Math.round(next[7]);
     }
-    if (next.length > 8) {
+    if ((next[5] | 0) !== DEC_ICON && next.length > 8) {
       next[8] = Math.round(next[8]);
+    }
+    if (next.length > 9) {
+      next[9] = Math.round(next[9]);
+    }
+    if (next.length > 10) {
+      next[10] = Math.round(next[10]);
+    }
+    if (next.length > 11) {
+      next[11] = Math.round(next[11]);
+    }
+    if (next.length > 12) {
+      next[12] = Math.round(next[12]);
+    }
+    if (next.length > 13) {
+      next[13] = Math.round(next[13]);
     }
     return next;
   }
@@ -171,6 +273,39 @@ const roundCall = (call: number[]) => {
   if (next[0] === 7) {
     for (let i = 1; i <= 4 && i < next.length; i++) {
       next[i] = Math.round(next[i]);
+    }
+    if (next.length > 5) {
+      next[5] = roundAngle(next[5]);
+    }
+    return next;
+  }
+  if (next[0] === 5) {
+    if (next.length > 1) {
+      next[1] = Math.round(next[1]);
+    }
+    if (next.length > 2) {
+      next[2] = Math.round(next[2]);
+    }
+    if (next.length > 3) {
+      next[3] = roundAngle(next[3]);
+    }
+    if (next.length > 4) {
+      next[4] = roundAngle(next[4]);
+    }
+    return next;
+  }
+  if (next[0] === 2) {
+    if (next.length > 1) {
+      next[1] = Math.round(next[1]);
+    }
+    if (next.length > 2) {
+      next[2] = Math.round(next[2]);
+    }
+    if (next.length > 3) {
+      next[3] = roundAngle(next[3]);
+    }
+    if (next.length > 4) {
+      next[4] = roundAngle(next[4]);
     }
     return next;
   }
@@ -204,8 +339,7 @@ export const roundLevel = (
       Math.round(s[1]),
       Math.round(s[2]),
       Math.round(s[3]),
-      s[4],
-      s[5].map(roundCall),
+      s[4].map(roundCall),
     ]),
     links: links.map(l => [l[0], l[1], Math.round(l[2]), Math.round(l[3])]),
     start: roundStart(start),
@@ -224,9 +358,11 @@ export const generateLevelsTs = (
   const builderNames = new Set<string>();
   const sideNames = new Set<string>();
   const triggerNames = new Set<string>();
+  const soundNames = new Set<string>();
   const decNames = new Set<string>();
+  const circleIconNames = new Set<string>();
   for (const section of sections) {
-    for (const call of section[5]) {
+    for (const call of section[4]) {
       const name = BUILDER_NAMES[call[0]];
       if (name) {
         builderNames.add(name);
@@ -236,15 +372,37 @@ export const generateLevelsTs = (
         if (trig) {
           triggerNames.add(trig);
         }
+        if (call[5] === TRIGGER_PLAY_SOUND) {
+          const sound = SOUND_NAMES[call[6]];
+          if (sound) {
+            soundNames.add(sound);
+          }
+        }
+      }
+      if (call[0] === 6) {
+        const icon = CIRCLE_ICON_NAMES[call[9]];
+        if (icon) {
+          circleIconNames.add(icon);
+        }
       }
       if (call[0] === 12) {
         const dec = DEC_NAMES[call[5]];
         if (dec) {
           decNames.add(dec);
         }
-        const shape = SHAPE_NAMES[call[8]];
-        if (shape) {
-          decNames.add(shape);
+        if ((call[5] | 0) === DEC_ICON) {
+          const glyph = ICON_NAMES[call[7]];
+          if (glyph) {
+            decNames.add(glyph);
+          }
+        } else if ((call[5] | 0) !== DEC_RAINBOW) {
+          const shape = SHAPE_NAMES[call[8]];
+          if (shape) {
+            decNames.add(shape);
+          }
+          if (call[6] === TEX_PALETTE) {
+            decNames.add('TEX_PALETTE');
+          }
         }
       }
     }
@@ -266,14 +424,20 @@ export const generateLevelsTs = (
       : '') +
     (decNames.size > 0
       ? `import {\n  ${[...decNames].sort().join(',\n  ')},\n} from './model/parts/Decoration';\n`
+      : '') +
+    (circleIconNames.size > 0
+      ? `import {\n  ${[...circleIconNames].sort().join(',\n  ')},\n} from './model/parts/Obstacle';\n`
+      : '') +
+    (soundNames.size > 0
+      ? `import {\n  ${[...soundNames].sort().join(',\n  ')},\n} from './zzfx.js';\n`
       : '');
 
   const sectionLines: string[] = [];
   for (const s of sections) {
-    const calls = s[5];
+    const calls = s[4];
     if (calls.length === 0) {
       sectionLines.push(
-        `  [${formatNum(s[0])}, ${formatNum(s[1])}, ${formatNum(s[2])}, ${formatNum(s[3])}, ${s[4]}, []],`
+        `  [${formatNum(s[0])}, ${formatNum(s[1])}, ${formatNum(s[2])}, ${formatNum(s[3])}, []],`
       );
       continue;
     }
@@ -284,7 +448,6 @@ export const generateLevelsTs = (
     ${formatNum(s[1])},
     ${formatNum(s[2])},
     ${formatNum(s[3])},
-    ${s[4]},
     [
 ${callStr},
     ],
@@ -303,12 +466,11 @@ export type SectionData = [
   number,
   number,
   number,
-  number,
   number[][],
 ];
 
 /**
- * x, y, w, h, bg, builder calls.
+ * x, y, w, h, builder calls.
  * Generated by the editor.
  */
 export const SECTIONS: SectionData[] = [

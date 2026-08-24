@@ -9,11 +9,13 @@ import {
 } from '../dom';
 import { getState } from '../state/State';
 import type { Ball } from '../model/Ball';
+import { COMPLETE_SECTION, MENU_SECTION } from '../model/constants';
 import type { Section } from '../model/Section';
 import { findSectionAt } from '../model/Section';
 import { BallElement } from './BallElement';
 import { BoardSection } from './BoardSection';
 import {
+  CAM_MENU_SCALE,
   CAM_SCALE_STEP,
   clampCamScale,
   getCamFitScale,
@@ -35,6 +37,7 @@ export class Board extends UiElement {
   targetLookX = 0;
   targetLookY = 0;
   targetScale = 1;
+  wasPlaying = false;
 
   constructor() {
     super();
@@ -128,9 +131,13 @@ export class Board extends UiElement {
 
   setCamTarget(section: Section, snap: boolean) {
     const look = getCamLook(section);
+    const state = getState();
     this.targetLookX = look.x;
     this.targetLookY = look.y;
-    this.targetScale = getCamFitScale(section, this.width, this.height);
+    this.targetScale =
+      state.playing || state.complete
+        ? getCamFitScale(section, this.width, this.height)
+        : CAM_MENU_SCALE;
     if (snap) {
       this.lookX = look.x;
       this.lookY = look.y;
@@ -169,7 +176,6 @@ export class Board extends UiElement {
       position: 'absolute',
       inset: '0',
       overflow: 'hidden',
-      background: '#222',
     });
     appendChild(root, el);
 
@@ -191,7 +197,10 @@ export class Board extends UiElement {
     }
 
     this.syncBalls();
-    this.section = state.sections[0];
+    const ball = state.balls[0];
+    this.section = ball
+      ? findSectionAt(state.sections, ball.pos.x, ball.pos.y, null)
+      : state.sections[0];
     if (this.section) {
       this.setCamTarget(this.section, true);
     }
@@ -209,6 +218,9 @@ export class Board extends UiElement {
   }
 
   onMouseWheel(_x: number, _y: number, delta: number) {
+    if (!getState().playing) {
+      return;
+    }
     if (delta > 0) {
       this.camScale = clampCamScale(this.camScale / CAM_SCALE_STEP);
     } else {
@@ -220,7 +232,7 @@ export class Board extends UiElement {
   }
 
   onMouseDown(x: number, y: number, _button: number, shift = false) {
-    if (!shift) {
+    if (!shift || !getState().playing) {
       return;
     }
     const wx = this.camX + x / this.camScale;
@@ -244,18 +256,34 @@ export class Board extends UiElement {
     this.syncBalls();
     const state = getState();
     const ball = state.balls[0];
-    if (ball) {
+    if (!state.playing) {
+      const lockId = state.complete ? COMPLETE_SECTION : MENU_SECTION;
+      const room = state.sections[lockId];
+      if (room && this.section !== room) {
+        this.section = room;
+        this.setCamTarget(room, true);
+      }
+      if (room && state.complete) {
+        this.targetScale = getCamFitScale(room, this.width, this.height);
+      } else {
+        this.targetScale = CAM_MENU_SCALE;
+      }
+    } else if (ball) {
       const next = findSectionAt(
         state.sections,
         ball.pos.x,
         ball.pos.y,
         this.section
       );
-      if (next && next !== this.section) {
+      if (
+        next &&
+        (next !== this.section || state.playing !== this.wasPlaying)
+      ) {
         this.section = next;
-        this.setCamTarget(next, false);
+        this.setCamTarget(next, state.playing !== this.wasPlaying);
       }
     }
+    this.wasPlaying = state.playing;
     this.lookX = lerpCam(this.lookX, this.targetLookX, dt);
     this.lookY = lerpCam(this.lookY, this.targetLookY, dt);
     this.camScale = lerpCam(this.camScale, this.targetScale, dt);

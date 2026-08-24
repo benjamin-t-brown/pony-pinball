@@ -9,6 +9,8 @@ export const CAM_ZOOM_FACTOR = 0.85;
 /** Sections smaller than this on both axes skip fit-zoom and use CAM_SMALL_SCALE. */
 export const CAM_SMALL_SIZE = 250;
 export const CAM_SMALL_SCALE = 3;
+/** Menu backdrop zoom. */
+export const CAM_MENU_SCALE = 4;
 
 export const clampCamScale = (scale: number) => {
   if (scale < CAM_SCALE_MIN) {

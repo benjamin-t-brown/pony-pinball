@@ -17,14 +17,34 @@ import { GATE_COLORS } from '../model/builders';
 import type { Collectable } from '../model/parts/Collectable';
 import {
   CHEVRON_D,
+  DEC_ICON,
+  DEC_RAINBOW,
+  HAT_D,
+  ICON_HAT,
+  ICON_PONY,
+  PONY_D,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
+  TEX_ARROWS,
+  WAND_D,
+  decorationFill,
+  decorationLightAt,
+  decorationLightCount,
   getTextureClass,
+  lightAnimation,
   type Decoration,
 } from '../model/parts/Decoration';
 import type { Field } from '../model/parts/Field';
 import type { Launcher } from '../model/parts/Launcher';
-import type { Obstacle } from '../model/parts/Obstacle';
+import {
+  CIRCLE_DIAMOND,
+  CIRCLE_STAR,
+  DIAMOND_D,
+  STAR_D,
+  circleFill,
+  obstacleStroke,
+  type Obstacle,
+} from '../model/parts/Obstacle';
 import type { Paddle } from '../model/parts/Paddle';
 import type { Portal } from '../model/parts/Portal';
 import {
@@ -121,10 +141,133 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
   );
 };
 
+const addDecorationIcon = (g: SVGElement, dec: Decoration) => {
+  const fill = decorationFill(dec.texture);
+  const glyph = dec.shape % 3;
+  if (glyph === ICON_HAT) {
+    g.appendChild(
+      createSvgElement('path', {
+        'd': HAT_D,
+        fill,
+      })
+    );
+    g.appendChild(
+      createSvgElement(CIRCLE, {
+        cx: '0',
+        cy: '-9.2',
+        r: '2.2',
+        fill,
+      })
+    );
+    return;
+  }
+  if (glyph === ICON_PONY) {
+    g.appendChild(
+      createSvgElement('path', {
+        'd': PONY_D,
+        fill,
+      })
+    );
+    return;
+  }
+  g.appendChild(
+    createSvgElement('path', {
+      'd': WAND_D,
+      fill,
+    })
+  );
+  const spark = createSvgElement('g', {
+    transform: 'translate(5.2 -6.8) scale(4.2)',
+  });
+  spark.appendChild(
+    createSvgElement('path', {
+      'd': STAR_D,
+      fill,
+    })
+  );
+  g.appendChild(spark);
+};
+
+const syncDecorationLight = (wrap: Element, dec: Decoration) => {
+  setAttribute(wrap as unknown as HTMLElement, 'opacity', dec.active ? '1' : '0.2');
+  const anim = lightAnimation(dec);
+  const kids = wrap.children;
+  for (let i = 0; i < kids.length; i++) {
+    const g = kids[i] as unknown as HTMLElement;
+    const style: Record<string, string> = {
+      'animation': anim,
+    };
+    if (dec.delay && anim !== 'none') {
+      style['animation-delay'] = stringify(i * dec.delay) + 'ms';
+    } else {
+      style['animation-delay'] = '0ms';
+    }
+    setStyle(g, style);
+  }
+};
+
+const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
+  const disc = createSvgElement(CIRCLE, {
+    r: stringify(o.r),
+    fill: circleFill(o.active, o.color),
+  });
+  svg.appendChild(disc);
+  const g = createSvgElement('g', {
+    transform: 'scale(' + stringify(o.r * 0.7) + ')',
+  });
+  const icon = o.icon % 3;
+  if (icon === CIRCLE_STAR) {
+    g.appendChild(
+      createSvgElement('path', {
+        'd': STAR_D,
+        fill: '#123',
+      })
+    );
+  } else if (icon === CIRCLE_DIAMOND) {
+    g.appendChild(
+      createSvgElement('path', {
+        'd': DIAMOND_D,
+        fill: '#123',
+      })
+    );
+  } else {
+    g.appendChild(
+      createSvgElement(CIRCLE, {
+        cx: '-.32',
+        cy: '-.22',
+        r: '.13',
+        fill: '#123',
+      })
+    );
+    g.appendChild(
+      createSvgElement(CIRCLE, {
+        cx: '.32',
+        cy: '-.22',
+        r: '.13',
+        fill: '#123',
+      })
+    );
+    g.appendChild(
+      createSvgElement('path', {
+        'd': 'M-.4.22A.48.48 0 0 0 .4.22',
+        fill: 'none',
+        stroke: '#123',
+        'stroke-width': '.12',
+        'stroke-linecap': 'round',
+      })
+    );
+  }
+  svg.appendChild(g);
+  return disc;
+};
+
 export class PartElement extends UiElement {
   part: Part;
   lineEls: SVGLineElement[] = [];
   spiralEls: SVGElement[] = [];
+  lightWrap: Element | null = null;
+  lightOn = true;
+  discEl: Element | null = null;
 
   constructor(part: Part, parent?: UiElement) {
     super(parent);
@@ -209,6 +352,23 @@ export class PartElement extends UiElement {
 
     if (part.type === PART_DECORATION) {
       const dec = part as Decoration;
+      if (dec.decorationType === DEC_RAINBOW) {
+        const el = createElement(DIV);
+        el.className = 'tr';
+        setStyle(el, {
+          position: 'absolute',
+          left: px(dec.x),
+          top: px(dec.y),
+          width: px(dec.x1),
+          height: px(dec.y1),
+          [TRANSFORM]:
+            'rotate(' + stringify((dec.rot * 180) / Math.PI) + 'deg)',
+          'transform-origin': '0 0',
+          [POINTER_EVENTS]: 'none',
+        });
+        this.attach(el);
+        return;
+      }
       const svg = createSvgElement(SVG, {
         width: '1',
         height: '1',
@@ -220,32 +380,61 @@ export class PartElement extends UiElement {
         overflow: 'visible',
         [POINTER_EVENTS]: 'none',
       });
-      const g = createSvgElement('g', {
-        transform:
-          'translate(' +
-          stringify(dec.x) +
-          ' ' +
-          stringify(dec.y) +
-          ') rotate(' +
-          stringify((dec.rot * 180) / Math.PI) +
-          ') scale(' +
-          stringify(dec.scale) +
-          ')',
-        'class': getTextureClass(dec.texture),
-      });
-      addDecorationShape(g, dec.shape);
-      if (dec.interval > 0) {
-        setStyle(g as unknown as HTMLElement, {
-          'animation': 'k ' + stringify(dec.interval) + 'ms step-end infinite',
+      const wrap = createSvgElement('g', {});
+      if (dec.decorationType === DEC_ICON) {
+        const g = createSvgElement('g', {
+          transform:
+            'translate(' +
+            stringify(dec.x) +
+            ' ' +
+            stringify(dec.y) +
+            ') rotate(' +
+            stringify((dec.rot * 180) / Math.PI) +
+            ') scale(' +
+            stringify(dec.scale) +
+            ')',
+          'opacity': stringify(dec.opacity),
         });
+        addDecorationIcon(g, dec);
+        wrap.appendChild(g);
+        svg.appendChild(wrap);
+        this.attach(svg as unknown as HTMLElement);
+        return;
       }
-      svg.appendChild(g);
+      const n = decorationLightCount(dec);
+      const rot = stringify((dec.rot * 180) / Math.PI);
+      const sc = stringify(dec.scale);
+      for (let i = 0; i < n; i++) {
+        const p = decorationLightAt(dec, i);
+        const g = createSvgElement('g', {
+          transform:
+            'translate(' +
+            stringify(p.x) +
+            ' ' +
+            stringify(p.y) +
+            ') rotate(' +
+            rot +
+            ') scale(' +
+            sc +
+            ')',
+          'class': getTextureClass(dec.texture),
+        });
+        addDecorationShape(g, dec.shape);
+        wrap.appendChild(g);
+      }
+      svg.appendChild(wrap);
+      this.lightWrap = wrap;
+      this.lightOn = dec.active;
+      syncDecorationLight(wrap, dec);
       this.attach(svg as unknown as HTMLElement);
       return;
     }
 
     if (part.type === PART_FIELD) {
       const field = part as Field;
+      if (field.trigger) {
+        return;
+      }
       this.width = field.w;
       this.height = field.h;
       const el = createElement(DIV);
@@ -258,33 +447,12 @@ export class PartElement extends UiElement {
         [POINTER_EVENTS]: 'none',
       });
       const forceLen = Math.hypot(field.ax, field.ay);
-      if (!field.trigger && field.grav === 0 && forceLen > 0) {
-        const svg = createSvgElement(SVG, {
-          width: stringify(field.w),
-          height: stringify(field.h),
-        }) as SVGSVGElement;
-        setStyle(svg as unknown as HTMLElement, {
-          position: 'absolute',
-          inset: '0',
-          overflow: 'visible',
-          [POINTER_EVENTS]: 'none',
+      if (field.grav === 0 && forceLen > 0) {
+        el.className = getTextureClass(TEX_ARROWS);
+        setStyle(el, {
+          '--r':
+            stringify((Math.atan2(field.ay, field.ax) * 180) / Math.PI) + 'deg',
         });
-        const nx = field.ax / forceLen;
-        const ny = field.ay / forceLen;
-        const cx = field.w / 2;
-        const cy = field.h / 2;
-        const len = 28;
-        const head = 10;
-        const tipX = cx + nx * len;
-        const tipY = cy + ny * len;
-        const bx = tipX - nx * head;
-        const by = tipY - ny * head;
-        const pxOff = -ny * head * 0.65;
-        const pyOff = nx * head * 0.65;
-        this.addLine(svg, cx - nx * len, cy - ny * len, tipX, tipY, '#fc8', '3');
-        this.addLine(svg, tipX, tipY, bx + pxOff, by + pyOff, '#fc8', '3');
-        this.addLine(svg, tipX, tipY, bx - pxOff, by - pyOff, '#fc8', '3');
-        appendChild(el, svg as unknown as HTMLElement);
       }
       this.attach(el);
       this.render(0);
@@ -329,10 +497,22 @@ export class PartElement extends UiElement {
       );
       this.addLine(svg, 0, 0, 0, 0, '#fc8', '8');
     } else {
-      const walls = (part as Obstacle).walls;
+      const obstacle = part as Obstacle;
+      if (obstacle.isCircle) {
+        this.discEl = addCircleGlyph(svg, obstacle);
+      }
+      const walls = obstacle.walls;
       for (let i = 0; i < walls.length; i++) {
         const w = walls[i];
-        this.addLine(svg, w.a.x, w.a.y, w.b.x, w.b.y, '#888', '4');
+        this.addLine(
+          svg,
+          w.a.x,
+          w.a.y,
+          w.b.x,
+          w.b.y,
+          obstacleStroke(obstacle),
+          '4'
+        );
       }
     }
 
@@ -369,6 +549,16 @@ export class PartElement extends UiElement {
     }
 
     if (part.type === PART_DECORATION) {
+      const wrap = this.lightWrap;
+      if (!wrap) {
+        return;
+      }
+      const dec = part as Decoration;
+      if (this.lightOn === dec.active) {
+        return;
+      }
+      this.lightOn = dec.active;
+      syncDecorationLight(wrap, dec);
       return;
     }
 
@@ -400,23 +590,6 @@ export class PartElement extends UiElement {
     }
 
     if (part.type === PART_FIELD) {
-      const field = part as Field;
-      const conveyer = !field.trigger && field.grav === 0;
-      let bg = conveyer ? 'rgba(180,140,40,0.08)' : 'rgba(70,140,220,0.08)';
-      if (field.active) {
-        if (conveyer) {
-          bg = field.inside
-            ? 'rgba(240,200,80,0.4)'
-            : 'rgba(200,160,50,0.22)';
-        } else {
-          bg = field.inside
-            ? 'rgba(120,200,255,0.35)'
-            : 'rgba(70,160,255,0.18)';
-        }
-      }
-      if (this.el) {
-        setStyle(this.el, { background: bg });
-      }
       return;
     }
 
@@ -429,7 +602,14 @@ export class PartElement extends UiElement {
         [TRANSFORM]: 'rotate(' + obstacle.angle + 'rad)',
       });
     }
-    const stroke = obstacle.active ? '#fc8' : '#888';
+    const stroke = obstacleStroke(obstacle);
+    if (this.discEl) {
+      setAttribute(
+        this.discEl as unknown as HTMLElement,
+        'fill',
+        circleFill(obstacle.active, obstacle.color)
+      );
+    }
     for (let i = 0; i < this.lineEls.length; i++) {
       setAttribute(this.lineEls[i] as unknown as HTMLElement, 'stroke', stroke);
     }

@@ -19,9 +19,15 @@ export const LAUNCHER_FORCE = 1250;
 export const LAUNCHER_RANGE = 36;
 export const LAUNCHER_CHARGE_MS = 600;
 export const LAUNCHER_LEN = 24;
+/** Section shown behind the start menu. */
+export const MENU_SECTION = 17;
+/** Section that ends the run. */
+export const COMPLETE_SECTION = 16;
 
 /** Gate wall and decoration texture colors. */
 export const GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
+export const SECTION_BG = '#123';
+export const SECTION_DOT = '#345';
 
 export const LEFT_PIVOT = { x: 118, y: 450 };
 export const RIGHT_PIVOT = { x: 282, y: 450 };

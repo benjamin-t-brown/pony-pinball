@@ -1,4 +1,5 @@
 import { type Circle, vecLen, vecMul } from '../../sim/physics';
+import type { Ball } from '../Ball';
 import { PART_FIELD, Part } from '../Part';
 import type { Section } from '../Section';
 import type { Trigger } from '../Trigger';
@@ -70,7 +71,7 @@ export class Field extends Part {
     if (inNow && !this.inside) {
       this.onEnter();
       if (this.trigger) {
-        this.trigger.onActivated(section);
+        this.trigger.onActivated(section, ball as Ball);
       }
     } else if (!inNow && this.inside) {
       this.onExit();

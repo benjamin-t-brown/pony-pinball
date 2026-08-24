@@ -5,6 +5,9 @@ import { Layer } from './Layer';
 export class SimLayer extends Layer {
   update(dt: number) {
     const state = getState();
+    if (state.playing) {
+      state.playMs += dt;
+    }
     updateSimulation(state, dt);
   }
 
