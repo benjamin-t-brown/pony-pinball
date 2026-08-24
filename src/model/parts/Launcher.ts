@@ -8,6 +8,11 @@ import {
 import { LAUNCHER_LEN } from '../constants';
 import { PART_LAUNCHER, Part } from '../Part';
 import type { Section } from '../Section';
+import {
+  playSound,
+  SOUND_LAUNCH,
+  SOUND_LAUNCH_PULL_BACK,
+} from '../../zzfx.js';
 
 export class Launcher extends Part {
   dir: Vec;
@@ -43,12 +48,18 @@ export class Launcher extends Part {
   }
 
   activate() {
+    if (!this.active) {
+      playSound(SOUND_LAUNCH_PULL_BACK);
+    }
     this.active = true;
   }
 
   unactivate() {
     if (this.active) {
       this.pendingFire = this.charge > 0;
+      if (this.pendingFire) {
+        playSound(SOUND_LAUNCH);
+      }
     }
     this.active = false;
   }

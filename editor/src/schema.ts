@@ -7,6 +7,7 @@ import {
   B_FLIPPER_LEFT,
   B_LAUNCHER,
   B_PORTAL,
+  B_TRIANGLE,
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
@@ -180,6 +181,21 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'color', step: 1 },
     ],
   },
+  {
+    id: B_TRIANGLE,
+    name: 'Triangle',
+    place: 'point',
+    params: [
+      { name: 'x' },
+      { name: 'y' },
+      { name: 'sideLen1' },
+      { name: 'sideLen2' },
+      { name: 'startingRotation', step: 0.05 },
+      { name: 'resti0', step: 0.05 },
+      { name: 'resti1', step: 0.05 },
+      { name: 'resti2', step: 0.05 },
+    ],
+  },
 ];
 
 export { GATE_COLORS };
@@ -257,6 +273,9 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_PORTAL) {
     return [B_PORTAL, x, y, x + 80, y, 18, 0];
   }
+  if (id === B_TRIANGLE) {
+    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5];
+  }
   return [id, x, y];
 };
 
@@ -285,6 +304,9 @@ export const ensureCallArgs = (call: number[]) => {
   }
   if (call[0] === B_PORTAL) {
     next.length = 7;
+  }
+  if (call[0] === B_TRIANGLE) {
+    next.length = 9;
   }
   return next;
 };

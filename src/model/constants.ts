@@ -12,6 +12,7 @@ export const PADDLE_FRICTION = 0.25;
 // A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
 // the ball arrived with, so the cap has to clear that or the kick gets shaved.
 export const MAX_BALL_SPEED = 1500;
+export const PORTAL_WARP_MS = 300;
 export const LAUNCHER_X = 384;
 export const LAUNCHER_Y = 582;
 export const LAUNCHER_FORCE = 1250;

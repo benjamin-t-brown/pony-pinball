@@ -1,6 +1,7 @@
 import {
   B_COLLECTABLE,
   B_FIELD,
+  B_TRIANGLE,
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
@@ -35,6 +36,9 @@ export const wallsAddedByCall = (call: number[]) => {
   }
   if (isSegmentWallCall(call[0])) {
     return 1;
+  }
+  if (call[0] === B_TRIANGLE) {
+    return 3;
   }
   return 0;
 };

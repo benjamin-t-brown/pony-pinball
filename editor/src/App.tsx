@@ -62,8 +62,8 @@ export const App = () => {
   const [dirty, setDirty] = useState(false);
   const [status, setStatus] = useState('Loading…');
   const [statusError, setStatusError] = useState(false);
-  const [frame, setFrame] = useState(0);
   const [spawn, setSpawn] = useState<{ x: number; y: number } | null>(null);
+  const [sim, setSim] = useState<State | null>(null);
   const simRef = useRef<State | null>(null);
   const spawnRef = useRef<{ x: number; y: number } | null>(null);
   const wrapSize = useRef({ w: 800, h: 600 });
@@ -80,15 +80,12 @@ export const App = () => {
   );
 
   const built = useMemo(() => {
-    if (playing && simRef.current) {
-      return simRef.current.sections;
-    }
     try {
       return buildLevel(sections, links);
     } catch {
       return [];
     }
-  }, [sections, links, playing, frame]);
+  }, [sections, links]);
 
   const markDirty = useCallback((next: SectionData[]) => {
     setSections(next);
@@ -139,9 +136,12 @@ export const App = () => {
   useEffect(() => {
     if (!playing) {
       simRef.current = null;
+      setSim(null);
       return;
     }
-    simRef.current = createPlayState(sections, links, spawnRef.current);
+    const state = createPlayState(sections, links, spawnRef.current);
+    simRef.current = state;
+    setSim(state);
     let last = performance.now();
     let acc = 0;
     let raf = 0;
@@ -149,14 +149,13 @@ export const App = () => {
       const dt = Math.min(33, t - last);
       last = t;
       acc += dt;
-      const state = simRef.current;
-      if (state) {
+      const s = simRef.current;
+      if (s) {
         while (acc >= PHYSICS_DT_MS) {
-          updateSimulation(state, PHYSICS_DT_MS);
+          updateSimulation(s, PHYSICS_DT_MS);
           acc -= PHYSICS_DT_MS;
         }
       }
-      setFrame(n => n + 1);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -234,7 +233,6 @@ export const App = () => {
           const state = simRef.current;
           if (state) {
             dropBall(state, state.startX, state.startY);
-            setFrame(n => n + 1);
           }
         }
         return;
@@ -502,7 +500,6 @@ export const App = () => {
     setDirty(true);
     if (simRef.current) {
       dropBall(simRef.current, x, y);
-      setFrame(n => n + 1);
     }
   };
 
@@ -550,7 +547,7 @@ export const App = () => {
         playing={playing}
         spawn={spawn}
         built={built}
-        sim={playing ? simRef.current : null}
+        sim={sim}
         onSections={markDirty}
         onOpenings={markOpenings}
         onSelection={setSelection}

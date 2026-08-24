@@ -18,6 +18,7 @@ const BUILDER_NAMES: Record<number, string> = {
   8: 'B_COLLECTABLE',
   9: 'B_FAN',
   10: 'B_PORTAL',
+  11: 'B_TRIANGLE',
 };
 
 const TRIGGER_NAMES: Record<number, string> = {
@@ -93,6 +94,21 @@ const roundCall = (call: number[]) => {
     }
     if (next.length > 6) {
       next[6] = Math.round(next[6]);
+    }
+    return next;
+  }
+  if (next[0] === 11) {
+    if (next.length > 1) {
+      next[1] = Math.round(next[1]);
+    }
+    if (next.length > 2) {
+      next[2] = Math.round(next[2]);
+    }
+    if (next.length > 3) {
+      next[3] = Math.round(next[3]);
+    }
+    if (next.length > 4) {
+      next[4] = Math.round(next[4]);
     }
     return next;
   }

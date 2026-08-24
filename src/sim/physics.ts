@@ -53,7 +53,7 @@ export const circleApplyImpulse = (c: Circle, j: Vec): Circle => {
   return c;
 };
 
-export const GRAVITY = 1200;
+export const GRAVITY = 900;
 
 export const circleIntegrate = (
   c: Circle,

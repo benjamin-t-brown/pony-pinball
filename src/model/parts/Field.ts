@@ -2,6 +2,7 @@ import { type Circle, vecLen, vecMul } from '../../sim/physics';
 import { PART_FIELD, Part } from '../Part';
 import type { Section } from '../Section';
 import type { Trigger } from '../Trigger';
+import { playSound, SOUND_BALL_TRAVELING } from '../../zzfx.js';
 
 export class Field extends Part {
   w = 0;
@@ -47,7 +48,11 @@ export class Field extends Part {
     return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
   }
 
-  onEnter() {}
+  onEnter() {
+    if (!this.trigger && this.grav === 0 && (this.ax || this.ay)) {
+      playSound(SOUND_BALL_TRAVELING);
+    }
+  }
 
   onExit() {}
 

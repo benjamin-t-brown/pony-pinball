@@ -143,7 +143,7 @@ export class GateSection4Trigger extends Trigger {
     }
     const needed = 5;
     const section = 4;
-    const wallIndex = 44;
+    const wallIndex = 45;
     if ((state.collected[0] || 0) < needed) {
       return;
     }
@@ -151,7 +151,9 @@ export class GateSection4Trigger extends Trigger {
     if (!target) {
       return;
     }
-    target.walls[wallIndex].rest = -1;
+    if (target.walls[wallIndex].rest !== -1) {
+      target.walls[wallIndex].rest = -1;
+    }
   }
 }
 

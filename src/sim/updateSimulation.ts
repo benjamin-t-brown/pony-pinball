@@ -1,5 +1,11 @@
-import { ballCreate, ballIsOutOfBounds, type Ball } from '../model/Ball';
+import {
+  ballCreate,
+  ballIsOutOfBounds,
+  ballUpdateWarp,
+  type Ball,
+} from '../model/Ball';
 import { MAX_BALL_SPEED } from '../model/constants';
+import { PART_PADDLE } from '../model/Part';
 import {
   flattenSectionWalls,
   forEachPart,
@@ -16,6 +22,11 @@ import {
   vecMul,
 } from './physics';
 import type { State } from '../state/State';
+import {
+  playSound,
+  SOUND_PADDLE_FLIPPER,
+  SOUND_PADDLE_FLIPPER_DOWN,
+} from '../zzfx.js';
 
 export const updateBallMotion = (
   ball: Ball,
@@ -60,8 +71,14 @@ export const updateParts = (state: State, dt: number) => {
         }
       }
       if (state.input[part.control] && inSection) {
+        if (!part.active && part.type === PART_PADDLE) {
+          playSound(SOUND_PADDLE_FLIPPER);
+        }
         part.activate();
       } else {
+        if (part.active && part.type === PART_PADDLE) {
+          playSound(SOUND_PADDLE_FLIPPER_DOWN);
+        }
         part.unactivate();
       }
     }
@@ -89,7 +106,15 @@ export const updateSimulation = (state: State, dt: number) => {
   updateParts(state, dt);
   for (let i = 0; i < state.balls.length; i++) {
     const ball = state.balls[i];
-    updateBallMotion(ball, dtSeconds, preBallParts(ball, state, dtSeconds));
+    if (ball.warpMs > 0) {
+      ballUpdateWarp(ball, dt);
+      continue;
+    }
+    const g = preBallParts(ball, state, dtSeconds);
+    if (ball.warpMs > 0) {
+      continue;
+    }
+    updateBallMotion(ball, dtSeconds, g);
     flattenSectionWalls(state.sections, state.walls);
     resolveBallWalls(ball, state.walls);
     resolveBallParts(ball, state);

@@ -132,7 +132,7 @@ let circleApplyImpulse = (c, j) => {
     c.vel = vecAdd(c.vel, vecMul(j, c.invM));
     return c;
 };
-let GRAVITY = 1200;
+let GRAVITY = 900;
 let circleIntegrate = (c, dtSeconds, gravity = GRAVITY) => {
     c.vel = vecAdd(c.vel, vecMul(vecCreate(0, gravity), dtSeconds));
     c.pos = vecAdd(c.pos, vecMul(c.vel, dtSeconds));
@@ -726,697 +726,8 @@ class LayerManager {
         requestAnimationFrame(this.loop);
     };
 }
-let W = 400;
-let H = 600;
-let BALL_R = 10;
-let PADDLE_LEN = 58;
-let PADDLE_SPEED = 18;
-let PADDLE_RETURN = 10;
-// Matches the rendered stroke, so the ball rides on the paddle's face rather
-// than sinking to its centre line.
-let PADDLE_HALF_WIDTH = 3;
-let PADDLE_REST = 0.35;
-let PADDLE_FRICTION = 0.25;
-// A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
-// the ball arrived with, so the cap has to clear that or the kick gets shaved.
-let MAX_BALL_SPEED = 1500;
-let LAUNCHER_X = 384;
-let LAUNCHER_Y = 582;
-let LAUNCHER_FORCE = 1250;
-let LAUNCHER_RANGE = 36;
-let LAUNCHER_CHARGE_MS = 600;
-let LAUNCHER_LEN = 24;
-let LEFT_PIVOT = { x: 118, y: 450 };
-let RIGHT_PIVOT = { x: 282, y: 450 };
-let LEFT_REST_ANGLE = 0.45;
-let LEFT_UP = -0.55;
-let RIGHT_REST_ANGLE = Math.PI - 0.45;
-let RIGHT_UP = Math.PI + 0.55;
-let ballCreate = (x = 0, y = 0) => {
-    let b = circleCreate(x, y, BALL_R, 1);
-    return { ...b, color: 'red' };
-};
-let ballIsOutOfBounds = (ball, sections) => {
-    return !isPointInAnySection(sections, ball.pos.x, ball.pos.y, 40);
-};
-let updateBallMotion = (ball, dtSeconds, gravity = GRAVITY) => {
-    circleIntegrate(ball, dtSeconds, gravity);
-};
-let clampBallSpeed = (ball, maxSpeed = MAX_BALL_SPEED) => {
-    let speed = vecLen(ball.vel);
-    if (speed > maxSpeed) {
-        ball.vel = vecMul(ball.vel, maxSpeed / speed);
-    }
-};
-let resolveBallWalls = (ball, walls, surfaceVel = null) => {
-    let hit = false;
-    for (let i = 0; i < walls.length; i++) {
-        if (resolveCircleLine(ball, walls[i], 0, surfaceVel)) {
-            hit = true;
-        }
-    }
-    return hit;
-};
-let updateParts = (state, dt) => {
-    forEachPart(state.sections, (part, section) => {
-        // Only player-driven parts follow the input; everything else owns its own
-        // active flag (bumper flash timers, permanent fields).
-        if (part.control >= 0) {
-            let inSection = false;
-            for (let i = 0; i < state.balls.length; i++) {
-                let p = state.balls[i].pos;
-                if (sectionContains(section, p.x, p.y)) {
-                    inSection = true;
-                    break;
-                }
-            }
-            if (state.input[part.control] && inSection) {
-                part.activate();
-            }
-            else {
-                part.unactivate();
-            }
-        }
-        part.update(dt, section);
-    });
-};
-/** Applies pre-integration forces and returns the gravity to integrate with. */
-let preBallParts = (ball, state, dtSeconds) => {
-    let g = GRAVITY;
-    forEachPart(state.sections, (part, section) => {
-        g = part.preBall(ball, section.x, section.y, dtSeconds, g, section, state);
-    });
-    return g;
-};
-let resolveBallParts = (ball, state) => {
-    forEachPart(state.sections, (part, section) => {
-        part.affectBall(ball, section.x, section.y);
-    });
-};
-let updateSimulation = (state, dt) => {
-    let dtSeconds = dt / 1000;
-    updateParts(state, dt);
-    for (let i = 0; i < state.balls.length; i++) {
-        let ball = state.balls[i];
-        updateBallMotion(ball, dtSeconds, preBallParts(ball, state, dtSeconds));
-        flattenSectionWalls(state.sections, state.walls);
-        resolveBallWalls(ball, state.walls);
-        resolveBallParts(ball, state);
-        // A paddle sweeping into a ball can push it through a wall, so give the
-        // walls the last word on position.
-        resolveBallWalls(ball, state.walls);
-        clampBallSpeed(ball);
-        if (ballIsOutOfBounds(ball, state.sections)) {
-            state.balls[i] = ballCreate(state.startX, state.startY);
-        }
-    }
-};
-class SimLayer extends Layer {
-    constructor() {
-        super(null, 'sim');
-    }
-    update(dt) {
-        let state = getStateGlobal();
-        updateSimulation(state, dt);
-    }
-    render(dt) {
-        // drawBall(this.views.ball, this.game.ball);
-        // drawPaddle(this.views.leftPaddle, this.game.leftPaddle);
-        // drawPaddle(this.views.rightPaddle, this.game.rightPaddle);
-        // super.render(deltaTime);
-    }
-}
-class UiElement {
-    parent = null;
-    children = [];
-    el = null;
-    x = 0;
-    y = 0;
-    width = 0;
-    height = 0;
-    scale = 1;
-    id = '';
-    isHovered = false;
-    isClicked = false;
-    shouldPropagateEventsToChildren = true;
-    constructor(parent) {
-        if (parent) {
-            parent.addChild(this);
-        }
-    }
-    getChildById(id) {
-        if (this.id === id) {
-            return this;
-        }
-        for (let child of this.children) {
-            let found = child.getChildById(id);
-            if (found) {
-                return found;
-            }
-        }
-        return null;
-    }
-    removeChildById(id) {
-        let child = this.getChildById(id);
-        if (!child || !child.parent) {
-            return;
-        }
-        child.parent.removeChildAtIndex(child.parent.children.indexOf(child));
-    }
-    setPos(x, y) {
-        this.x = x;
-        this.y = y;
-    }
-    setScale(scale) {
-        this.scale = scale;
-    }
-    getPos() {
-        return [this.x, this.y];
-    }
-    getDims() {
-        return [this.width * this.scale, this.height * this.scale];
-    }
-    setId(id) {
-        this.id = id;
-    }
-    getId() {
-        return this.id;
-    }
-    getChildren() {
-        return this.children;
-    }
-    getParent() {
-        return this.parent;
-    }
-    getChildHostEl() {
-        return this.el;
-    }
-    removeChildAtIndex(index) {
-        if (index < 0 || index >= this.children.length) {
-            return;
-        }
-        this.children[index].parent = null;
-        this.children.splice(index, 1);
-    }
-    addChild(child) {
-        if (child.parent) {
-            child.parent.removeChildAtIndex(child.parent.children.indexOf(child));
-        }
-        child.parent = this;
-        this.children.push(child);
-    }
-    hit(mouseX, mouseY) {
-        let [width, height] = this.getDims();
-        return (mouseX >= this.x &&
-            mouseY >= this.y &&
-            mouseX <= this.x + width &&
-            mouseY <= this.y + height);
-    }
-    checkMouseDownEvent(mouseX, mouseY, button, shift = false) {
-        if (this.shouldPropagateEventsToChildren) {
-            for (let i = this.children.length - 1; i >= 0; i--) {
-                if (this.children[i].checkMouseDownEvent(mouseX, mouseY, button, shift)) {
-                    return true;
-                }
-            }
-        }
-        if (!this.hit(mouseX, mouseY)) {
-            return false;
-        }
-        this.isClicked = true;
-        this.onMouseDown(mouseX, mouseY, button, shift);
-        return true;
-    }
-    checkMouseUpEvent(mouseX, mouseY, button) {
-        let handled = false;
-        if (this.shouldPropagateEventsToChildren) {
-            for (let i = this.children.length - 1; i >= 0; i--) {
-                if (this.children[i].checkMouseUpEvent(mouseX, mouseY, button)) {
-                    handled = true;
-                }
-            }
-        }
-        if (this.isClicked) {
-            if (this.hit(mouseX, mouseY)) {
-                this.onClick(mouseX, mouseY, button);
-                handled = true;
-            }
-            this.onMouseUp(mouseX, mouseY, button);
-            this.isClicked = false;
-        }
-        return handled;
-    }
-    checkHoverEvent(mouseX, mouseY) {
-        let handled = false;
-        if (this.shouldPropagateEventsToChildren) {
-            for (let i = this.children.length - 1; i >= 0; i--) {
-                if (this.children[i].checkHoverEvent(mouseX, mouseY)) {
-                    handled = true;
-                }
-            }
-        }
-        this.isHovered = this.hit(mouseX, mouseY);
-        if (this.isHovered) {
-            handled = true;
-        }
-        return handled;
-    }
-    checkMouseWheelEvent(mouseX, mouseY, delta) {
-        if (this.shouldPropagateEventsToChildren) {
-            for (let i = this.children.length - 1; i >= 0; i--) {
-                if (this.children[i].checkMouseWheelEvent(mouseX, mouseY, delta)) {
-                    return true;
-                }
-            }
-        }
-        if (!this.hit(mouseX, mouseY)) {
-            return false;
-        }
-        this.onMouseWheel(mouseX, mouseY, delta);
-        return true;
-    }
-    checkResizeEvent(width, height) {
-        for (let child of this.children) {
-            child.checkResizeEvent(width, height);
-        }
-    }
-    onMouseDown(_x, _y, _button, _shift = false) { }
-    onMouseUp(_x, _y, _button) { }
-    onClick(_x, _y, _button) { }
-    onMouseWheel(_x, _y, _delta) { }
-    build() {
-        for (let child of this.children) {
-            child.build();
-        }
-    }
-    update(_dt) {
-        for (let child of this.children) {
-            child.update(_dt);
-        }
-    }
-    render(dt) {
-        for (let child of this.children) {
-            child.render(dt);
-        }
-    }
-}
-class BallElement extends UiElement {
-    ball;
-    constructor(ball, parent) {
-        super(parent);
-        this.ball = ball;
-        this.setId('ball');
-    }
-    build() {
-        let ball = this.ball;
-        let size = ball.r * 2;
-        this.width = size;
-        this.height = size;
-        let svg = createSvgElement(SVG, {
-            width: stringify(size),
-            height: stringify(size),
-            viewBox: '0 0 ' + size + ' ' + size,
-        });
-        svg.appendChild(createSvgElement(CIRCLE, {
-            'cx': stringify(ball.r),
-            'cy': stringify(ball.r),
-            'r': stringify(ball.r),
-            'fill': ball.color,
-            'fill-opacity': '0.75',
-        }));
-        setStyle(svg, {
-            position: 'absolute',
-            left: '0px',
-            top: '0px',
-            [POINTER_EVENTS]: 'none',
-        });
-        let host = this.parent && this.parent.getChildHostEl();
-        if (host) {
-            appendChild(host, svg);
-        }
-        this.el = svg;
-        this.syncPos();
-    }
-    update(_dt) {
-        this.syncPos();
-    }
-    render(_dt) { }
-    syncPos() {
-        let ball = this.ball;
-        this.x = ball.pos.x - ball.r;
-        this.y = ball.pos.y - ball.r;
-        if (this.el) {
-            setStyle(this.el, {
-                left: px(this.x),
-                top: px(this.y),
-            });
-        }
-    }
-}
-let CONTROL_LEFT = 0;
-let CONTROL_RIGHT = 1;
-let CONTROL_START = 2;
-/** Not player-driven. The input gate in updateParts skips these. */
-let CONTROL_NONE = -1;
-let PART_PADDLE = 0;
-let PART_LAUNCHER = 1;
-let PART_OBSTACLE = 2;
-let PART_FIELD = 3;
-let PART_COLLECTABLE = 4;
-let PART_PORTAL = 5;
-/**
- * Everything that lives in a Section and can touch the ball: paddles,
- * launchers, bumpers, fields. One list, one loop, one UI element — adding a
- * kind costs a `type` constant and the phases it actually cares about, not a
- * new array, foreach, update pass and element class.
- */
-class Part {
-    x = 0;
-    y = 0;
-    type = PART_PADDLE;
-    control = CONTROL_NONE;
-    active = false;
-    constructor(x, y, type, control = CONTROL_NONE) {
-        this.x = x;
-        this.y = y;
-        this.type = type;
-        this.control = control;
-    }
-    activate() {
-        this.active = true;
-    }
-    unactivate() {
-        this.active = false;
-    }
-    /** Pre-physics tick: move under your own power. */
-    update(_dt, _section) { }
-    /**
-     * Pre-integration: apply forces to the ball and return the gravity it should
-     * integrate with. Returning `g` untouched opts out of both.
-     */
-    preBall(_ball, _ox, _oy, _dtSeconds, g, _section, _state) {
-        return g;
-    }
-    /** Post-integration: resolve contact. */
-    affectBall(_ball, _ox, _oy) { }
-}
-class Collectable extends Part {
-    r = 12;
-    groupType = 0;
-    taken = false;
-    trigger = null;
-    constructor(x, y, r, groupType) {
-        super(x, y, PART_COLLECTABLE);
-        this.active = true;
-        this.r = r;
-        this.groupType = groupType;
-    }
-    preBall(ball, ox, oy, _dtSeconds, g, section, state) {
-        if (this.taken || !state) {
-            return g;
-        }
-        let dx = ball.pos.x - (this.x + ox);
-        let dy = ball.pos.y - (this.y + oy);
-        let hitR = this.r + ball.r;
-        if (dx * dx + dy * dy > hitR * hitR) {
-            return g;
-        }
-        this.taken = true;
-        this.active = false;
-        let gt = this.groupType;
-        while (state.collected.length <= gt) {
-            state.collected.push(0);
-        }
-        state.collected[gt]++;
-        if (this.trigger) {
-            this.trigger.onCollect(section, state, gt);
-        }
-        return g;
-    }
-}
-class Field extends Part {
-    w = 0;
-    h = 0;
-    permanent = true;
-    inside = false;
-    grav = 1;
-    ax = 0;
-    ay = 0;
-    drag = 0;
-    maxSpeed = 0;
-    trigger = null;
-    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
-        super(x, y, PART_FIELD);
-        this.active = true;
-        this.w = w;
-        this.h = h;
-        this.grav = grav;
-        this.ax = ax;
-        this.ay = ay;
-        this.maxSpeed = maxSpeed;
-    }
-    unactivate() {
-        if (!this.permanent) {
-            this.active = false;
-        }
-    }
-    contains(px, py, ox, oy) {
-        let x = this.x + ox;
-        let y = this.y + oy;
-        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
-    }
-    onEnter() { }
-    onExit() { }
-    preBall(ball, ox, oy, dtSeconds, g, section, _state) {
-        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
-        if (inNow && !this.inside) {
-            this.onEnter();
-            if (this.trigger) {
-                this.trigger.onActivated(section);
-            }
-        }
-        else if (!inNow && this.inside) {
-            this.onExit();
-            if (this.trigger) {
-                this.trigger.onDeactivated(section);
-            }
-        }
-        this.inside = inNow;
-        if (this.trigger) {
-            this.trigger.onUpdate(dtSeconds * 1000, section);
-        }
-        if (!inNow) {
-            return g;
-        }
-        if (this.trigger) {
-            return g;
-        }
-        // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
-        // motion so the ball settles into the stream instead of skating across it.
-        let forceLen = Math.hypot(this.ax, this.ay);
-        if (this.grav === 0 && forceLen > 0) {
-            let nx = this.ax / forceLen;
-            let ny = this.ay / forceLen;
-            let along = ball.vel.x * nx + ball.vel.y * ny;
-            let catchRate = this.drag > 0 ? this.drag : 4;
-            let damp = Math.max(0, 1 - catchRate * dtSeconds);
-            let newAlong = along + forceLen * dtSeconds;
-            if (this.maxSpeed > 0) {
-                if (newAlong > this.maxSpeed) {
-                    newAlong = this.maxSpeed;
-                }
-                else if (newAlong < -this.maxSpeed) {
-                    newAlong = -this.maxSpeed;
-                }
-            }
-            ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
-            ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
-            return 0;
-        }
-        ball.vel.x += this.ax * dtSeconds;
-        ball.vel.y += this.ay * dtSeconds;
-        if (this.drag > 0) {
-            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
-        }
-        if (this.maxSpeed > 0) {
-            let speed = vecLen(ball.vel);
-            if (speed > this.maxSpeed) {
-                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
-            }
-        }
-        return g * this.grav;
-    }
-}
-class Launcher extends Part {
-    dir;
-    force = 0;
-    range = 0;
-    chargeMs = 500;
-    len = LAUNCHER_LEN;
-    charge = 0;
-    pendingFire = false;
-    constructor(x, y, control, dx, dy, force, range, chargeMs = 500, len = LAUNCHER_LEN) {
-        super(x, y, PART_LAUNCHER, control);
-        this.dir = vecNorm(vecCreate(dx, dy));
-        this.force = force;
-        this.range = range;
-        this.chargeMs = chargeMs > 0 ? chargeMs : 1;
-        this.len = len > 0 ? len : LAUNCHER_LEN;
-    }
-    /** 0..1 fill for the charge indicator. */
-    getChargeT() {
-        return this.charge / this.chargeMs;
-    }
-    activate() {
-        this.active = true;
-    }
-    unactivate() {
-        if (this.active) {
-            this.pendingFire = this.charge > 0;
-        }
-        this.active = false;
-    }
-    update(dt, _section) {
-        if (this.active) {
-            this.charge += dt;
-            if (this.charge > this.chargeMs) {
-                this.charge = this.chargeMs;
-            }
-        }
-    }
-    affectBall(ball, ox, oy) {
-        if (!this.pendingFire) {
-            return;
-        }
-        this.pendingFire = false;
-        let t = this.getChargeT();
-        this.charge = 0;
-        let dx = ball.pos.x - (this.x + ox);
-        let dy = ball.pos.y - (this.y + oy);
-        if (dx * dx + dy * dy > this.range * this.range) {
-            return;
-        }
-        ball.vel = vecMul(this.dir, this.force * t);
-    }
-}
-let FLASH_MS = 120;
-class Obstacle extends Part {
-    vx = 0;
-    vy = 0;
-    angle = 0;
-    omega = 0;
-    r = 0;
-    walls = [];
-    worldWalls = [];
-    alwaysSolid = true;
-    touching = false;
-    flash = 0;
-    constructor(x, y, type, walls, vx = 0, vy = 0, omega = 0) {
-        super(x, y, type);
-        this.vx = vx;
-        this.vy = vy;
-        this.omega = omega;
-        this.walls = walls;
-        for (let i = 0; i < walls.length; i++) {
-            this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
-        }
-    }
-    onHit() {
-        this.activate();
-        this.flash = FLASH_MS;
-    }
-    update(dt, section) {
-        let dtSeconds = dt / 1000;
-        if (this.flash > 0) {
-            this.flash -= dt;
-            if (this.flash <= 0) {
-                this.unactivate();
-            }
-        }
-        this.x += this.vx * dtSeconds;
-        this.y += this.vy * dtSeconds;
-        this.angle += this.omega * dtSeconds;
-        let r = this.r;
-        if (this.x < r) {
-            this.x = r;
-            if (this.vx < 0) {
-                this.vx = -this.vx;
-            }
-        }
-        else if (this.x > section.w - r) {
-            this.x = section.w - r;
-            if (this.vx > 0) {
-                this.vx = -this.vx;
-            }
-        }
-        if (this.y < r) {
-            this.y = r;
-            if (this.vy < 0) {
-                this.vy = -this.vy;
-            }
-        }
-        else if (this.y > section.h - r) {
-            this.y = section.h - r;
-            if (this.vy > 0) {
-                this.vy = -this.vy;
-            }
-        }
-    }
-    affectBall(ball, ox, oy) {
-        if (!this.active && !this.alwaysSolid) {
-            this.touching = false;
-            return;
-        }
-        let wx = this.x + ox;
-        let wy = this.y + oy;
-        let ca = Math.cos(this.angle);
-        let sa = Math.sin(this.angle);
-        for (let i = 0; i < this.walls.length; i++) {
-            let w = this.walls[i];
-            lineSet(this.worldWalls[i], w.a.x * ca - w.a.y * sa + wx, w.a.x * sa + w.a.y * ca + wy, w.b.x * ca - w.b.y * sa + wx, w.b.x * sa + w.b.y * ca + wy);
-        }
-        let hit = resolveBallWalls(ball, this.worldWalls, vecCreate(this.vx - this.omega * (ball.pos.y - wy), this.vy + this.omega * (ball.pos.x - wx)));
-        if (hit && !this.touching) {
-            this.onHit();
-        }
-        this.touching = hit;
-    }
-}
-let makeCircleWalls = (r, n, rest) => {
-    let walls = [];
-    for (let i = 0; i < n; i++) {
-        let a0 = (i / n) * Math.PI * 2;
-        let a1 = ((i + 1) / n) * Math.PI * 2;
-        walls.push(lineCreate(r * Math.cos(a0), r * Math.sin(a0), r * Math.cos(a1), r * Math.sin(a1), rest));
-    }
-    return walls;
-};
-/** Radial paddles from the hub out to `r`, evenly spaced around the circle. */
-let makeFanWalls = (r, paddles, rest) => {
-    let n = paddles < 1 ? 1 : paddles | 0;
-    let walls = [];
-    for (let i = 0; i < n; i++) {
-        let a = (i / n) * Math.PI * 2;
-        walls.push(lineCreate(0, 0, r * Math.cos(a), r * Math.sin(a), rest));
-    }
-    return walls;
-};
-let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
-    o.r = radius;
-    return o;
-};
-let makeFan = (x, y, paddles, restitution, radius, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeFanWalls(radius, paddles, restitution), vx, vy, omega);
-    o.r = radius;
-    return o;
-};
-/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
-let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
-    o.r = r;
-    return o;
-};
+// @ts-nocheck
+
 /*
 
 ZzFX - Zuper Zmall Zound Zynth v1.3.2 by Frank Force
@@ -1463,7 +774,7 @@ ZzFX Features
 */
 let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
   zzfxV = 0.3, // volume
-  zzfxX = new AudioContext(), // audio context
+  zzfxX, // audio context (lazy — Node/SSR has no AudioContext)
   zzfx = // play sound
     (
       p = 1,
@@ -1564,7 +875,7 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
           (g += x + x * E * Z(a ** 5)),
           n && ++n > z && ((b += v), (C += v), (n = 0)),
           !l || ++I % l || ((b = C), (u = G), (n = n || 1)));
-      ((X = zzfxX), (p = X.createBuffer(1, h, R)));
+      ((X = zzfxX || (zzfxX = new AudioContext())), (p = X.createBuffer(1, h, R)));
       p.getChannelData(0).set(k);
       b = X.createBufferSource();
       b.buffer = p;
@@ -1831,22 +1142,30 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
 // zzfx(...[,,306,.11,.12,.02,,2.7,,,325,.07,.02,,,,,.7,.01,.07]); // Get coin
 // zzfx(...[,,845,.31,.13,,3,2.2,2,,,,.03,.1,276,,,.64,.1,.3]); // Secret
 // zzfx(...[.6,,14,.05,.42,,1,.9,-13,1,,,,.6,412,,,.77,.36,,391]); // Gate Open
-// zzfx(...[.7,.55,594,.01,,.03,4,.2,5,-60,140,.04,.01,.3,66,,,.78,.01,,-1492]); //  Paddle Flipper
+// zzfx(...[,,286,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04]); //  Paddle Flipper
 // zzfx(...[,,527,,,.03,5,1.7052253513389288,-63,,,,,,,.5,,.93,,,401]); // Wall Reappear
+// zzfx(...[,,186,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04]); // paddle flipper down
+// zzfx(...[3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105]); // portal in
+// zzfx(...[3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105]); // portal out
+// zzfx(...[1.1,,70,.16,.32,.06,4,1.9,,38,-360,.01,.09,.1,.5,.3,,.77,.02,.08,-1487]); // hit fan
 // prettier-ignore
 let SOUNDS = [
   [.5,,106,,,.004,3,3.2,1,,,,,,37,,,.97,.16,,-1153], // gate closed
   [.7,,10,.07,.01,.15,2,3.9,,,41,.01,.03,,11,,,.83,.03,.06,136], // hit special wall
-  [1.2,,746,,.02,.24,3,1.3,,-3,,,,,,.1,,.79,,,107], // hit small circle
+  [1.6,.5,398,.07,.03,.16,,3.3,,-1,,,,,,,,.63,.1,,354], // hit small circle
   [1.8,,225,.01,.15,.17,1,1.3,,,,,,,22,,.16,.74,.03,,-1030], // Launch
-  [2.1,,964,,.05,.01,3,2.9,-38,-61,243,,,,197,,.05,.72], // Launch Pull Back
+  [1.6,,127,.2,.08,.2,4,2.7,,,,,,,,.1,,.55,.13,,-1202], // Launch Pull Back
   [.8,,463,.02,.15,.49,3,1.6,3,,-85,.39,,,15,.1,.27,.77,.34,,962], // Start game
   [.6,,323,.17,,.007,5,.5,,6,-123,,.05,,7.2,.2,.03,.83,.33,,105], // Ball Traveling
   [,,306,.11,.12,.02,,2.7,,,325,.07,.02,,,,,.7,.01,.07], // Get coin
   [,,845,.31,.13,,3,2.2,2,,,,.03,.1,276,,,.64,.1,.3], // Secret
   [.6,,14,.05,.42,,1,.9,-13,1,,,,.6,412,,,.77,.36,,391], // Gate Open
-  [.7,.55,594,.01,,.03,4,.2,5,-60,140,.04,.01,.3,66,,,.78,.01,,-1492], // Paddle Flipper
-  [,,527,,,.03,5,1.7052253513389288,-63,,,,,,,.5,,.93,,,401], // Wall Reappear
+  [,,286,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // Paddle Flipper
+  [,,527,,,.03,5,1.70,-63,,,,,,,.5,,.93,,,401], // Wall Reappear
+  [,,186,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // paddle flipper down
+  [3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal in
+  [3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal out
+  [1.1,,70,.16,.32,.06,4,1.9,,38,-360,.01,.09,.1,.5,.3,,.77,.02,.08,-1487], // hit fan
 ];
 
 let SOUND_GATE_CLOSED = 0;
@@ -1861,9 +1180,808 @@ let SOUND_SECRET = 8;
 let SOUND_GATE_OPEN = 9;
 let SOUND_PADDLE_FLIPPER = 10;
 let SOUND_WALL_REAPPEAR = 11;
+let SOUND_PADDLE_FLIPPER_DOWN = 12;
+let SOUND_PORTAL_IN = 13;
+let SOUND_PORTAL_OUT = 14;
+let SOUND_HIT_FAN = 15;
 
 let playSound = i => {
   zzfx(...SOUNDS[i]);
+};
+let W = 400;
+let H = 600;
+let BALL_R = 10;
+let PADDLE_LEN = 58;
+let PADDLE_SPEED = 18;
+let PADDLE_RETURN = 10;
+// Matches the rendered stroke, so the ball rides on the paddle's face rather
+// than sinking to its centre line.
+let PADDLE_HALF_WIDTH = 3;
+let PADDLE_REST = 0.35;
+let PADDLE_FRICTION = 0.25;
+// A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
+// the ball arrived with, so the cap has to clear that or the kick gets shaved.
+let MAX_BALL_SPEED = 1500;
+let PORTAL_WARP_MS = 300;
+let LAUNCHER_X = 384;
+let LAUNCHER_Y = 582;
+let LAUNCHER_FORCE = 1250;
+let LAUNCHER_RANGE = 36;
+let LAUNCHER_CHARGE_MS = 600;
+let LAUNCHER_LEN = 24;
+let LEFT_PIVOT = { x: 118, y: 450 };
+let RIGHT_PIVOT = { x: 282, y: 450 };
+let LEFT_REST_ANGLE = 0.45;
+let LEFT_UP = -0.55;
+let RIGHT_REST_ANGLE = Math.PI - 0.45;
+let RIGHT_UP = Math.PI + 0.55;
+let ballCreate = (x = 0, y = 0) => {
+    let b = circleCreate(x, y, BALL_R, 1);
+    return {
+        ...b,
+        color: 'red',
+        warpMs: 0,
+        warpX0: 0,
+        warpY0: 0,
+        warpX1: 0,
+        warpY1: 0,
+        warpVx: 0,
+        warpVy: 0,
+    };
+};
+let ballIsOutOfBounds = (ball, sections) => {
+    return !isPointInAnySection(sections, ball.pos.x, ball.pos.y, 40);
+};
+let ballStartWarp = (ball, x0, y0, x1, y1) => {
+    ball.warpMs = PORTAL_WARP_MS;
+    ball.warpX0 = x0;
+    ball.warpY0 = y0;
+    ball.warpX1 = x1;
+    ball.warpY1 = y1;
+    ball.warpVx = ball.vel.x;
+    ball.warpVy = ball.vel.y;
+    ball.vel.x = 0;
+    ball.vel.y = 0;
+    ball.pos.x = x0;
+    ball.pos.y = y0;
+    ball.color = '#fff';
+    ball.r = BALL_R * 0.5;
+    playSound(SOUND_PORTAL_IN);
+};
+/** Advance portal travel. Returns true while the ball is still warping. */
+let ballUpdateWarp = (ball, dt) => {
+    if (ball.warpMs <= 0) {
+        return false;
+    }
+    ball.warpMs -= dt;
+    let u = 1 - Math.max(ball.warpMs, 0) / PORTAL_WARP_MS;
+    ball.pos.x = ball.warpX0 + (ball.warpX1 - ball.warpX0) * u;
+    ball.pos.y = ball.warpY0 + (ball.warpY1 - ball.warpY0) * u;
+    if (ball.warpMs > 0) {
+        return true;
+    }
+    ball.warpMs = 0;
+    ball.pos.x = ball.warpX1;
+    ball.pos.y = ball.warpY1;
+    ball.vel.x = ball.warpVx;
+    ball.vel.y = ball.warpVy;
+    ball.color = 'red';
+    ball.r = BALL_R;
+    playSound(SOUND_PORTAL_OUT);
+    return false;
+};
+let CONTROL_LEFT = 0;
+let CONTROL_RIGHT = 1;
+let CONTROL_START = 2;
+/** Not player-driven. The input gate in updateParts skips these. */
+let CONTROL_NONE = -1;
+let PART_PADDLE = 0;
+let PART_LAUNCHER = 1;
+let PART_OBSTACLE = 2;
+let PART_FIELD = 3;
+let PART_COLLECTABLE = 4;
+let PART_PORTAL = 5;
+/**
+ * Everything that lives in a Section and can touch the ball: paddles,
+ * launchers, bumpers, fields. One list, one loop, one UI element — adding a
+ * kind costs a `type` constant and the phases it actually cares about, not a
+ * new array, foreach, update pass and element class.
+ */
+class Part {
+    x = 0;
+    y = 0;
+    type = PART_PADDLE;
+    control = CONTROL_NONE;
+    active = false;
+    constructor(x, y, type, control = CONTROL_NONE) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.control = control;
+    }
+    activate() {
+        this.active = true;
+    }
+    unactivate() {
+        this.active = false;
+    }
+    /** Pre-physics tick: move under your own power. */
+    update(_dt, _section) { }
+    /**
+     * Pre-integration: apply forces to the ball and return the gravity it should
+     * integrate with. Returning `g` untouched opts out of both.
+     */
+    preBall(_ball, _ox, _oy, _dtSeconds, g, _section, _state) {
+        return g;
+    }
+    /** Post-integration: resolve contact. */
+    affectBall(_ball, _ox, _oy) { }
+}
+let updateBallMotion = (ball, dtSeconds, gravity = GRAVITY) => {
+    circleIntegrate(ball, dtSeconds, gravity);
+};
+let clampBallSpeed = (ball, maxSpeed = MAX_BALL_SPEED) => {
+    let speed = vecLen(ball.vel);
+    if (speed > maxSpeed) {
+        ball.vel = vecMul(ball.vel, maxSpeed / speed);
+    }
+};
+let resolveBallWalls = (ball, walls, surfaceVel = null) => {
+    let hit = false;
+    for (let i = 0; i < walls.length; i++) {
+        if (resolveCircleLine(ball, walls[i], 0, surfaceVel)) {
+            hit = true;
+        }
+    }
+    return hit;
+};
+let updateParts = (state, dt) => {
+    forEachPart(state.sections, (part, section) => {
+        // Only player-driven parts follow the input; everything else owns its own
+        // active flag (bumper flash timers, permanent fields).
+        if (part.control >= 0) {
+            let inSection = false;
+            for (let i = 0; i < state.balls.length; i++) {
+                let p = state.balls[i].pos;
+                if (sectionContains(section, p.x, p.y)) {
+                    inSection = true;
+                    break;
+                }
+            }
+            if (state.input[part.control] && inSection) {
+                if (!part.active && part.type === PART_PADDLE) {
+                    playSound(SOUND_PADDLE_FLIPPER);
+                }
+                part.activate();
+            }
+            else {
+                if (part.active && part.type === PART_PADDLE) {
+                    playSound(SOUND_PADDLE_FLIPPER_DOWN);
+                }
+                part.unactivate();
+            }
+        }
+        part.update(dt, section);
+    });
+};
+/** Applies pre-integration forces and returns the gravity to integrate with. */
+let preBallParts = (ball, state, dtSeconds) => {
+    let g = GRAVITY;
+    forEachPart(state.sections, (part, section) => {
+        g = part.preBall(ball, section.x, section.y, dtSeconds, g, section, state);
+    });
+    return g;
+};
+let resolveBallParts = (ball, state) => {
+    forEachPart(state.sections, (part, section) => {
+        part.affectBall(ball, section.x, section.y);
+    });
+};
+let updateSimulation = (state, dt) => {
+    let dtSeconds = dt / 1000;
+    updateParts(state, dt);
+    for (let i = 0; i < state.balls.length; i++) {
+        let ball = state.balls[i];
+        if (ball.warpMs > 0) {
+            ballUpdateWarp(ball, dt);
+            continue;
+        }
+        let g = preBallParts(ball, state, dtSeconds);
+        if (ball.warpMs > 0) {
+            continue;
+        }
+        updateBallMotion(ball, dtSeconds, g);
+        flattenSectionWalls(state.sections, state.walls);
+        resolveBallWalls(ball, state.walls);
+        resolveBallParts(ball, state);
+        // A paddle sweeping into a ball can push it through a wall, so give the
+        // walls the last word on position.
+        resolveBallWalls(ball, state.walls);
+        clampBallSpeed(ball);
+        if (ballIsOutOfBounds(ball, state.sections)) {
+            state.balls[i] = ballCreate(state.startX, state.startY);
+        }
+    }
+};
+class SimLayer extends Layer {
+    constructor() {
+        super(null, 'sim');
+    }
+    update(dt) {
+        let state = getStateGlobal();
+        updateSimulation(state, dt);
+    }
+    render(dt) {
+        // drawBall(this.views.ball, this.game.ball);
+        // drawPaddle(this.views.leftPaddle, this.game.leftPaddle);
+        // drawPaddle(this.views.rightPaddle, this.game.rightPaddle);
+        // super.render(deltaTime);
+    }
+}
+class UiElement {
+    parent = null;
+    children = [];
+    el = null;
+    x = 0;
+    y = 0;
+    width = 0;
+    height = 0;
+    scale = 1;
+    id = '';
+    isHovered = false;
+    isClicked = false;
+    shouldPropagateEventsToChildren = true;
+    constructor(parent) {
+        if (parent) {
+            parent.addChild(this);
+        }
+    }
+    getChildById(id) {
+        if (this.id === id) {
+            return this;
+        }
+        for (let child of this.children) {
+            let found = child.getChildById(id);
+            if (found) {
+                return found;
+            }
+        }
+        return null;
+    }
+    removeChildById(id) {
+        let child = this.getChildById(id);
+        if (!child || !child.parent) {
+            return;
+        }
+        child.parent.removeChildAtIndex(child.parent.children.indexOf(child));
+    }
+    setPos(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+    setScale(scale) {
+        this.scale = scale;
+    }
+    getPos() {
+        return [this.x, this.y];
+    }
+    getDims() {
+        return [this.width * this.scale, this.height * this.scale];
+    }
+    setId(id) {
+        this.id = id;
+    }
+    getId() {
+        return this.id;
+    }
+    getChildren() {
+        return this.children;
+    }
+    getParent() {
+        return this.parent;
+    }
+    getChildHostEl() {
+        return this.el;
+    }
+    removeChildAtIndex(index) {
+        if (index < 0 || index >= this.children.length) {
+            return;
+        }
+        this.children[index].parent = null;
+        this.children.splice(index, 1);
+    }
+    addChild(child) {
+        if (child.parent) {
+            child.parent.removeChildAtIndex(child.parent.children.indexOf(child));
+        }
+        child.parent = this;
+        this.children.push(child);
+    }
+    hit(mouseX, mouseY) {
+        let [width, height] = this.getDims();
+        return (mouseX >= this.x &&
+            mouseY >= this.y &&
+            mouseX <= this.x + width &&
+            mouseY <= this.y + height);
+    }
+    checkMouseDownEvent(mouseX, mouseY, button, shift = false) {
+        if (this.shouldPropagateEventsToChildren) {
+            for (let i = this.children.length - 1; i >= 0; i--) {
+                if (this.children[i].checkMouseDownEvent(mouseX, mouseY, button, shift)) {
+                    return true;
+                }
+            }
+        }
+        if (!this.hit(mouseX, mouseY)) {
+            return false;
+        }
+        this.isClicked = true;
+        this.onMouseDown(mouseX, mouseY, button, shift);
+        return true;
+    }
+    checkMouseUpEvent(mouseX, mouseY, button) {
+        let handled = false;
+        if (this.shouldPropagateEventsToChildren) {
+            for (let i = this.children.length - 1; i >= 0; i--) {
+                if (this.children[i].checkMouseUpEvent(mouseX, mouseY, button)) {
+                    handled = true;
+                }
+            }
+        }
+        if (this.isClicked) {
+            if (this.hit(mouseX, mouseY)) {
+                this.onClick(mouseX, mouseY, button);
+                handled = true;
+            }
+            this.onMouseUp(mouseX, mouseY, button);
+            this.isClicked = false;
+        }
+        return handled;
+    }
+    checkHoverEvent(mouseX, mouseY) {
+        let handled = false;
+        if (this.shouldPropagateEventsToChildren) {
+            for (let i = this.children.length - 1; i >= 0; i--) {
+                if (this.children[i].checkHoverEvent(mouseX, mouseY)) {
+                    handled = true;
+                }
+            }
+        }
+        this.isHovered = this.hit(mouseX, mouseY);
+        if (this.isHovered) {
+            handled = true;
+        }
+        return handled;
+    }
+    checkMouseWheelEvent(mouseX, mouseY, delta) {
+        if (this.shouldPropagateEventsToChildren) {
+            for (let i = this.children.length - 1; i >= 0; i--) {
+                if (this.children[i].checkMouseWheelEvent(mouseX, mouseY, delta)) {
+                    return true;
+                }
+            }
+        }
+        if (!this.hit(mouseX, mouseY)) {
+            return false;
+        }
+        this.onMouseWheel(mouseX, mouseY, delta);
+        return true;
+    }
+    checkResizeEvent(width, height) {
+        for (let child of this.children) {
+            child.checkResizeEvent(width, height);
+        }
+    }
+    onMouseDown(_x, _y, _button, _shift = false) { }
+    onMouseUp(_x, _y, _button) { }
+    onClick(_x, _y, _button) { }
+    onMouseWheel(_x, _y, _delta) { }
+    build() {
+        for (let child of this.children) {
+            child.build();
+        }
+    }
+    update(_dt) {
+        for (let child of this.children) {
+            child.update(_dt);
+        }
+    }
+    render(dt) {
+        for (let child of this.children) {
+            child.render(dt);
+        }
+    }
+}
+class BallElement extends UiElement {
+    ball;
+    circleEl = null;
+    constructor(ball, parent) {
+        super(parent);
+        this.ball = ball;
+        this.setId('ball');
+    }
+    build() {
+        let ball = this.ball;
+        let size = ball.r * 2;
+        this.width = size;
+        this.height = size;
+        let svg = createSvgElement(SVG, {
+            width: stringify(size),
+            height: stringify(size),
+            viewBox: '0 0 ' + size + ' ' + size,
+        });
+        let circle = createSvgElement(CIRCLE, {
+            cx: stringify(ball.r),
+            cy: stringify(ball.r),
+            r: stringify(ball.r),
+            fill: ball.color,
+            'fill-opacity': '0.75',
+        });
+        svg.appendChild(circle);
+        this.circleEl = circle;
+        setStyle(svg, {
+            position: 'absolute',
+            left: '0px',
+            top: '0px',
+            [POINTER_EVENTS]: 'none',
+        });
+        let host = this.parent && this.parent.getChildHostEl();
+        if (host) {
+            appendChild(host, svg);
+        }
+        this.el = svg;
+        this.syncPos();
+    }
+    update(_dt) {
+        this.syncPos();
+    }
+    render(_dt) { }
+    syncPos() {
+        let ball = this.ball;
+        let size = ball.r * 2;
+        this.width = size;
+        this.height = size;
+        this.x = ball.pos.x - ball.r;
+        this.y = ball.pos.y - ball.r;
+        if (this.el) {
+            let sizeStr = stringify(size);
+            setAttribute(this.el, 'width', sizeStr);
+            setAttribute(this.el, 'height', sizeStr);
+            setAttribute(this.el, 'viewBox', '0 0 ' + sizeStr + ' ' + sizeStr);
+            setStyle(this.el, {
+                left: px(this.x),
+                top: px(this.y),
+            });
+        }
+        if (this.circleEl) {
+            let r = stringify(ball.r);
+            let el = this.circleEl;
+            setAttribute(el, 'cx', r);
+            setAttribute(el, 'cy', r);
+            setAttribute(el, 'r', r);
+            setAttribute(el, 'fill', ball.color);
+        }
+    }
+}
+class Collectable extends Part {
+    r = 12;
+    groupType = 0;
+    taken = false;
+    trigger = null;
+    constructor(x, y, r, groupType) {
+        super(x, y, PART_COLLECTABLE);
+        this.active = true;
+        this.r = r;
+        this.groupType = groupType;
+    }
+    preBall(ball, ox, oy, _dtSeconds, g, section, state) {
+        if (this.taken || !state) {
+            return g;
+        }
+        let dx = ball.pos.x - (this.x + ox);
+        let dy = ball.pos.y - (this.y + oy);
+        let hitR = this.r + ball.r;
+        if (dx * dx + dy * dy > hitR * hitR) {
+            return g;
+        }
+        this.taken = true;
+        this.active = false;
+        playSound(SOUND_GET_COIN);
+        let gt = this.groupType;
+        while (state.collected.length <= gt) {
+            state.collected.push(0);
+        }
+        state.collected[gt]++;
+        if (this.trigger) {
+            this.trigger.onCollect(section, state, gt);
+        }
+        return g;
+    }
+}
+class Field extends Part {
+    w = 0;
+    h = 0;
+    permanent = true;
+    inside = false;
+    grav = 1;
+    ax = 0;
+    ay = 0;
+    drag = 0;
+    maxSpeed = 0;
+    trigger = null;
+    constructor(x, y, w, h, grav = 1, ax = 0, ay = 0, maxSpeed = 0) {
+        super(x, y, PART_FIELD);
+        this.active = true;
+        this.w = w;
+        this.h = h;
+        this.grav = grav;
+        this.ax = ax;
+        this.ay = ay;
+        this.maxSpeed = maxSpeed;
+    }
+    unactivate() {
+        if (!this.permanent) {
+            this.active = false;
+        }
+    }
+    contains(px, py, ox, oy) {
+        let x = this.x + ox;
+        let y = this.y + oy;
+        return px >= x && px <= x + this.w && py >= y && py <= y + this.h;
+    }
+    onEnter() {
+        if (!this.trigger && this.grav === 0 && (this.ax || this.ay)) {
+            playSound(SOUND_BALL_TRAVELING);
+        }
+    }
+    onExit() { }
+    preBall(ball, ox, oy, dtSeconds, g, section, _state) {
+        let inNow = this.active && this.contains(ball.pos.x, ball.pos.y, ox, oy);
+        if (inNow && !this.inside) {
+            this.onEnter();
+            if (this.trigger) {
+                this.trigger.onActivated(section);
+            }
+        }
+        else if (!inNow && this.inside) {
+            this.onExit();
+            if (this.trigger) {
+                this.trigger.onDeactivated(section);
+            }
+        }
+        this.inside = inNow;
+        if (this.trigger) {
+            this.trigger.onUpdate(dtSeconds * 1000, section);
+        }
+        if (!inNow) {
+            return g;
+        }
+        if (this.trigger) {
+            return g;
+        }
+        // Conveyer / beam: zero gravity, accelerate along a direction, damp sideways
+        // motion so the ball settles into the stream instead of skating across it.
+        let forceLen = Math.hypot(this.ax, this.ay);
+        if (this.grav === 0 && forceLen > 0) {
+            let nx = this.ax / forceLen;
+            let ny = this.ay / forceLen;
+            let along = ball.vel.x * nx + ball.vel.y * ny;
+            let catchRate = this.drag > 0 ? this.drag : 4;
+            let damp = Math.max(0, 1 - catchRate * dtSeconds);
+            let newAlong = along + forceLen * dtSeconds;
+            if (this.maxSpeed > 0) {
+                if (newAlong > this.maxSpeed) {
+                    newAlong = this.maxSpeed;
+                }
+                else if (newAlong < -this.maxSpeed) {
+                    newAlong = -this.maxSpeed;
+                }
+            }
+            ball.vel.x = nx * newAlong + (ball.vel.x - nx * along) * damp;
+            ball.vel.y = ny * newAlong + (ball.vel.y - ny * along) * damp;
+            return 0;
+        }
+        ball.vel.x += this.ax * dtSeconds;
+        ball.vel.y += this.ay * dtSeconds;
+        if (this.drag > 0) {
+            ball.vel = vecMul(ball.vel, Math.max(0, 1 - this.drag * dtSeconds));
+        }
+        if (this.maxSpeed > 0) {
+            let speed = vecLen(ball.vel);
+            if (speed > this.maxSpeed) {
+                ball.vel = vecMul(ball.vel, this.maxSpeed / speed);
+            }
+        }
+        return g * this.grav;
+    }
+}
+class Launcher extends Part {
+    dir;
+    force = 0;
+    range = 0;
+    chargeMs = 500;
+    len = LAUNCHER_LEN;
+    charge = 0;
+    pendingFire = false;
+    constructor(x, y, control, dx, dy, force, range, chargeMs = 500, len = LAUNCHER_LEN) {
+        super(x, y, PART_LAUNCHER, control);
+        this.dir = vecNorm(vecCreate(dx, dy));
+        this.force = force;
+        this.range = range;
+        this.chargeMs = chargeMs > 0 ? chargeMs : 1;
+        this.len = len > 0 ? len : LAUNCHER_LEN;
+    }
+    /** 0..1 fill for the charge indicator. */
+    getChargeT() {
+        return this.charge / this.chargeMs;
+    }
+    activate() {
+        if (!this.active) {
+            playSound(SOUND_LAUNCH_PULL_BACK);
+        }
+        this.active = true;
+    }
+    unactivate() {
+        if (this.active) {
+            this.pendingFire = this.charge > 0;
+            if (this.pendingFire) {
+                playSound(SOUND_LAUNCH);
+            }
+        }
+        this.active = false;
+    }
+    update(dt, _section) {
+        if (this.active) {
+            this.charge += dt;
+            if (this.charge > this.chargeMs) {
+                this.charge = this.chargeMs;
+            }
+        }
+    }
+    affectBall(ball, ox, oy) {
+        if (!this.pendingFire) {
+            return;
+        }
+        this.pendingFire = false;
+        let t = this.getChargeT();
+        this.charge = 0;
+        let dx = ball.pos.x - (this.x + ox);
+        let dy = ball.pos.y - (this.y + oy);
+        if (dx * dx + dy * dy > this.range * this.range) {
+            return;
+        }
+        ball.vel = vecMul(this.dir, this.force * t);
+    }
+}
+let FLASH_MS = 120;
+class Obstacle extends Part {
+    vx = 0;
+    vy = 0;
+    angle = 0;
+    omega = 0;
+    r = 0;
+    walls = [];
+    worldWalls = [];
+    alwaysSolid = true;
+    touching = false;
+    flash = 0;
+    /** Closed n-gon circle (not fan spokes). */
+    isCircle = false;
+    isFan = false;
+    constructor(x, y, type, walls, vx = 0, vy = 0, omega = 0) {
+        super(x, y, type);
+        this.vx = vx;
+        this.vy = vy;
+        this.omega = omega;
+        this.walls = walls;
+        for (let i = 0; i < walls.length; i++) {
+            this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
+        }
+    }
+    onHit() {
+        this.activate();
+        this.flash = FLASH_MS;
+        if (this.isCircle) {
+            playSound(SOUND_HIT_SMALL_CIRCLE);
+        }
+        else if (this.isFan) {
+            playSound(SOUND_HIT_FAN);
+        }
+    }
+    update(dt, section) {
+        let dtSeconds = dt / 1000;
+        if (this.flash > 0) {
+            this.flash -= dt;
+            if (this.flash <= 0) {
+                this.unactivate();
+            }
+        }
+        this.x += this.vx * dtSeconds;
+        this.y += this.vy * dtSeconds;
+        this.angle += this.omega * dtSeconds;
+        let r = this.r;
+        if (this.x < r) {
+            this.x = r;
+            if (this.vx < 0) {
+                this.vx = -this.vx;
+            }
+        }
+        else if (this.x > section.w - r) {
+            this.x = section.w - r;
+            if (this.vx > 0) {
+                this.vx = -this.vx;
+            }
+        }
+        if (this.y < r) {
+            this.y = r;
+            if (this.vy < 0) {
+                this.vy = -this.vy;
+            }
+        }
+        else if (this.y > section.h - r) {
+            this.y = section.h - r;
+            if (this.vy > 0) {
+                this.vy = -this.vy;
+            }
+        }
+    }
+    affectBall(ball, ox, oy) {
+        if (!this.active && !this.alwaysSolid) {
+            this.touching = false;
+            return;
+        }
+        let wx = this.x + ox;
+        let wy = this.y + oy;
+        let ca = Math.cos(this.angle);
+        let sa = Math.sin(this.angle);
+        for (let i = 0; i < this.walls.length; i++) {
+            let w = this.walls[i];
+            lineSet(this.worldWalls[i], w.a.x * ca - w.a.y * sa + wx, w.a.x * sa + w.a.y * ca + wy, w.b.x * ca - w.b.y * sa + wx, w.b.x * sa + w.b.y * ca + wy);
+        }
+        let hit = resolveBallWalls(ball, this.worldWalls, vecCreate(this.vx - this.omega * (ball.pos.y - wy), this.vy + this.omega * (ball.pos.x - wx)));
+        if (hit && !this.touching) {
+            this.onHit();
+        }
+        this.touching = hit;
+    }
+}
+let makeCircleWalls = (r, n, rest) => {
+    let walls = [];
+    for (let i = 0; i < n; i++) {
+        let a0 = (i / n) * Math.PI * 2;
+        let a1 = ((i + 1) / n) * Math.PI * 2;
+        walls.push(lineCreate(r * Math.cos(a0), r * Math.sin(a0), r * Math.cos(a1), r * Math.sin(a1), rest));
+    }
+    return walls;
+};
+/** Radial paddles from the hub out to `r`, evenly spaced around the circle. */
+let makeFanWalls = (r, paddles, rest) => {
+    let n = paddles < 1 ? 1 : paddles | 0;
+    let walls = [];
+    for (let i = 0; i < n; i++) {
+        let a = (i / n) * Math.PI * 2;
+        walls.push(lineCreate(0, 0, r * Math.cos(a), r * Math.sin(a), rest));
+    }
+    return walls;
+};
+let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
+    o.r = radius;
+    o.isCircle = true;
+    return o;
+};
+let makeFan = (x, y, paddles, restitution, radius, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeFanWalls(radius, paddles, restitution), vx, vy, omega);
+    o.r = radius;
+    o.isFan = true;
+    return o;
+};
+/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
+let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
+    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
+    o.r = r;
+    o.isCircle = true;
+    return o;
 };
 class Paddle extends Part {
     angle = 0;
@@ -1890,12 +2008,6 @@ class Paddle extends Part {
     }
     getLine() {
         return this.line;
-    }
-    activate() {
-        if (!this.active) {
-            playSound(SOUND_PADDLE_FLIPPER);
-        }
-        this.active = true;
     }
     /** Velocity of the paddle's surface at a world point: omega cross r. */
     getSurfaceVel(p, pivotX, pivotY) {
@@ -1959,7 +2071,7 @@ class Paddle extends Part {
         this.syncLine();
     }
 }
-/** Pair of linked mouths: hit one, exit the other, keep velocity. */
+/** Pair of linked mouths: hit one, travel to the other, keep velocity. */
 class Portal extends Part {
     x2 = 0;
     y2 = 0;
@@ -1980,6 +2092,10 @@ class Portal extends Part {
         this.angle += dt * 0.004;
     }
     preBall(ball, ox, oy, _dtSeconds, g, _section) {
+        let b = ball;
+        if (b.warpMs > 0) {
+            return g;
+        }
         let ax = this.x + ox;
         let ay = this.y + oy;
         let bx = this.x2 + ox;
@@ -1999,13 +2115,11 @@ class Portal extends Part {
             return g;
         }
         if (inA) {
-            ball.pos.x = bx;
-            ball.pos.y = by;
+            ballStartWarp(b, ax, ay, bx, by);
             this.lock = true;
         }
         else if (inB) {
-            ball.pos.x = ax;
-            ball.pos.y = ay;
+            ballStartWarp(b, bx, by, ax, ay);
             this.lock = true;
         }
         return g;
@@ -2132,7 +2246,7 @@ class GateSection4Trigger extends Trigger {
         }
         let needed = 5;
         let section = 4;
-        let wallIndex = 44;
+        let wallIndex = 45;
         if ((state.collected[0] || 0) < needed) {
             return;
         }
@@ -2140,7 +2254,9 @@ class GateSection4Trigger extends Trigger {
         if (!target) {
             return;
         }
-        target.walls[wallIndex].rest = -1;
+        if (target.walls[wallIndex].rest !== -1) {
+            target.walls[wallIndex].rest = -1;
+        }
     }
 }
 let TRIGGERS = [];
@@ -2161,6 +2277,7 @@ let B_CONVEYER = 7;
 let B_COLLECTABLE = 8;
 let B_FAN = 9;
 let B_PORTAL = 10;
+let B_TRIANGLE = 11;
 let SECTION_SIDE_BOTTOM = 0;
 let SECTION_SIDE_TOP = 1;
 let SECTION_SIDE_LEFT = 2;
@@ -2221,6 +2338,28 @@ BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
 BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, r, color]) => {
     let c = color | 0;
     s.parts.push(new Portal(x0, y0, x1, y1, r, c < 0 ? 0 : c % GATE_COLORS.length));
+};
+/**
+ * Right triangle at (x, y): side1 along `rot`, side2 along rot+90°.
+ * Walls are pushed as hypot (resti0), side1 (resti1), side2 (resti2).
+ */
+let triangleVerts = (x, y, len1, len2, rot) => {
+    let c = Math.cos(rot);
+    let s = Math.sin(rot);
+    return {
+        x0: x,
+        y0: y,
+        x1: x + len1 * c,
+        y1: y + len1 * s,
+        x2: x - len2 * s,
+        y2: y + len2 * c,
+    };
+};
+BUILDERS[B_TRIANGLE] = (s, [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2]) => {
+    let v = triangleVerts(x, y, sideLen1, sideLen2, rot);
+    s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0));
+    s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
+    s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
 };
 // assumes an edge can only have one hole in it at max
 let buildSectionEdges = (sections, links) => {
@@ -3009,12 +3148,12 @@ let SECTIONS = [
             [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, -2],
             [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, -2],
-            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 43, 0, 400],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 44, 0, 400],
             [B_CONVEYER, 344, 643, 139, 26, 1.5708, 400, 160, 6],
             [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
             [B_LAUNCHER, 18, 577, 0, -1, 1450, 50, 600, 50],
-            [B_FIELD, 6, 507, 15, 108, TRIGGER_DEACTIVATE_WALL, 43, 0, 1000],
-            [B_FIELD, 14, 504, 16, 110, TRIGGER_DEACTIVATE_WALL, 42, 0, 1000],
+            [B_FIELD, 3, 506, 18, 107, TRIGGER_DEACTIVATE_WALL, 43, 0, 1000],
+            [B_FIELD, 14, 483, 18, 130, TRIGGER_DEACTIVATE_WALL, 42, 0, 1000],
             [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
             [B_WALL_RESTI, 127, 455, 162, 519, 1.2],
             [B_WALL_RESTI, 345, 516, 381, 451, 1.2],
@@ -3058,7 +3197,7 @@ let SECTIONS = [
                 234, 44, 126, 44,
                 234, 125, 127, 125,
                 233, 294, 128, 374,
-                181, 493, 2, 553,
+                174, 495, 2, 552,
                 233, 331, 188, 331,
                 126, 124, 126, 44
             ],
@@ -3066,10 +3205,10 @@ let SECTIONS = [
             [B_WALL_GATE, 235, 164, 269, 130, 1],
             [B_WALL_GATE, 234, 292, 268, 258, 1],
             [B_FIELD, 247, 363, 19, 180, TRIGGER_DEACTIVATE_WALL, 27, 200, 500],
-            [B_FIELD, 239, 369, 20, 173, TRIGGER_DEACTIVATE_WALL, 26, 200, 300],
+            [B_FIELD, 238, 374, 20, 173, TRIGGER_DEACTIVATE_WALL, 28, 200, 300],
             [B_WALL_RESTI, 137, 223, 113, 182, 0.5],
-            [B_LAUNCHER, 133, 198, -0.5141, -0.8577, 600, 36, 600, 15],
-            [B_FLIPPER_LEFT, 96, 421, 0.9, -0.6, 0, 58],
+            [B_LAUNCHER, 133, 198, -0.5141, -0.8577, 540, 36, 600, 15],
+            [B_FLIPPER_LEFT, 96, 421, 0.45, -0.6, 0, 48],
             [B_WALL_RESTI, 73, 402, 96, 415, 0.5],
             [B_FLIPPER_LEFT, 71, 165, 0.45, -0.55, 1, 42],
             [B_CIRCLE, 36, 261, 10, 1.25, 11, 0, 0, 1],
@@ -3122,32 +3261,119 @@ let SECTIONS = [
             [
                 B_WALLS,
                 115, 524, 44, 483,
-                271, 525, 358, 475,
+                271, 524, 358, 483,
                 39, 615, 39, 107,
                 19, 676, 2, 646,
                 36, 646, 19, 676,
                 36, 646, 52, 676,
                 39, 615, 227, 615,
                 39, 587, 228, 614,
-                39, 57, 39, 102,
-                400, 614, 233, 675
+                400, 614, 236, 662,
+                237, 665, 237, 676,
+                256, 86, 372, 117,
+                205, 0, 255, 86,
+                39, 153, 74, 229,
+                148, 195, 72, 108,
+                74, 229, 38, 291,
+                366, 187, 400, 166,
+                366, 187, 400, 222,
+                39, 60, 105, 60,
+                327, 284, 400, 357,
+                328, 197, 327, 107,
+                301, 1, 329, 26,
+                367, 2, 331, 25,
+                328, 199, 348, 204,
+                348, 205, 353, 244,
+                329, 200, 353, 246
             ],
-            [B_CONVEYER, 92, 625, 134, 48, 3.1416, 400, 160, 6],
+            [B_CONVEYER, 92, 625, 143, 49, 3.1416, 500, 160, 8],
             [B_FLIPPER_LEFT, 116, 531, 0.45, -0.55, 0, 58],
-            [B_FLIPPER_LEFT, 270, 532, 0.45, -0.55, 1, 58],
+            [B_FLIPPER_LEFT, 270, 531, 0.45, -0.55, 1, 58],
             [B_WALL_RESTI, 0, 47, 47, 0, 1.5],
             [B_CONVEYER, 43, 625, 49, 48, -2.55, 400, 160, 6],
             [B_LAUNCHER, 19, 612, 0, -1, 1450, 50, 600, 50],
-            [B_PORTAL, 93, 40, 169, 307, 18, 0],
+            [B_PORTAL, 60, 136, 331, 53, 18, 0],
+            [B_PORTAL, 53, 84, 342, 262, 18, 1],
+            [B_WALL_RESTI, 328, 283, 400, 288, 0.5],
+            [B_LAUNCHER, 362, 275, -1, 0, 1400, 36, 100, 24],
+            [B_WALL_RESTI, 395, 285, 395, 225, 0.25],
+            [B_FAN, 218, 150, 6, 1, 40, 0, 0, 1.5],
+            [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25, 0.5, 0.5],
+            [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25, 0.5, 0.5],
+            [B_CIRCLE, 85, 323, 10, 1.25, 14, 0, 0, 1],
+            [B_CIRCLE, 324, 338, 10, 1.25, 14, 0, 0, 1],
+            [B_CIRCLE, 315, 579, 10, 1.25, 14, 0, 0, 1],
+            [B_CONVEYER, 333, 125, 25, 67, 1.5708, 400, 160, 6],
         ],
     ],
-    [-325, -2305, 494, 391, 0, []],
-    [-769, -2125, 444, 298, 0, []],
-    [-1014, -1827, 326, 558, 0, []],
+    [
+        -325,
+        -2305,
+        494,
+        515,
+        0,
+        [
+            [
+                B_WALLS,
+                136, 34, 158, 38,
+                0, 299, 110, 336,
+                7, 481, 104, 463,
+                111, 335, 137, 404,
+                166, 400, 196, 331,
+                196, 331, 217, 417,
+                246, 416, 277, 329,
+                278, 328, 305, 413,
+                338, 413, 397, 324,
+                397, 90, 397, 515,
+                396, 2, 396, 53,
+                0, 360, 77, 389,
+                103, 463, 136, 405,
+                164, 447, 139, 450,
+                308, 442, 329, 445,
+                67, 488, 175, 513,
+                317, 512, 397, 487
+            ],
+            [B_TRIANGLE, 147, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_TRIANGLE, 221, 127, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_TRIANGLE, 296, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_CONVEYER, 91, 27, 38, 97, -1.5708, 600, 500, 40],
+            [B_FLIPPER_LEFT, 163, 43, 0.45, -0.45, 0, 19],
+            [B_CIRCLE, 35, 141, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 369, 170, 3, 1, 8, 0, 0, -4],
+            [B_CIRCLE, 304, 139, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 108, 151, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 50, 233, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 361, 263, 3, 1, 8, 0, 0, -4],
+            [B_CIRCLE, 170, 280, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 89, 277, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 311, 282, 3, 1, 8, 0, 0, 4],
+            [B_CIRCLE, 346, 25, 3, 1, 8, 0, 0, 4],
+            [B_CONVEYER, 90, 6, 44, 20, 0, 400, 160, 6],
+            [B_CONVEYER, 4, 54, 83, 27, 0.0047, 400, 400, 40],
+            [B_PORTAL, 14, 21, 129, 475, 18, 0],
+            [B_PORTAL, 20, 335, 234, 491, 18, 1],
+            [B_PORTAL, 57, 21, 340, 468, 18, 2],
+            [B_CONVEYER, 138, 370, 27, 72, 1.5708, 400, 160, 6],
+            [B_CONVEYER, 217, 371, 27, 72, 1.5708, 400, 160, 6],
+            [B_CONVEYER, 307, 367, 27, 72, 1.5708, 400, 160, 6],
+            [B_CIRCLE, 219, 102, 3, 0.5, 8, 0, 0, -4],
+        ],
+    ],
+    [-568, -1790, 374, 123, 0, []],
     [71, -2717, 228, 412, 0, []],
-    [-688, -1479, 363, 432, 0, []],
     [-325, -1667, 319, 319, 0, []],
-    [-6, -1914, 175, 333, 0, []],
+    [-6, -1790, 175, 209, 0, []],
+    [
+        -404,
+        -1879,
+        79,
+        89,
+        0,
+        [
+            [B_WALLS, 65, 78, 77, 87, 66, 76, 75, 59],
+            [B_FAN, 36, 45, 5, 1, 38, 0, 0, 1.5],
+        ],
+    ],
 ];
 /** section, side, localOffset, width */
 let LINKS = [
@@ -3175,9 +3401,21 @@ let LINKS = [
     [9, SECTION_SIDE_RIGHT, 58, 41],
     [5, SECTION_SIDE_TOP, 0, 100],
     [8, SECTION_SIDE_BOTTOM, 130, 100],
+    [9, SECTION_SIDE_LEFT, 426, 89],
+    [14, SECTION_SIDE_RIGHT, 0, 89],
+    [10, SECTION_SIDE_TOP, 164, 79],
+    [14, SECTION_SIDE_BOTTOM, 0, 79],
+    [10, SECTION_SIDE_BOTTOM, 243, 100],
+    [12, SECTION_SIDE_TOP, 0, 100],
+    [12, SECTION_SIDE_RIGHT, 0, 86],
+    [13, SECTION_SIDE_LEFT, 123, 86],
+    [9, SECTION_SIDE_BOTTOM, 400, 90],
+    [13, SECTION_SIDE_TOP, 81, 90],
+    [9, SECTION_SIDE_TOP, 396, 98],
+    [11, SECTION_SIDE_BOTTOM, 0, 98],
 ];
 /** world x, y */
-let START = [191, -1744];
+let START = [547, -2053];
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
     return {

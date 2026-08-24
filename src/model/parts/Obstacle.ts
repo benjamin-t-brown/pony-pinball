@@ -3,6 +3,7 @@ import { lineCreate, lineSet, vecCreate } from '../../sim/physics';
 import { resolveBallWalls } from '../../sim/updateSimulation';
 import type { Section } from '../Section';
 import { PART_OBSTACLE, Part } from '../Part';
+import { playSound, SOUND_HIT_FAN, SOUND_HIT_SMALL_CIRCLE } from '../../zzfx.js';
 
 const FLASH_MS = 120;
 
@@ -17,6 +18,9 @@ export class Obstacle extends Part {
   alwaysSolid = true;
   touching = false;
   flash = 0;
+  /** Closed n-gon circle (not fan spokes). */
+  isCircle = false;
+  isFan = false;
 
   constructor(
     x: number,
@@ -40,6 +44,11 @@ export class Obstacle extends Part {
   onHit() {
     this.activate();
     this.flash = FLASH_MS;
+    if (this.isCircle) {
+      playSound(SOUND_HIT_SMALL_CIRCLE);
+    } else if (this.isFan) {
+      playSound(SOUND_HIT_FAN);
+    }
   }
 
   update(dt: number, section: Section) {
@@ -162,6 +171,7 @@ export const makeCircle = (
     omega
   );
   o.r = radius;
+  o.isCircle = true;
   return o;
 };
 
@@ -185,6 +195,7 @@ export const makeFan = (
     omega
   );
   o.r = radius;
+  o.isFan = true;
   return o;
 };
 
@@ -209,5 +220,6 @@ export const makeBumper = (
     omega
   );
   o.r = r;
+  o.isCircle = true;
   return o;
 };

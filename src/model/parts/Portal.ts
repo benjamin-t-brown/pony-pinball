@@ -1,8 +1,9 @@
 import type { Circle } from '../../sim/physics';
+import { ballStartWarp, type Ball } from '../Ball';
 import { PART_PORTAL, Part } from '../Part';
 import type { Section } from '../Section';
 
-/** Pair of linked mouths: hit one, exit the other, keep velocity. */
+/** Pair of linked mouths: hit one, travel to the other, keep velocity. */
 export class Portal extends Part {
   x2 = 0;
   y2 = 0;
@@ -33,6 +34,10 @@ export class Portal extends Part {
     g: number,
     _section: Section
   ) {
+    const b = ball as Ball;
+    if (b.warpMs > 0) {
+      return g;
+    }
     const ax = this.x + ox;
     const ay = this.y + oy;
     const bx = this.x2 + ox;
@@ -52,12 +57,10 @@ export class Portal extends Part {
       return g;
     }
     if (inA) {
-      ball.pos.x = bx;
-      ball.pos.y = by;
+      ballStartWarp(b, ax, ay, bx, by);
       this.lock = true;
     } else if (inB) {
-      ball.pos.x = ax;
-      ball.pos.y = ay;
+      ballStartWarp(b, bx, by, ax, ay);
       this.lock = true;
     }
     return g;

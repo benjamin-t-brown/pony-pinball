@@ -2,6 +2,7 @@ import type { Circle } from '../../sim/physics';
 import { PART_COLLECTABLE, Part } from '../Part';
 import type { Section } from '../Section';
 import type { Trigger } from '../Trigger';
+import { playSound, SOUND_GET_COIN } from '../../zzfx.js';
 
 export class Collectable extends Part {
   r = 12;
@@ -36,6 +37,7 @@ export class Collectable extends Part {
     }
     this.taken = true;
     this.active = false;
+    playSound(SOUND_GET_COIN);
     const gt = this.groupType;
     while (state.collected.length <= gt) {
       state.collected.push(0);

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react';
-import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_PORTAL, B_WALL_RESTI, B_WALLS, GATE_COLORS } from '@game/model/builders';
+import { memo, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_PORTAL, B_TRIANGLE, B_WALL_RESTI, B_WALLS, GATE_COLORS, buildLevel, triangleVerts } from '@game/model/builders';
 import {
   PART_COLLECTABLE,
   PART_FIELD,
@@ -183,6 +183,34 @@ const hitConveyerTip = (
   return Math.hypot(sx - hx, sy - hy) <= 10;
 };
 
+const triangleWorld = (section: SectionData, call: number[]) => {
+  const v = triangleVerts(call[1], call[2], call[3], call[4], call[5]);
+  return {
+    x0: section[0] + v.x0,
+    y0: section[1] + v.y0,
+    x1: section[0] + v.x1,
+    y1: section[1] + v.y1,
+    x2: section[0] + v.x2,
+    y2: section[1] + v.y2,
+  };
+};
+
+const hitTriangleTip = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+) => {
+  if (call[0] !== B_TRIANGLE) {
+    return false;
+  }
+  const t = triangleWorld(section, call);
+  const hx = (t.x1 - cam.x) * cam.scale;
+  const hy = (t.y1 - cam.y) * cam.scale;
+  return Math.hypot(sx - hx, sy - hy) <= 10;
+};
+
 const launcherDrawLen = (call: number[]) => {
   return call[8] > 0 ? call[8] : LAUNCHER_LEN;
 };
@@ -226,7 +254,8 @@ const hitAimTip = (
 ) => {
   return (
     hitConveyerTip(section, call, sx, sy, cam) ||
-    hitLauncherTip(section, call, sx, sy, cam)
+    hitLauncherTip(section, call, sx, sy, cam) ||
+    hitTriangleTip(section, call, sx, sy, cam)
   );
 };
 
@@ -329,6 +358,14 @@ const hitsCall = (
   if (call[0] === B_COLLECTABLE) {
     const r = call[3] ?? 14;
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
+  }
+  if (call[0] === B_TRIANGLE && call.length >= 6) {
+    const t = triangleWorld(section, call);
+    return (
+      distToSegment(wx, wy, t.x0, t.y0, t.x1, t.y1) < fat ||
+      distToSegment(wx, wy, t.x0, t.y0, t.x2, t.y2) < fat ||
+      distToSegment(wx, wy, t.x1, t.y1, t.x2, t.y2) < fat
+    );
   }
   if (isRectBuilder(call[0])) {
     const x = origin.x;
@@ -612,19 +649,136 @@ export const WorldCanvas = ({
 }: Props) => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
-  const [ghost, setGhost] = useState<{
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  } | null>(null);
-  const [wallGhost, setWallGhost] = useState<{
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-  } | null>(null);
+  const wallGhostRef = useRef<SVGLineElement | null>(null);
+  const rectGhostRef = useRef<SVGRectElement | null>(null);
+  const draftSec = useRef<SectionData[] | null>(null);
+  const draftOpen = useRef<Opening[] | null>(null);
+  const paintRaf = useRef(0);
+  const camRaf = useRef(0);
+  const pendingCam = useRef<Cam | null>(null);
+  const [draftRev, setDraftRev] = useState(0);
+  const [liveCam, setLiveCam] = useState<Cam | null>(null);
+  const [playFrame, setPlayFrame] = useState(0);
   const [showWallIds, setShowWallIds] = useState(false);
+
+  const viewCam = liveCam ?? cam;
+
+  const showWallGhost = (x0: number, y0: number, x1: number, y1: number) => {
+    const el = wallGhostRef.current;
+    if (!el) {
+      return;
+    }
+    el.setAttribute('x1', String(x0));
+    el.setAttribute('y1', String(y0));
+    el.setAttribute('x2', String(x1));
+    el.setAttribute('y2', String(y1));
+    el.style.display = '';
+  };
+  const hideWallGhost = () => {
+    if (wallGhostRef.current) {
+      wallGhostRef.current.style.display = 'none';
+    }
+  };
+  const showRectGhost = (x: number, y: number, w: number, h: number) => {
+    const el = rectGhostRef.current;
+    if (!el) {
+      return;
+    }
+    el.setAttribute('x', String(x));
+    el.setAttribute('y', String(y));
+    el.setAttribute('width', String(Math.max(0, w)));
+    el.setAttribute('height', String(Math.max(0, h)));
+    el.style.display = '';
+  };
+  const hideRectGhost = () => {
+    if (rectGhostRef.current) {
+      rectGhostRef.current.style.display = 'none';
+    }
+  };
+
+  const bumpDraft = () => {
+    if (!paintRaf.current) {
+      paintRaf.current = requestAnimationFrame(() => {
+        paintRaf.current = 0;
+        setDraftRev(r => r + 1);
+      });
+    }
+  };
+  const beginDraftSections = () => {
+    if (!draftSec.current) {
+      draftSec.current = cloneSections(sections);
+    }
+    return draftSec.current;
+  };
+  const beginDraftOpenings = () => {
+    if (!draftOpen.current) {
+      draftOpen.current = openings.map(o => ({ ...o }));
+    }
+    return draftOpen.current;
+  };
+  const commitDraft = () => {
+    if (paintRaf.current) {
+      cancelAnimationFrame(paintRaf.current);
+      paintRaf.current = 0;
+    }
+    if (draftSec.current) {
+      onSections(draftSec.current);
+      draftSec.current = null;
+    }
+    if (draftOpen.current) {
+      onOpenings(draftOpen.current);
+      draftOpen.current = null;
+    }
+  };
+
+  const bumpCam = (next: Cam) => {
+    pendingCam.current = next;
+    if (!camRaf.current) {
+      camRaf.current = requestAnimationFrame(() => {
+        camRaf.current = 0;
+        const camToShow = pendingCam.current;
+        if (camToShow) {
+          setLiveCam(camToShow);
+        }
+      });
+    }
+  };
+
+  const viewSections = draftSec.current ?? sections;
+  const viewOpenings = draftOpen.current ?? openings;
+
+  const viewBuilt = useMemo(() => {
+    if (playing && sim) {
+      return sim.sections;
+    }
+    try {
+      return buildLevel(viewSections, openingsToLinks(viewSections, viewOpenings));
+    } catch {
+      return [];
+    }
+  }, [playing, sim, playFrame, viewSections, viewOpenings, draftRev, sections, openings]);
+
+  useEffect(() => {
+    if (!playing) {
+      return;
+    }
+    let id = 0;
+    const loop = () => {
+      setPlayFrame(n => n + 1);
+      id = requestAnimationFrame(loop);
+    };
+    id = requestAnimationFrame(loop);
+    return () => {
+      cancelAnimationFrame(id);
+    };
+  }, [playing]);
+
+  useEffect(() => {
+    if (!dragRef.current) {
+      draftSec.current = null;
+      draftOpen.current = null;
+    }
+  }, [sections, openings]);
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -682,10 +836,10 @@ export const WorldCanvas = ({
       const rect = el.getBoundingClientRect();
       const sx = e.clientX - rect.left;
       const sy = e.clientY - rect.top;
-      const wx = cam.x + sx / cam.scale;
-      const wy = cam.y + sy / cam.scale;
+      const wx = viewCam.x + sx / viewCam.scale;
+      const wy = viewCam.y + sy / viewCam.scale;
       const factor = e.deltaY > 0 ? 1 / 1.1 : 1.1;
-      const scale = Math.max(0.15, Math.min(4, cam.scale * factor));
+      const scale = Math.max(0.15, Math.min(4, viewCam.scale * factor));
       onCam({
         scale,
         x: wx - sx / scale,
@@ -696,7 +850,7 @@ export const WorldCanvas = ({
     return () => {
       el.removeEventListener('wheel', onWheel);
     };
-  }, [cam, onCam]);
+  }, [viewCam, onCam]);
 
   const localPoint = (e: PointerEvent) => {
     const el = wrapRef.current;
@@ -709,12 +863,12 @@ export const WorldCanvas = ({
     return {
       sx,
       sy,
-      wx: cam.x + sx / cam.scale,
-      wy: cam.y + sy / cam.scale,
+      wx: viewCam.x + sx / viewCam.scale,
+      wy: viewCam.y + sy / viewCam.scale,
     };
   };
 
-  const snapDist = SNAP_PX / cam.scale;
+  const snapDist = SNAP_PX / viewCam.scale;
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -737,33 +891,34 @@ export const WorldCanvas = ({
 
     if (tool.kind === 'section') {
       dragRef.current = { kind: 'create', x0: wx, y0: wy };
-      setGhost(normalizeRect(wx, wy, wx, wy));
+      const g = normalizeRect(wx, wy, wx, wy);
+      showRectGhost(g.x, g.y, g.w, g.h);
       return;
     }
 
     if (tool.kind === 'opening') {
       const existing = hitTest(
-        sections,
-        openings,
+        viewSections,
+        viewOpenings,
         wx,
         wy,
-        Math.max(4, 8 / cam.scale)
+        Math.max(4, 8 / viewCam.scale)
       );
       if (existing && existing.kind === 'opening') {
-        const o = openings[existing.index];
-        const span = openingSpan(o, sections);
+        const o = viewOpenings[existing.index];
+        const span = openingSpan(o, viewSections);
         onSelection(existing);
         if (span) {
           const end = hitOpeningEnd(
-            openings,
-            sections,
+            viewOpenings,
+            viewSections,
             existing.index,
             sx,
             sy,
-            cam
+            viewCam
           );
           if (end !== null) {
-            const o2 = openings[existing.index];
+            const o2 = viewOpenings[existing.index];
             dragRef.current = {
               kind: 'resizeOpening',
               index: existing.index,
@@ -780,7 +935,7 @@ export const WorldCanvas = ({
         }
         return;
       }
-      const hit = findSharedEdgeAt(sections, wx, wy, snapDist * 2);
+      const hit = findSharedEdgeAt(viewSections, wx, wy, snapDist * 2);
       if (hit) {
         const along = hit.axis === 'h' ? wx : wy;
         const maxW = hit.hi - hit.lo;
@@ -795,9 +950,9 @@ export const WorldCanvas = ({
             offset,
             width,
           },
-          sections
+          viewSections
         );
-        const next = openings.filter(o => {
+        const next = viewOpenings.filter(o => {
           const uses = (si: number, side: number) =>
             (o.a === si && o.aSide === side) || (o.b === si && o.bSide === side);
           return !uses(hit.a, hit.aSide) && !uses(hit.b, hit.bSide);
@@ -810,12 +965,12 @@ export const WorldCanvas = ({
     }
 
     if (tool.kind === 'builder') {
-      const si = findSectionAt(sections, wx, wy);
+      const si = findSectionAt(viewSections, wx, wy);
       if (si < 0) {
         return;
       }
-      const raw = toLocal(sections[si], wx, wy);
-      const local = clampLocal(sections[si], raw.x, raw.y);
+      const raw = toLocal(viewSections[si], wx, wy);
+      const local = clampLocal(viewSections[si], raw.x, raw.y);
       if (tool.id === B_WALLS || isSegmentWallCall(tool.id) || tool.id === B_PORTAL) {
         dragRef.current = {
           kind: 'wall',
@@ -824,7 +979,7 @@ export const WorldCanvas = ({
           y0: local.y,
           id: tool.id,
         };
-        setWallGhost({ x0: wx, y0: wy, x1: wx, y1: wy });
+        showWallGhost(wx, wy, wx, wy);
         return;
       }
       if (isRectBuilder(tool.id)) {
@@ -835,10 +990,10 @@ export const WorldCanvas = ({
           y0: local.y,
           id: tool.id,
         };
-        setGhost({ x: wx, y: wy, w: 0, h: 0 });
+        showRectGhost(wx, wy, 0, 0);
         return;
       }
-      const next = cloneSections(sections);
+      const next = cloneSections(viewSections);
       next[si][5].push(placeDefaults(tool.id, local.x, local.y));
       onSections(next);
       onSelection({ kind: 'call', section: si, call: next[si][5].length - 1 });
@@ -846,10 +1001,10 @@ export const WorldCanvas = ({
     }
 
     if (selection && selection.kind === 'call') {
-      const s = sections[selection.section];
+      const s = viewSections[selection.section];
       const call = s && s[5][selection.call];
       if (s && call) {
-        if (hitAimTip(s, call, sx, sy, cam)) {
+        if (hitAimTip(s, call, sx, sy, viewCam)) {
           dragRef.current = {
             kind: 'rotateAim',
             section: selection.section,
@@ -857,7 +1012,7 @@ export const WorldCanvas = ({
           };
           return;
         }
-        const portalEnd = hitPortalEnd(s, call, sx, sy, cam);
+        const portalEnd = hitPortalEnd(s, call, sx, sy, viewCam);
         if (portalEnd !== null) {
           dragRef.current = {
             kind: 'moveCallEnd',
@@ -868,7 +1023,7 @@ export const WorldCanvas = ({
           return;
         }
         if (isRectBuilder(call[0])) {
-          const handle = hitFieldHandle(fieldWorld(s, call), sx, sy, cam);
+          const handle = hitFieldHandle(fieldWorld(s, call), sx, sy, viewCam);
           if (handle) {
             dragRef.current = {
               kind: 'resizeField',
@@ -884,9 +1039,9 @@ export const WorldCanvas = ({
     }
 
     if (selection && selection.kind === 'section') {
-      const section = sections[selection.index];
+      const section = viewSections[selection.index];
       if (section) {
-        const handle = hitHandle(section, sx, sy, cam);
+        const handle = hitHandle(section, sx, sy, viewCam);
         if (handle) {
           dragRef.current = {
             kind: 'resize',
@@ -908,15 +1063,15 @@ export const WorldCanvas = ({
 
     if (selection && selection.kind === 'opening') {
       const end = hitOpeningEnd(
-        openings,
-        sections,
+        viewOpenings,
+        viewSections,
         selection.index,
         sx,
         sy,
-        cam
+        viewCam
       );
       if (end !== null) {
-        const o = openings[selection.index];
+        const o = viewOpenings[selection.index];
         dragRef.current = {
           kind: 'resizeOpening',
           index: selection.index,
@@ -927,7 +1082,7 @@ export const WorldCanvas = ({
     }
 
     if (selection && selection.kind === 'wall') {
-      const end = hitWallEnd(sections, selection, sx, sy, cam);
+      const end = hitWallEnd(viewSections, selection, sx, sy, viewCam);
       if (end !== null) {
         dragRef.current = {
           kind: 'moveWallEnd',
@@ -940,7 +1095,7 @@ export const WorldCanvas = ({
       }
     }
 
-    const hit = hitTest(sections, openings, wx, wy, Math.max(4, 8 / cam.scale));
+    const hit = hitTest(viewSections, viewOpenings, wx, wy, Math.max(4, 8 / viewCam.scale));
     onSelection(hit);
     if (hit && hit.kind === 'section') {
       dragRef.current = {
@@ -948,22 +1103,22 @@ export const WorldCanvas = ({
         index: hit.index,
         x0: wx,
         y0: wy,
-        ox: sections[hit.index][0],
-        oy: sections[hit.index][1],
+        ox: viewSections[hit.index][0],
+        oy: viewSections[hit.index][1],
       };
     }
     if (hit && hit.kind === 'call') {
-      const s = sections[hit.section];
+      const s = viewSections[hit.section];
       const call = s && s[5][hit.call];
       if (call && call[0] !== B_WALLS && call.length >= 3) {
-        if (hitAimTip(s, call, sx, sy, cam)) {
+        if (hitAimTip(s, call, sx, sy, viewCam)) {
           dragRef.current = {
             kind: 'rotateAim',
             section: hit.section,
             call: hit.call,
           };
         } else {
-          const portalEnd = hitPortalEnd(s, call, sx, sy, cam);
+          const portalEnd = hitPortalEnd(s, call, sx, sy, viewCam);
           if (portalEnd !== null) {
             dragRef.current = {
               kind: 'moveCallEnd',
@@ -988,10 +1143,10 @@ export const WorldCanvas = ({
       }
     }
     if (hit && hit.kind === 'wall') {
-      const call = sections[hit.section][5][hit.call];
+      const call = viewSections[hit.section][5][hit.call];
       const k = 1 + hit.segment * 4;
       if (call && call.length >= k + 4) {
-        const end = hitWallEnd(sections, hit, sx, sy, cam);
+        const end = hitWallEnd(viewSections, hit, sx, sy, viewCam);
         if (end !== null) {
           dragRef.current = {
             kind: 'moveWallEnd',
@@ -1017,10 +1172,10 @@ export const WorldCanvas = ({
       }
     }
     if (hit && hit.kind === 'opening') {
-      const o = openings[hit.index];
-      const span = openingSpan(o, sections);
+      const o = viewOpenings[hit.index];
+      const span = openingSpan(o, viewSections);
       if (o && span) {
-        const end = hitOpeningEnd(openings, sections, hit.index, sx, sy, cam);
+        const end = hitOpeningEnd(viewOpenings, viewSections, hit.index, sx, sy, viewCam);
         if (end !== null) {
           dragRef.current = {
             kind: 'resizeOpening',
@@ -1047,17 +1202,18 @@ export const WorldCanvas = ({
       return;
     }
     if (drag.kind === 'pan') {
-      onCam({
-        ...cam,
-        x: cam.x - (e.clientX - drag.lx) / cam.scale,
-        y: cam.y - (e.clientY - drag.ly) / cam.scale,
+      const base = pendingCam.current ?? viewCam;
+      bumpCam({
+        ...base,
+        x: base.x - (e.clientX - drag.lx) / base.scale,
+        y: base.y - (e.clientY - drag.ly) / base.scale,
       });
       drag.lx = e.clientX;
       drag.ly = e.clientY;
       return;
     }
     if (drag.kind === 'create') {
-      const others = sections;
+      const others = viewSections;
       const raw = normalizeRect(drag.x0, drag.y0, wx, wy);
       const snapped = snapRect(
         raw.x,
@@ -1068,12 +1224,12 @@ export const WorldCanvas = ({
         { l: true, r: true, t: true, b: true },
         snapDist
       );
-      setGhost(snapped);
+      showRectGhost(snapped.x, snapped.y, snapped.w, snapped.h);
       return;
     }
     if (drag.kind === 'move') {
-      const others = sections.filter((_, i) => i !== drag.index);
-      const s = sections[drag.index];
+      const others = viewSections.filter((_, i) => i !== drag.index);
+      const s = viewSections[drag.index];
       const snapped = snapRect(
         drag.ox + (wx - drag.x0),
         drag.oy + (wy - drag.y0),
@@ -1083,15 +1239,18 @@ export const WorldCanvas = ({
         { l: true, r: true, t: true, b: true },
         snapDist
       );
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       next[drag.index][0] = snapped.x;
       next[drag.index][1] = snapped.y;
-      onSections(next);
-      onOpenings(openings.map(o => clampOpening(o, next)));
+      const openNext = beginDraftOpenings();
+      for (let i = 0; i < openNext.length; i++) {
+        openNext[i] = clampOpening(openNext[i], next);
+      }
+      bumpDraft();
       return;
     }
     if (drag.kind === 'resize') {
-      const others = sections.filter((_, i) => i !== drag.index);
+      const others = viewSections.filter((_, i) => i !== drag.index);
       const raw = applyHandle(drag.orig, drag.handle, wx, wy);
       const snapped = snapRect(
         raw.x,
@@ -1102,17 +1261,20 @@ export const WorldCanvas = ({
         HANDLE_LIVE[drag.handle],
         snapDist
       );
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       next[drag.index][0] = snapped.x;
       next[drag.index][1] = snapped.y;
       next[drag.index][2] = snapped.w;
       next[drag.index][3] = snapped.h;
-      onSections(next);
-      onOpenings(openings.map(o => clampOpening(o, next)));
+      const openNext = beginDraftOpenings();
+      for (let i = 0; i < openNext.length; i++) {
+        openNext[i] = clampOpening(openNext[i], next);
+      }
+      bumpDraft();
       return;
     }
     if (drag.kind === 'field') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
@@ -1120,16 +1282,16 @@ export const WorldCanvas = ({
       const p = clampLocal(s, cur.x, cur.y);
       const raw = normalizeFieldRect(drag.x0, drag.y0, p.x, p.y);
       const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
-      setGhost({
-        x: s[0] + clamped.x,
-        y: s[1] + clamped.y,
-        w: clamped.w,
-        h: clamped.h,
-      });
+      showRectGhost(
+        s[0] + clamped.x,
+        s[1] + clamped.y,
+        clamped.w,
+        clamped.h
+      );
       return;
     }
     if (drag.kind === 'resizeField') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
@@ -1141,24 +1303,24 @@ export const WorldCanvas = ({
         p.y
       );
       const clamped = clampRectLocal(s, raw.x, raw.y, raw.w, raw.h);
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const call = next[drag.section][5][drag.call];
       if (call) {
         call[1] = clamped.x;
         call[2] = clamped.y;
         call[3] = clamped.w;
         call[4] = clamped.h;
-        onSections(next);
+        bumpDraft();
       }
       return;
     }
     if (drag.kind === 'rotateAim') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       const call = s && s[5][drag.call];
       if (!s || !call) {
         return;
       }
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const nextCall = next[drag.section][5][drag.call];
       if (call[0] === B_CONVEYER) {
         const cx = s[0] + call[1] + call[3] / 2;
@@ -1178,12 +1340,20 @@ export const WorldCanvas = ({
         }
         nextCall[3] = -Math.cos(ang);
         nextCall[4] = -Math.sin(ang);
+      } else if (call[0] === B_TRIANGLE) {
+        const ox = s[0] + call[1];
+        const oy = s[1] + call[2];
+        let ang = Math.atan2(wy - oy, wx - ox);
+        if (e.shiftKey) {
+          ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
+        }
+        nextCall[5] = ang;
       }
-      onSections(next);
+      bumpDraft();
       return;
     }
     if (drag.kind === 'wall') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       let x1 = wx;
       let y1 = wy;
       if (e.shiftKey && s) {
@@ -1196,22 +1366,22 @@ export const WorldCanvas = ({
         x1 = snapped.x;
         y1 = snapped.y;
       }
-      setWallGhost({
-        x0: sections[drag.section][0] + drag.x0,
-        y0: sections[drag.section][1] + drag.y0,
+      showWallGhost(
+        viewSections[drag.section][0] + drag.x0,
+        viewSections[drag.section][1] + drag.y0,
         x1,
-        y1,
-      });
+        y1
+      );
     }
     if (drag.kind === 'moveCall') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
       const dx = wx - drag.x0;
       const dy = wy - drag.y0;
       const local = clampLocal(s, drag.ox + dx, drag.oy + dy);
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const call = next[drag.section][5][drag.call];
       if (call && call.length >= 3) {
         if (isRectBuilder(call[0])) {
@@ -1237,12 +1407,12 @@ export const WorldCanvas = ({
           call[1] = local.x;
           call[2] = local.y;
         }
-        onSections(next);
+        bumpDraft();
       }
       return;
     }
     if (drag.kind === 'moveCallEnd') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
@@ -1256,18 +1426,18 @@ export const WorldCanvas = ({
         const snapped = snapPolar(ox, oy, local.x, local.y);
         local = clampLocal(s, snapped.x, snapped.y);
       }
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const call = next[drag.section][5][drag.call];
       const k = 1 + drag.end * 2;
       if (call && call.length > k + 1) {
         call[k] = local.x;
         call[k + 1] = local.y;
-        onSections(next);
+        bumpDraft();
       }
       return;
     }
     if (drag.kind === 'moveWall') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
@@ -1281,7 +1451,7 @@ export const WorldCanvas = ({
         s[2],
         s[3]
       );
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const call = next[drag.section][5][drag.call];
       const k = 1 + drag.segment * 4;
       if (call && call.length >= k + 4) {
@@ -1289,12 +1459,12 @@ export const WorldCanvas = ({
         call[k + 1] = px(drag.oy0 + shifted.dy);
         call[k + 2] = px(drag.ox1 + shifted.dx);
         call[k + 3] = px(drag.oy1 + shifted.dy);
-        onSections(next);
+        bumpDraft();
       }
       return;
     }
     if (drag.kind === 'moveWallEnd') {
-      const s = sections[drag.section];
+      const s = viewSections[drag.section];
       if (!s) {
         return;
       }
@@ -1309,57 +1479,93 @@ export const WorldCanvas = ({
         const snapped = snapPolar(ox, oy, local.x, local.y);
         local = clampLocal(s, snapped.x, snapped.y);
       }
-      const next = cloneSections(sections);
+      const next = beginDraftSections();
       const call = next[drag.section][5][drag.call];
       const k = 1 + drag.segment * 4 + drag.end * 2;
       if (call && call.length > k + 1) {
         call[k] = local.x;
         call[k + 1] = local.y;
-        onSections(next);
+        bumpDraft();
       }
       return;
     }
     if (drag.kind === 'moveOpening') {
-      const o = openings[drag.index];
-      const span = o ? openingSpan(o, sections) : null;
+      const o = viewOpenings[drag.index];
+      const span = o ? openingSpan(o, viewSections) : null;
       if (!o || !span) {
         return;
       }
       const along = span.axis === 'h' ? wx : wy;
-      const next = openings.slice();
+      const next = beginDraftOpenings();
       next[drag.index] = clampOpening(
         { ...o, offset: along - drag.grab },
-        sections
+        viewSections
       );
-      onOpenings(next);
+      bumpDraft();
       return;
     }
     if (drag.kind === 'resizeOpening') {
-      const o = openings[drag.index];
-      const span = o ? openingSpan(o, sections) : null;
+      const o = viewOpenings[drag.index];
+      const span = o ? openingSpan(o, viewSections) : null;
       if (!o || !span) {
         return;
       }
       const along = span.axis === 'h' ? wx : wy;
       const lo = Math.min(along, drag.fixed);
       const hi = Math.max(along, drag.fixed);
-      const next = openings.slice();
+      const next = beginDraftOpenings();
       next[drag.index] = clampOpening(
         { ...o, offset: lo, width: Math.max(8, hi - lo) },
-        sections
+        viewSections
       );
-      onOpenings(next);
+      bumpDraft();
     }
   };
 
   const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (playing || !drag) {
-      setGhost(null);
-      setWallGhost(null);
+
+    if (drag?.kind === 'pan') {
+      if (camRaf.current) {
+        cancelAnimationFrame(camRaf.current);
+        camRaf.current = 0;
+      }
+      const camToCommit = pendingCam.current ?? liveCam;
+      pendingCam.current = null;
+      if (camToCommit) {
+        onCam(camToCommit);
+        setLiveCam(null);
+      }
+    }
+
+    hideRectGhost();
+    hideWallGhost();
+
+    if (!drag) {
       return;
     }
+
+    if (playing) {
+      return;
+    }
+
+    if (
+      drag.kind === 'move' ||
+      drag.kind === 'resize' ||
+      drag.kind === 'resizeField' ||
+      drag.kind === 'rotateAim' ||
+      drag.kind === 'moveCall' ||
+      drag.kind === 'moveCallEnd' ||
+      drag.kind === 'moveWall' ||
+      drag.kind === 'moveWallEnd' ||
+      drag.kind === 'moveOpening' ||
+      drag.kind === 'resizeOpening'
+    ) {
+      commitDraft();
+      return;
+    }
+
     if (drag.kind === 'create') {
       const { wx, wy } = localPoint(e);
       const raw = normalizeRect(drag.x0, drag.y0, wx, wy);
@@ -1450,12 +1656,10 @@ export const WorldCanvas = ({
         }
       }
     }
-    setGhost(null);
-    setWallGhost(null);
   };
 
   const selectedSection =
-    selection && selection.kind === 'section' ? sections[selection.index] : null;
+    selection && selection.kind === 'section' ? viewSections[selection.index] : null;
 
   let cursor = 'default';
   if (playing) {
@@ -1467,7 +1671,7 @@ export const WorldCanvas = ({
   let triggerWalls: Set<number> | null = null;
   let triggerWallSection = -1;
   if (selection && selection.kind === 'call') {
-    const call = sections[selection.section]?.[5][selection.call];
+    const call = viewSections[selection.section]?.[5][selection.call];
     if (call && (call[0] === B_FIELD || call[0] === B_COLLECTABLE)) {
       const trig = triggerDefFor(call[5] ?? 0);
       const walls = new Set<number>();
@@ -1492,7 +1696,10 @@ export const WorldCanvas = ({
     }
   }
 
-  const links = openingsToLinks(sections, openings);
+  const viewLinks = useMemo(
+    () => openingsToLinks(viewSections, viewOpenings),
+    [viewSections, viewOpenings, draftRev, sections, openings]
+  );
 
   return (
     <div
@@ -1504,10 +1711,11 @@ export const WorldCanvas = ({
       onPointerUp={onPointerUp}
     >
       <svg>
-        <g transform={`scale(${cam.scale}) translate(${-cam.x} ${-cam.y})`}>
-          {built.map(section => (
+        <g transform={`scale(${viewCam.scale}) translate(${-viewCam.x} ${-viewCam.y})`}>
+          {viewBuilt.map(section => (
             <SectionPreview
               key={section.id}
+              frame={playing ? playFrame : 0}
               section={section}
               selected={
                 !!selection &&
@@ -1518,14 +1726,14 @@ export const WorldCanvas = ({
                 triggerWallSection === section.id ? triggerWalls : null
               }
               restiWalls={
-                sections[section.id]
-                  ? restiWallIndices(sections[section.id], section.id, links)
+                viewSections[section.id]
+                  ? restiWallIndices(viewSections[section.id], section.id, viewLinks)
                   : null
               }
             />
           ))}
           {showWallIds
-            ? built.map(section =>
+            ? viewBuilt.map(section =>
                 section.walls.map((w, i) => (
                   <text
                     key={'wi' + section.id + '-' + i}
@@ -1533,9 +1741,9 @@ export const WorldCanvas = ({
                     y={(w.a.y + w.b.y) / 2 + section.y}
                     fill="#fc8"
                     stroke="#000"
-                    strokeWidth={3 / cam.scale}
+                    strokeWidth={3 / viewCam.scale}
                     paintOrder="stroke"
-                    fontSize={12 / cam.scale}
+                    fontSize={12 / viewCam.scale}
                     fontWeight="bold"
                     textAnchor="middle"
                     dominantBaseline="middle"
@@ -1545,13 +1753,13 @@ export const WorldCanvas = ({
                 ))
               )
             : null}
-          {openings.map((o, i) => {
-            const span = openingSpan(o, sections);
+          {viewOpenings.map((o, i) => {
+            const span = openingSpan(o, viewSections);
             if (!span) {
               return null;
             }
             const selected = selection && selection.kind === 'opening' && selection.index === i;
-            const hs = 5 / cam.scale;
+            const hs = 5 / viewCam.scale;
             return (
               <g key={'o' + i}>
                 <line
@@ -1573,7 +1781,7 @@ export const WorldCanvas = ({
                         height={hs * 2}
                         fill="#fff"
                         stroke="#000"
-                        strokeWidth={1 / cam.scale}
+                        strokeWidth={1 / viewCam.scale}
                       />
                       <rect
                         x={(span.axis === 'h' ? span.hi : span.pos) - hs}
@@ -1582,7 +1790,7 @@ export const WorldCanvas = ({
                         height={hs * 2}
                         fill="#fff"
                         stroke="#000"
-                        strokeWidth={1 / cam.scale}
+                        strokeWidth={1 / viewCam.scale}
                       />
                     </>
                   )
@@ -1591,71 +1799,65 @@ export const WorldCanvas = ({
             );
           })}
           {tool.kind === 'opening'
-            ? sharedEdgeGuides(sections)
+            ? sharedEdgeGuides(viewSections)
             : null}
-          {ghost ? (
-            <rect
-              x={ghost.x}
-              y={ghost.y}
-              width={ghost.w}
-              height={ghost.h}
-              fill="rgba(120,180,255,0.15)"
-              stroke="#8cf"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-            />
-          ) : null}
-          {wallGhost ? (
-            <line
-              x1={wallGhost.x0}
-              y1={wallGhost.y0}
-              x2={wallGhost.x1}
-              y2={wallGhost.y1}
-              stroke="#fc8"
-              strokeWidth={4}
-            />
-          ) : null}
+          <rect
+            ref={rectGhostRef}
+            fill="rgba(120,180,255,0.15)"
+            stroke="#8cf"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            style={{ display: 'none' }}
+            pointerEvents="none"
+          />
+          <line
+            ref={wallGhostRef}
+            stroke="#fc8"
+            strokeWidth={4}
+            style={{ display: 'none' }}
+            pointerEvents="none"
+          />
           {selection && selection.kind === 'call'
-            ? callMarker(sections, selection.section, selection.call, cam.scale)
+            ? callMarker(viewSections, selection.section, selection.call, viewCam.scale)
             : null}
           {selection &&
           selection.kind === 'call' &&
           !playing &&
-          sections[selection.section] &&
-          sections[selection.section][5][selection.call] &&
-          isRectBuilder(sections[selection.section][5][selection.call][0])
+          viewSections[selection.section] &&
+          viewSections[selection.section][5][selection.call] &&
+          isRectBuilder(viewSections[selection.section][5][selection.call][0])
             ? fieldCorners(
                 fieldWorld(
-                  sections[selection.section],
-                  sections[selection.section][5][selection.call]
+                  viewSections[selection.section],
+                  viewSections[selection.section][5][selection.call]
                 )
               ).map(h => (
                 <rect
                   key={h.id}
-                  x={h.x - 5 / cam.scale}
-                  y={h.y - 5 / cam.scale}
-                  width={10 / cam.scale}
-                  height={10 / cam.scale}
+                  x={h.x - 5 / viewCam.scale}
+                  y={h.y - 5 / viewCam.scale}
+                  width={10 / viewCam.scale}
+                  height={10 / viewCam.scale}
                   fill="#fff"
                   stroke="#000"
-                  strokeWidth={1 / cam.scale}
+                  strokeWidth={1 / viewCam.scale}
                 />
               ))
             : null}
           {selection && selection.kind === 'wall'
-            ? wallMarker(sections, selection, cam.scale)
+            ? wallMarker(viewSections, selection, viewCam.scale)
             : null}
           {selectedSection && !playing
             ? handlePositions(selectedSection).map(h => (
                 <rect
                   key={h.id}
-                  x={h.x - 5 / cam.scale}
-                  y={h.y - 5 / cam.scale}
-                  width={10 / cam.scale}
-                  height={10 / cam.scale}
+                  x={h.x - 5 / viewCam.scale}
+                  y={h.y - 5 / viewCam.scale}
+                  width={10 / viewCam.scale}
+                  height={10 / viewCam.scale}
                   fill="#fff"
                   stroke="#000"
-                  strokeWidth={1 / cam.scale}
+                  strokeWidth={1 / viewCam.scale}
                 />
               ))
             : null}
@@ -1674,20 +1876,20 @@ export const WorldCanvas = ({
           {spawn ? (
             <g
               stroke="rgba(255,255,255,0.45)"
-              strokeWidth={2 / cam.scale}
+              strokeWidth={2 / viewCam.scale}
               strokeLinecap="round"
             >
               <line
-                x1={spawn.x - 7 / cam.scale}
-                y1={spawn.y - 7 / cam.scale}
-                x2={spawn.x + 7 / cam.scale}
-                y2={spawn.y + 7 / cam.scale}
+                x1={spawn.x - 7 / viewCam.scale}
+                y1={spawn.y - 7 / viewCam.scale}
+                x2={spawn.x + 7 / viewCam.scale}
+                y2={spawn.y + 7 / viewCam.scale}
               />
               <line
-                x1={spawn.x + 7 / cam.scale}
-                y1={spawn.y - 7 / cam.scale}
-                x2={spawn.x - 7 / cam.scale}
-                y2={spawn.y + 7 / cam.scale}
+                x1={spawn.x + 7 / viewCam.scale}
+                y1={spawn.y - 7 / viewCam.scale}
+                x2={spawn.x - 7 / viewCam.scale}
+                y2={spawn.y + 7 / viewCam.scale}
               />
             </g>
           ) : null}
@@ -1824,6 +2026,51 @@ const callMarker = (
           strokeWidth={1 / scale}
         />
       ) : null}
+      {call[0] === B_TRIANGLE && call.length >= 6
+        ? (() => {
+            const t = triangleWorld(s, call);
+            const tip = 5 / scale;
+            return (
+              <g>
+                <line
+                  x1={t.x0}
+                  y1={t.y0}
+                  x2={t.x1}
+                  y2={t.y1}
+                  stroke="#fc8"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={t.x0}
+                  y1={t.y0}
+                  x2={t.x2}
+                  y2={t.y2}
+                  stroke="#fc8"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={t.x1}
+                  y1={t.y1}
+                  x2={t.x2}
+                  y2={t.y2}
+                  stroke="#fc8"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={t.x1}
+                  cy={t.y1}
+                  r={tip}
+                  fill="#fff"
+                  stroke="#000"
+                  strokeWidth={1 / scale}
+                />
+              </g>
+            );
+          })()
+        : null}
       {!isRectBuilder(call[0]) && call[0] !== B_LAUNCHER ? (
         <rect
           x={origin.x - hs}
@@ -1899,12 +2146,14 @@ const wallMarker = (
   );
 };
 
-const SectionPreview = ({
+const SectionPreview = memo(({
+  frame,
   section,
   selected,
   highlightWalls,
   restiWalls,
 }: {
+  frame: number;
   section: Section;
   selected: boolean;
   highlightWalls: Set<number> | null;
@@ -1957,7 +2206,7 @@ const SectionPreview = ({
       ))}
     </g>
   );
-};
+});
 
 const conveyerArrowMarks = (
   cx: number,

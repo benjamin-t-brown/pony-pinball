@@ -1,7 +1,10 @@
+// @ts-nocheck
 const fs = require('fs');
 const path = require('path');
 
 const srcDir = path.join(__dirname, '../src');
+
+const ignoreFiles = ['zzfx'];
 
 const cleanJs = dir => {
   const files = fs.readdirSync(dir);
@@ -10,6 +13,9 @@ const cleanJs = dir => {
     if (fs.statSync(filePath).isDirectory()) {
       cleanJs(filePath);
     } else if (/\.js(\.map)?$/.test(file)) {
+      if (ignoreFiles.some(ignoreFile => file.includes(ignoreFile))) {
+        continue;
+      }
       fs.unlinkSync(filePath);
     }
   }

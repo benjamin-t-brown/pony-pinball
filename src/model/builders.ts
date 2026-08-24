@@ -26,6 +26,7 @@ export const B_CONVEYER = 7;
 export const B_COLLECTABLE = 8;
 export const B_FAN = 9;
 export const B_PORTAL = 10;
+export const B_TRIANGLE = 11;
 
 export const SECTION_SIDE_BOTTOM = 0;
 export const SECTION_SIDE_TOP = 1;
@@ -148,6 +149,39 @@ BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, r, color]) => {
   s.parts.push(
     new Portal(x0, y0, x1, y1, r, c < 0 ? 0 : c % GATE_COLORS.length)
   );
+};
+
+/**
+ * Right triangle at (x, y): side1 along `rot`, side2 along rot+90°.
+ * Walls are pushed as hypot (resti0), side1 (resti1), side2 (resti2).
+ */
+export const triangleVerts = (
+  x: number,
+  y: number,
+  len1: number,
+  len2: number,
+  rot: number
+) => {
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  return {
+    x0: x,
+    y0: y,
+    x1: x + len1 * c,
+    y1: y + len1 * s,
+    x2: x - len2 * s,
+    y2: y + len2 * c,
+  };
+};
+
+BUILDERS[B_TRIANGLE] = (
+  s,
+  [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2]
+) => {
+  const v = triangleVerts(x, y, sideLen1, sideLen2, rot);
+  s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0));
+  s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
+  s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
 };
 
 // assumes an edge can only have one hole in it at max
