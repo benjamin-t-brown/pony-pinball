@@ -2,6 +2,7 @@ import {
   B_CIRCLE,
   B_COLLECTABLE,
   B_CONVEYER,
+  B_DECORATION,
   B_FAN,
   B_FIELD,
   B_FLIPPER_LEFT,
@@ -13,6 +14,12 @@ import {
   B_WALLS,
   GATE_COLORS,
 } from '@game/model/builders';
+import {
+  DEC_BLINKING_LIGHT,
+  SHAPE_CHEVRON,
+  SHAPE_CIRCLE,
+  SHAPE_SQUARE,
+} from '@game/model/parts/Decoration';
 import {
   TRIGGER_DEACTIVATE_WALL,
   TRIGGER_GATE_SECTION_4,
@@ -196,9 +203,45 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'resti2', step: 0.05 },
     ],
   },
+  {
+    id: B_DECORATION,
+    name: 'Decoration',
+    place: 'point',
+    params: [
+      { name: 'x' },
+      { name: 'y' },
+      { name: 'scale', step: 0.1 },
+      { name: 'rot', step: 0.05 },
+      { name: 'decorationType', step: 1 },
+      { name: 'texture', step: 1 },
+    ],
+  },
 ];
 
 export { GATE_COLORS };
+
+export const DECORATION_DEFS = [
+  {
+    id: DEC_BLINKING_LIGHT,
+    name: 'Blinking light',
+    args: ['interval', 'shape'],
+  },
+];
+
+export const SHAPE_DEFS = [
+  { id: SHAPE_CHEVRON, name: 'chevron' },
+  { id: SHAPE_CIRCLE, name: 'circle' },
+  { id: SHAPE_SQUARE, name: 'square' },
+];
+
+export const decorationDefFor = (id: number) => {
+  for (let i = 0; i < DECORATION_DEFS.length; i++) {
+    if (DECORATION_DEFS[i].id === id) {
+      return DECORATION_DEFS[i];
+    }
+  }
+  return DECORATION_DEFS[0];
+};
 
 export const TRIGGER_DEFS = [
   {
@@ -276,6 +319,14 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
   if (id === B_TRIANGLE) {
     return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5];
   }
+  if (id === B_DECORATION) {
+    const dec = decorationDefFor(DEC_BLINKING_LIGHT);
+    const extra = [];
+    for (let i = 0; i < dec.args.length; i++) {
+      extra.push(dec.args[i] === 'interval' ? 400 : 0);
+    }
+    return [B_DECORATION, x, y, 1, 0, DEC_BLINKING_LIGHT, 0, ...extra];
+  }
   return [id, x, y];
 };
 
@@ -307,6 +358,14 @@ export const ensureCallArgs = (call: number[]) => {
   }
   if (call[0] === B_TRIANGLE) {
     next.length = 9;
+  }
+  if (call[0] === B_DECORATION) {
+    const dec = decorationDefFor(next[5]);
+    const n = 7 + dec.args.length;
+    while (next.length < n) {
+      next.push(dec.args[next.length - 7] === 'interval' ? 400 : 0);
+    }
+    next.length = n;
   }
   return next;
 };

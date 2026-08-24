@@ -3,23 +3,15 @@ import type { UiElement } from '../ui/UiElement';
 
 export const LAYER_ON = 0;
 export const LAYER_OFF = 1;
-export const LAYER_SUSPEND = 2;
 
 export abstract class Layer {
   window: HTMLElement | null;
   layerState = LAYER_ON;
   uiElements: UiElement[] = [];
   removeFlag = false;
-  id: string;
 
-  constructor(windowOrId: HTMLElement | string | null = null, id = '') {
-    if (typeof windowOrId === 'string') {
-      this.window = null;
-      this.id = windowOrId;
-    } else {
-      this.window = windowOrId;
-      this.id = id;
-    }
+  constructor(window: HTMLElement | null = null) {
+    this.window = window;
     if (this.window) {
       const host = this.window;
       const pos = (e: Event) => {
@@ -126,18 +118,6 @@ export abstract class Layer {
 
   onKeyUp(_key: string, _keyCode: number) {}
 
-  turnOn() {
-    this.layerState = LAYER_ON;
-  }
-
-  turnOff() {
-    this.layerState = LAYER_OFF;
-  }
-
-  suspend() {
-    this.layerState = LAYER_SUSPEND;
-  }
-
   remove() {
     this.removeFlag = true;
   }
@@ -146,33 +126,10 @@ export abstract class Layer {
     return this.removeFlag;
   }
 
-  getId() {
-    return this.id;
-  }
-
-  setId(id: string) {
-    this.id = id;
-  }
-
   addUiElement(element: UiElement) {
     this.uiElements.push(element);
     element.build();
   }
-
-  getUiElement(elementId: string): UiElement | null {
-    for (const elem of this.uiElements) {
-      if (elem.getId() === elementId) {
-        return elem;
-      }
-    }
-    return null;
-  }
-
-  getWindow() {
-    return this.window;
-  }
-
-  input() {}
 
   update(dt: number) {
     for (const elem of this.uiElements) {

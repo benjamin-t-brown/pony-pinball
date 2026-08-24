@@ -23,6 +23,7 @@ import {
 } from './physics';
 import type { State } from '../state/State';
 import {
+  clearSoundsPlayedThisTick,
   playSound,
   SOUND_PADDLE_FLIPPER,
   SOUND_PADDLE_FLIPPER_DOWN,
@@ -127,4 +128,5 @@ export const updateSimulation = (state: State, dt: number) => {
       state.balls[i] = ballCreate(state.startX, state.startY);
     }
   }
+  clearSoundsPlayedThisTick();
 };

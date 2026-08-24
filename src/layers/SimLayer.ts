@@ -1,14 +1,10 @@
 import { updateSimulation } from '../sim/updateSimulation';
-import { getStateGlobal } from '../state/StateManagerInterface';
+import { getState } from '../state/State';
 import { Layer } from './Layer';
 
 export class SimLayer extends Layer {
-  constructor() {
-    super(null, 'sim');
-  }
-
   update(dt: number) {
-    const state = getStateGlobal();
+    const state = getState();
     updateSimulation(state, dt);
   }
 

@@ -1,5 +1,4 @@
 import { LAYER_OFF, LAYER_ON, Layer } from './Layer';
-import type { StateManager } from '../state/StateManager';
 
 // the smaller this is, the smaller the physics step and
 // less chance the ball phases through walls, but more cpu power used
@@ -9,11 +8,9 @@ export class LayerManager {
   last = performance.now();
   acc = 0;
   layers: Layer[];
-  stateManager: StateManager | null;
 
-  constructor(layers: Layer[], stateManager: StateManager | null = null) {
+  constructor(layers: Layer[]) {
     this.layers = layers;
-    this.stateManager = stateManager;
   }
 
   start() {
@@ -30,9 +27,6 @@ export class LayerManager {
   }
 
   updateRender(dt: number) {
-    if (this.stateManager) {
-      this.stateManager.update(dt);
-    }
     for (let i = this.layers.length - 1; i >= 0; i--) {
       if (this.layers[i].shouldRemove()) {
         this.layers.splice(i, 1);

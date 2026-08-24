@@ -1,28 +1,12 @@
 export const DIV = 'div';
-export const BUTTON = 'button';
-export const P = 'p';
-export const SPAN = 'span';
 export const SVG = 'svg';
 export const LINE = 'line';
 export const CIRCLE = 'circle';
 export const BR = '<br>';
-export const TRANSITION = 'transition';
 export const TRANSFORM = 'transform';
 export const INNER_HTML = 'innerHTML';
-export const EVENT_CLICK = 'click';
-export const EVENT_MOUSE_OVER = 'mouseover';
-export const EVENT_DRAG_START = 'dragstart';
-export const EVENT_DRAG_END = 'dragend';
-export const EVENT_DRAG_OVER = 'dragover';
-export const EVENT_DRAG_LEAVE = 'dragleave';
-export const EVENT_DROP = 'drop';
-export const DRAGGABLE = 'draggable';
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 export const POINTER_EVENTS = 'pointer-events';
-
-export const getDocumentBody = () => {
-  return document.body;
-};
 
 export const getGameRoot = () => {
   return getElementById('game');
@@ -75,24 +59,12 @@ export const appendChild = (parent: HTMLElement, child: HTMLElement) => {
   parent.appendChild(child);
 };
 
-export const prependChild = (parent: HTMLElement, child: HTMLElement) => {
-  parent.prepend(child);
-};
-
 export const removeChild = (parent: HTMLElement, child: HTMLElement) => {
   parent.removeChild(child);
 };
 
-export const clearChildren = (parent: HTMLElement) => {
-  parent[INNER_HTML] = '';
-};
-
 export const getElementById = (id: string) => {
   return document.getElementById(id);
-};
-
-export const getElementsByClassName = (className: string) => {
-  return document.getElementsByClassName(className);
 };
 
 export const domAddEventListener = (
@@ -103,14 +75,6 @@ export const domAddEventListener = (
   element.addEventListener(event, listener);
 };
 
-export const domRemoveEventListener = (
-  element: HTMLElement,
-  event: string,
-  listener: (event: Event) => void
-) => {
-  element.removeEventListener(event, listener);
-};
-
 export const setAttribute = (
   element: HTMLElement,
   attribute: string,
@@ -119,33 +83,10 @@ export const setAttribute = (
   element.setAttribute(attribute, value);
 };
 
-export const removeAttribute = (element: HTMLElement, attribute: string) => {
-  element.removeAttribute(attribute);
-};
-
-export const hasAttribute = (element: HTMLElement, attribute: string) => {
-  return element.hasAttribute(attribute);
-};
-
-export const preventDefault = (event: Event) => {
-  event.preventDefault();
-};
-export const nextTick = (callback: () => void) => {
-  timeoutPromise(1).then(callback);
-};
-
-export const timeoutPromise = (ms: number) => {
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
-
-export function copyObject<T>(obj: T): T {
-  return structuredClone(obj);
-}
-
 export const px = (n: number) => {
   return n + 'px';
-}
+};
 
 export const stringify = (n: number) => {
   return n + '';
-}
+};

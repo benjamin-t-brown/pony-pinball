@@ -875,7 +875,8 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
           (g += x + x * E * Z(a ** 5)),
           n && ++n > z && ((b += v), (C += v), (n = 0)),
           !l || ++I % l || ((b = C), (u = G), (n = n || 1)));
-      ((X = zzfxX || (zzfxX = new AudioContext())), (p = X.createBuffer(1, h, R)));
+      ((X = zzfxX || (zzfxX = new AudioContext())),
+        (p = X.createBuffer(1, h, R)));
       p.getChannelData(0).set(k);
       b = X.createBufferSource();
       b.buffer = p;
@@ -1185,8 +1186,20 @@ let SOUND_PORTAL_IN = 13;
 let SOUND_PORTAL_OUT = 14;
 let SOUND_HIT_FAN = 15;
 
+let soundsPlayedThisTick = {};
+
 let playSound = i => {
+  if (soundsPlayedThisTick[i]) {
+    return;
+  }
   zzfx(...SOUNDS[i]);
+  soundsPlayedThisTick[i] = true;
+};
+
+let clearSoundsPlayedThisTick = () => {
+  for (let i in soundsPlayedThisTick) {
+    delete soundsPlayedThisTick[i];
+  }
 };
 let W = 400;
 let H = 600;
@@ -1402,6 +1415,7 @@ let updateSimulation = (state, dt) => {
             state.balls[i] = ballCreate(state.startX, state.startY);
         }
     }
+    clearSoundsPlayedThisTick();
 };
 class SimLayer extends Layer {
     constructor() {
@@ -2742,15 +2756,14 @@ class BoardSection extends UiElement {
     }
 }
 let CAM_SCALE_MIN = 0.25;
-let CAM_SCALE_MAX = 4;
+let CAM_SCALE_MAX = 8;
 let CAM_SCALE_STEP = 1.1;
 let CAM_PAN_MS = 300;
-let getCamPan = (section, viewW, viewH, scale) => {
-    return {
-        x: section.x + section.w / 2 - viewW / (2 * scale),
-        y: section.y + section.h / 2 - viewH / (2 * scale),
-    };
-};
+/** Applied after fitting the section in the viewport. 1 = exact fit; lower = zoomed out. */
+let CAM_ZOOM_FACTOR = 0.85;
+/** Sections smaller than this on both axes skip fit-zoom and use CAM_SMALL_SCALE. */
+let CAM_SMALL_SIZE = 250;
+let CAM_SMALL_SCALE = 3;
 let clampCamScale = (scale) => {
     if (scale < CAM_SCALE_MIN) {
         return CAM_SCALE_MIN;
@@ -2759,6 +2772,25 @@ let clampCamScale = (scale) => {
         return CAM_SCALE_MAX;
     }
     return scale;
+};
+let getCamLook = (section) => {
+    return {
+        x: section.x + section.w / 2,
+        y: section.y + section.h / 2,
+    };
+};
+let getCamFitScale = (section, viewW, viewH) => {
+    if (section.w < CAM_SMALL_SIZE && section.h < CAM_SMALL_SIZE) {
+        return CAM_SMALL_SCALE;
+    }
+    let fit = Math.min(viewW / section.w, viewH / section.h);
+    return clampCamScale(fit * CAM_ZOOM_FACTOR);
+};
+let getCamPan = (lookX, lookY, viewW, viewH, scale) => {
+    return {
+        x: lookX - viewW / (2 * scale),
+        y: lookY - viewH / (2 * scale),
+    };
 };
 let lerpCam = (cur, target, dt) => {
     let t = Math.min(1, dt / CAM_PAN_MS);
@@ -2771,8 +2803,11 @@ class Board extends UiElement {
     camX = 0;
     camY = 0;
     camScale = 1;
-    targetX = 0;
-    targetY = 0;
+    lookX = 0;
+    lookY = 0;
+    targetLookX = 0;
+    targetLookY = 0;
+    targetScale = 1;
     constructor() {
         super();
         this.setId('board');
@@ -2841,14 +2876,22 @@ class Board extends UiElement {
         this.width = w;
         this.height = h;
     }
-    setPanTarget(section, snap) {
-        let pan = getCamPan(section, this.width, this.height, this.camScale);
-        this.targetX = pan.x;
-        this.targetY = pan.y;
+    applyLook() {
+        let pan = getCamPan(this.lookX, this.lookY, this.width, this.height, this.camScale);
+        this.camX = pan.x;
+        this.camY = pan.y;
+    }
+    setCamTarget(section, snap) {
+        let look = getCamLook(section);
+        this.targetLookX = look.x;
+        this.targetLookY = look.y;
+        this.targetScale = getCamFitScale(section, this.width, this.height);
         if (snap) {
-            this.camX = pan.x;
-            this.camY = pan.y;
+            this.lookX = look.x;
+            this.lookY = look.y;
+            this.camScale = this.targetScale;
         }
+        this.applyLook();
     }
     applyCamera() {
         if (!this.worldEl) {
@@ -2897,7 +2940,7 @@ class Board extends UiElement {
         this.syncBalls();
         this.section = state.sections[0];
         if (this.section) {
-            this.setPanTarget(this.section, true);
+            this.setCamTarget(this.section, true);
         }
         this.applyCamera();
     }
@@ -2905,7 +2948,7 @@ class Board extends UiElement {
         this.width = width;
         this.height = height;
         if (this.section) {
-            this.setPanTarget(this.section, true);
+            this.setCamTarget(this.section, true);
             this.applyCamera();
         }
         super.checkResizeEvent(width, height);
@@ -2917,9 +2960,8 @@ class Board extends UiElement {
         else {
             this.camScale = clampCamScale(this.camScale * CAM_SCALE_STEP);
         }
-        if (this.section) {
-            this.setPanTarget(this.section, true);
-        }
+        this.targetScale = this.camScale;
+        this.applyLook();
         this.applyCamera();
     }
     onMouseDown(x, y, _button, shift = false) {
@@ -2950,11 +2992,13 @@ class Board extends UiElement {
             let next = findSectionAt(state.sections, ball.pos.x, ball.pos.y, this.section);
             if (next && next !== this.section) {
                 this.section = next;
-                this.setPanTarget(next, false);
+                this.setCamTarget(next, false);
             }
         }
-        this.camX = lerpCam(this.camX, this.targetX, dt);
-        this.camY = lerpCam(this.camY, this.targetY, dt);
+        this.lookX = lerpCam(this.lookX, this.targetLookX, dt);
+        this.lookY = lerpCam(this.lookY, this.targetLookY, dt);
+        this.camScale = lerpCam(this.camScale, this.targetScale, dt);
+        this.applyLook();
         this.applyCamera();
         super.update(dt);
     }
@@ -3120,15 +3164,11 @@ let SECTIONS = [
                 410, 265, 360, 219,
                 482, 287, 432, 212,
                 481, 129, 432, 210,
-                174, 581, 74, 523,
-                337, 580, 452, 514,
-                452, 514, 452, 429,
+                174, 581, 74, 522,
+                337, 581, 452, 522,
+                452, 522, 452, 429,
                 72, 522, 72, 437,
                 36, 437, 36, 643,
-                125, 452, 125, 521,
-                165, 522, 125, 522,
-                383, 449, 383, 518,
-                383, 518, 343, 518,
                 56, 196, 35, 198,
                 34, 199, 34, 334,
                 119, 285, 58, 196,
@@ -3142,21 +3182,19 @@ let SECTIONS = [
                 197, 218, 214, 160,
                 214, 159, 214, 61
             ],
-            [B_FLIPPER_LEFT, 332, 585, 0.45, -0.55, 1, 58],
+            [B_FLIPPER_LEFT, 332, 586, 0.45, -0.55, 1, 58],
             [B_FLIPPER_LEFT, 179, 586, 0.45, -0.55, 0, 58],
             [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2],
             [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, -2],
             [B_CIRCLE, 364, 171, 5, 1, 20, 0, 0, -2],
-            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 44, 0, 400],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 38, 0, 400],
             [B_CONVEYER, 344, 643, 139, 26, 1.5708, 400, 160, 6],
             [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
             [B_LAUNCHER, 18, 577, 0, -1, 1450, 50, 600, 50],
-            [B_FIELD, 3, 506, 18, 107, TRIGGER_DEACTIVATE_WALL, 43, 0, 1000],
-            [B_FIELD, 14, 483, 18, 130, TRIGGER_DEACTIVATE_WALL, 42, 0, 1000],
+            [B_FIELD, 3, 506, 18, 107, TRIGGER_DEACTIVATE_WALL, 37, 0, 1000],
+            [B_FIELD, 14, 483, 18, 130, TRIGGER_DEACTIVATE_WALL, 36, 0, 1000],
             [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
-            [B_WALL_RESTI, 127, 455, 162, 519, 1.2],
-            [B_WALL_RESTI, 345, 516, 381, 451, 1.2],
             [B_WALL_GATE, 30, 160, 0, 128, 4],
             [B_WALL_GATE, 31, 161, 0, 193, 4],
             [B_WALL_GATE, 483, 48, 495, 27, 2],
@@ -3169,6 +3207,8 @@ let SECTIONS = [
             [B_COLLECTABLE, 215, 38, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 249, 417, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_FAN, 124, 98, 4, 1, 80, 0, 0, -1.1],
+            [B_TRIANGLE, 124, 524, 79, 44, -1.5708, 1.5, 0.5, 0.5],
+            [B_TRIANGLE, 382, 524, 79, -44, -1.5708, 1.5, 0.5, 0.5],
         ],
     ],
     [
@@ -3241,14 +3281,15 @@ let SECTIONS = [
         ],
     ],
     [
-        78,
+        -6,
         -1201,
-        221,
+        305,
         125,
         1,
         [
-            [B_FAN, 157, 63, 4, 1, 57, 0, 0, 1.05],
-            [B_FAN, 60, 63, 4, 1, 57, 0, 0, 1.05],
+            [B_WALLS, 48, 124, 48, 0],
+            [B_FAN, 236, 63, 4, 1, 57, 0, 0, 1.05],
+            [B_FAN, 114, 63, 4, 1, 57, 0, 0, 1.05],
         ],
     ],
     [
@@ -3307,9 +3348,9 @@ let SECTIONS = [
         ],
     ],
     [
-        -325,
+        -345,
         -2305,
-        494,
+        416,
         515,
         0,
         [
@@ -3324,8 +3365,6 @@ let SECTIONS = [
                 246, 416, 277, 329,
                 278, 328, 305, 413,
                 338, 413, 397, 324,
-                397, 90, 397, 515,
-                396, 2, 396, 53,
                 0, 360, 77, 389,
                 103, 463, 136, 405,
                 164, 447, 139, 450,
@@ -3337,7 +3376,7 @@ let SECTIONS = [
             [B_TRIANGLE, 221, 127, 60, 60, 0.7854, 0.8, 0.8, 0.8],
             [B_TRIANGLE, 296, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8],
             [B_CONVEYER, 91, 27, 38, 97, -1.5708, 600, 500, 40],
-            [B_FLIPPER_LEFT, 163, 43, 0.45, -0.45, 0, 19],
+            [B_FLIPPER_LEFT, 163, 43, 0.45, -0.6, 0, 22],
             [B_CIRCLE, 35, 141, 3, 1, 8, 0, 0, 4],
             [B_CIRCLE, 369, 170, 3, 1, 8, 0, 0, -4],
             [B_CIRCLE, 304, 139, 3, 1, 8, 0, 0, 4],
@@ -3359,21 +3398,130 @@ let SECTIONS = [
             [B_CIRCLE, 219, 102, 3, 0.5, 8, 0, 0, -4],
         ],
     ],
-    [-568, -1790, 374, 123, 0, []],
-    [71, -2717, 228, 412, 0, []],
-    [-325, -1667, 319, 319, 0, []],
-    [-6, -1790, 175, 209, 0, []],
     [
-        -404,
+        -650,
+        -1790,
+        453,
+        123,
+        0,
+        [
+            [B_CONVEYER, 6, 7, 413, 18, 0, 400, 160, 25],
+            [B_LAUNCHER, 79, 79, 0.2588, 0.9659, 1250, 36, 600, 46],
+            [B_CONVEYER, 38, 69, 410, 28, 3.1416, 900, 900, 25],
+            [B_CONVEYER, 33, 30, 413, 18, -3.1416, 1200, 1200, 10],
+            [B_CONVEYER, 7, 30, 24, 89, -1.5707, 700, 700, 70],
+            [B_CONVEYER, 38, 106, 199, 11, 0, 600, 600, 60],
+            [B_LAUNCHER, 167, 63, 0.2588, 0.9659, 600, 36, 600, 30],
+            [B_CONVEYER, 343, 105, 106, 12, 3.1416, 600, 600, 25],
+            [B_LAUNCHER, 436, 64, -0, 1, 600, 36, 600, 30],
+        ],
+    ],
+    [
+        0,
+        -2802,
+        245,
+        497,
+        0,
+        [
+            [B_CONVEYER, 71, 353, 97, 136, -1.5708, 1400, 1400, 60],
+            [B_CONVEYER, 71, 204, 34, 136, 0, 3000, 1400, 60],
+            [B_CONVEYER, 135, 205, 32, 136, 3.1416, 3000, 1400, 60],
+            [B_CONVEYER, 111, 45, 18, 308, -1.5708, 1400, 1400, 60],
+            [B_PORTAL, 119, 22, 18, 475, 18, 0],
+            [B_PORTAL, 20, 23, 229, 474, 18, 1],
+            [B_CONVEYER, 9, 54, 17, 395, -1.5708, 1400, 1400, 60],
+            [B_CONVEYER, 221, 53, 17, 395, -1.5708, 1400, 1400, 60],
+        ],
+    ],
+    [
+        -325,
+        -1667,
+        319,
+        528,
+        0,
+        [
+            [
+                B_WALLS,
+                27, 42, 139, 42,
+                0, 374, 26, 389,
+                0, 440, 233, 484,
+                177, 528, 319, 497,
+                252, 256, 274, 288,
+                317, 254, 297, 288,
+                273, 313, 219, 328,
+                94, 45, 71, 101,
+                31, 108, 71, 101,
+                275, 313, 318, 310,
+                297, 288, 318, 287,
+                26, 162, 45, 195,
+                89, 161, 69, 194,
+                46, 220, 46, 195,
+                47, 221, 82, 230,
+                287, 75, 319, 86
+            ],
+            [B_FLIPPER_LEFT, 28, 395, 0.45, -0.5, 0, 35],
+            [B_CONVEYER, 34, 6, 104, 31, -3.1416, 400, 160, 6],
+            [B_CONVEYER, 4, 43, 17, 77, 1.6344, 400, 160, 20],
+            [B_CONVEYER, 3, 291, 17, 77, 1.5708, 400, 160, 6],
+            [B_PORTAL, 166, 503, 51, 70, 18, 0],
+            [B_FLIPPER_LEFT, 217, 333, 0.45, -0.6, 1, 35],
+            [B_FLIPPER_LEFT, 83, 236, 0.45, -0.5, 0, 35],
+            [B_CIRCLE, 236, 98, 10, 1, 20, 0, 0, 0],
+            [B_FAN, 140, 397, 3, 1, 22, 0, 0, 1],
+        ],
+    ],
+    [
+        -6,
+        -1790,
+        175,
+        209,
+        0,
+        [
+            [B_WALLS, 173, 202, 76, 209],
+            [B_CONVEYER, 11, 39, 16, 170, -1.5708, 300, 300, 20],
+            [B_CONVEYER, 3, 8, 29, 18, 0, 300, 160, 6],
+            [B_LAUNCHER, 155, 170, 0, -1, 1250, 36, 600, 24],
+            [B_LAUNCHER, 106, 170, 0, -1, 1250, 36, 600, 24],
+            [B_CONVEYER, 44, 36, 16, 149, 1.5708, 100, 100, 50],
+            [B_CONVEYER, 44, 186, 32, 21, 0, 800, 800, 1],
+        ],
+    ],
+    [
+        -424,
         -1879,
         79,
         89,
         0,
         [
             [B_WALLS, 65, 78, 77, 87, 66, 76, 75, 59],
-            [B_FAN, 36, 45, 5, 1, 38, 0, 0, 1.5],
+            [B_FAN, 35, 44, 3, 1, 38, 0, 0, 1.5],
         ],
     ],
+    [
+        71,
+        -2305,
+        98,
+        515,
+        0,
+        [
+            [B_CIRCLE, 15, 475, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 30, 455, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 44, 434, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 59, 413, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 14, 275, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 29, 255, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 44, 235, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 59, 215, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 74, 195, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 75, 393, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 14, 374, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 29, 354, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 44, 334, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 58, 313, 10, 1, 10, 75, 0, 0],
+            [B_CIRCLE, 73, 293, 10, 1, 10, 75, 0, 0],
+        ],
+    ],
+    [129, -2902, 116, 100, 0, []],
 ];
 /** section, side, localOffset, width */
 let LINKS = [
@@ -3392,30 +3540,34 @@ let LINKS = [
     [5, SECTION_SIDE_LEFT, 428, 125],
     [7, SECTION_SIDE_RIGHT, 0, 125],
     [6, SECTION_SIDE_TOP, 0, 51],
-    [7, SECTION_SIDE_BOTTOM, 0, 51],
+    [7, SECTION_SIDE_BOTTOM, 84, 51],
     [1, SECTION_SIDE_TOP, 356, 35],
     [6, SECTION_SIDE_BOTTOM, 278, 35],
     [4, SECTION_SIDE_LEFT, 437, 51],
     [6, SECTION_SIDE_RIGHT, 437, 51],
-    [8, SECTION_SIDE_LEFT, 58, 41],
-    [9, SECTION_SIDE_RIGHT, 58, 41],
     [5, SECTION_SIDE_TOP, 0, 100],
     [8, SECTION_SIDE_BOTTOM, 130, 100],
-    [9, SECTION_SIDE_LEFT, 426, 89],
-    [14, SECTION_SIDE_RIGHT, 0, 89],
-    [10, SECTION_SIDE_TOP, 164, 79],
-    [14, SECTION_SIDE_BOTTOM, 0, 79],
-    [10, SECTION_SIDE_BOTTOM, 243, 100],
+    [10, SECTION_SIDE_BOTTOM, 325, 100],
     [12, SECTION_SIDE_TOP, 0, 100],
     [12, SECTION_SIDE_RIGHT, 0, 86],
     [13, SECTION_SIDE_LEFT, 123, 86],
-    [9, SECTION_SIDE_BOTTOM, 400, 90],
-    [13, SECTION_SIDE_TOP, 81, 90],
-    [9, SECTION_SIDE_TOP, 396, 98],
-    [11, SECTION_SIDE_BOTTOM, 0, 98],
+    [11, SECTION_SIDE_BOTTOM, 71, 98],
+    [15, SECTION_SIDE_TOP, 0, 98],
+    [13, SECTION_SIDE_TOP, 77, 98],
+    [15, SECTION_SIDE_BOTTOM, 0, 98],
+    [8, SECTION_SIDE_LEFT, 58, 41],
+    [15, SECTION_SIDE_RIGHT, 58, 41],
+    [9, SECTION_SIDE_RIGHT, 57, 45],
+    [15, SECTION_SIDE_LEFT, 57, 45],
+    [10, SECTION_SIDE_TOP, 226, 79],
+    [14, SECTION_SIDE_BOTTOM, 0, 79],
+    [9, SECTION_SIDE_LEFT, 426, 89],
+    [14, SECTION_SIDE_RIGHT, 0, 89],
+    [11, SECTION_SIDE_TOP, 213, 32],
+    [16, SECTION_SIDE_BOTTOM, 84, 32],
 ];
 /** world x, y */
-let START = [547, -2053];
+let START = [48, -1601];
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
     return {

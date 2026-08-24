@@ -1,5 +1,6 @@
 import {
   B_COLLECTABLE,
+  B_DECORATION,
   B_FIELD,
   B_WALL_GATE,
   B_WALL_RESTI,
@@ -7,7 +8,14 @@ import {
   GATE_COLORS,
 } from '@game/model/builders';
 import type { Opening, SectionData, Selection } from '../types';
-import { defFor, TRIGGER_DEFS, triggerDefFor } from '../schema';
+import {
+  DECORATION_DEFS,
+  SHAPE_DEFS,
+  decorationDefFor,
+  defFor,
+  TRIGGER_DEFS,
+  triggerDefFor,
+} from '../schema';
 import { cloneSections } from '../geometry';
 import { openingsToLinks } from '../openings';
 import { convertWallKind } from '../wallRefs';
@@ -152,10 +160,16 @@ export const BuilderForm = ({
   const def = defFor(call[0]);
   const hasTrigger = call[0] === B_FIELD || call[0] === B_COLLECTABLE;
   const trig = hasTrigger ? triggerDefFor(call[5]) : null;
+  const hasDecoration = call[0] === B_DECORATION;
+  const dec = hasDecoration ? decorationDefFor(call[5]) : null;
   const params = def
     ? def.params
     : call.slice(1).map((_n: number, i: number) => ({ name: `arg${i}` }));
-  const extra = trig ? trig.args.map(name => ({ name })) : [];
+  const extra = trig
+    ? trig.args.map(name => ({ name }))
+    : dec
+      ? dec.args.map(name => ({ name }))
+      : [];
   return (
     <div>
       <h2>{def ? def.name : `Builder ${call[0]}`}</h2>
@@ -182,6 +196,57 @@ export const BuilderForm = ({
                 {TRIGGER_DEFS.map(t => (
                   <option key={t.id} value={t.id}>
                     {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : param.name === 'decorationType' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  const id = Number(e.target.value);
+                  const next = cloneSections(sections);
+                  const nextCall = next[selection.section][5][selection.call];
+                  nextCall[5] = id;
+                  const names = decorationDefFor(id).args;
+                  const n = 7 + names.length;
+                  while (nextCall.length < n) {
+                    nextCall.push(
+                      names[nextCall.length - 7] === 'interval' ? 400 : 0
+                    );
+                  }
+                  nextCall.length = n;
+                  onChange(next);
+                }}
+              >
+                {DECORATION_DEFS.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            ) : param.name === 'texture' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                {GATE_COLORS.map((c, ti) => (
+                  <option key={c} value={ti}>
+                    {ti}: {c}
+                  </option>
+                ))}
+              </select>
+            ) : param.name === 'shape' ? (
+              <select
+                value={call[i + 1] ?? 0}
+                onChange={e => {
+                  setArg(i + 1, Number(e.target.value), true);
+                }}
+              >
+                {SHAPE_DEFS.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </select>
@@ -220,7 +285,11 @@ export const BuilderForm = ({
                       param.name === 'x0' ||
                       param.name === 'y0' ||
                       param.name === 'x1' ||
-                      param.name === 'y1'
+                      param.name === 'y1' ||
+                      param.name === 'interval' ||
+                      param.name === 'decorationType' ||
+                      param.name === 'texture' ||
+                      param.name === 'shape'
                   );
                 }}
               />

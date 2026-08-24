@@ -3,9 +3,7 @@ import { LayerManager } from './layers/LayerManager';
 import { DebugLayer } from './layers/DebugLayer';
 import { SimLayer } from './layers/SimLayer';
 import { SimUiLayer } from './layers/SimUiLayer';
-import { createState } from './state/State';
-import { StateManager } from './state/StateManager';
-import { StateManagerInterface } from './state/StateManagerInterface';
+import { createState, setState } from './state/State';
 
 export const startGame = () => {
   const root = getGameRoot();
@@ -15,14 +13,13 @@ export const startGame = () => {
   }
   console.log('Start Game.');
 
-  const state = createState();
-  const stateManager = new StateManager(state);
-  StateManagerInterface.setStateManager(stateManager);
+  setState(createState());
 
-  new LayerManager(
-    [new SimLayer(), new SimUiLayer(root), new DebugLayer()],
-    stateManager
-  ).start();
+  new LayerManager([
+    new SimLayer(),
+    new SimUiLayer(root),
+    new DebugLayer(),
+  ]).start();
 };
 
 addEventListener('load', startGame);

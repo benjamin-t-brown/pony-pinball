@@ -4,6 +4,12 @@ import {
   TRIGGER_GATE_SECTION_4,
   TRIGGER_MOVE_DOOR,
 } from '@game/model/Trigger';
+import {
+  DEC_BLINKING_LIGHT,
+  SHAPE_CHEVRON,
+  SHAPE_CIRCLE,
+  SHAPE_SQUARE,
+} from '@game/model/parts/Decoration';
 import type { SectionData } from './types';
 
 const BUILDER_NAMES: Record<number, string> = {
@@ -19,6 +25,17 @@ const BUILDER_NAMES: Record<number, string> = {
   9: 'B_FAN',
   10: 'B_PORTAL',
   11: 'B_TRIANGLE',
+  12: 'B_DECORATION',
+};
+
+const DEC_NAMES: Record<number, string> = {
+  [DEC_BLINKING_LIGHT]: 'DEC_BLINKING_LIGHT',
+};
+
+const SHAPE_NAMES: Record<number, string> = {
+  [SHAPE_CHEVRON]: 'SHAPE_CHEVRON',
+  [SHAPE_CIRCLE]: 'SHAPE_CIRCLE',
+  [SHAPE_SQUARE]: 'SHAPE_SQUARE',
 };
 
 const TRIGGER_NAMES: Record<number, string> = {
@@ -62,6 +79,18 @@ const formatCall = (call: number[], indent: string) => {
       ...args.slice(0, 4).map(formatNum),
       trig,
       ...args.slice(5).map(formatNum),
+    ];
+    return `${indent}[${[name, ...nums].join(', ')}]`;
+  }
+  if (id === 12) {
+    const dec = DEC_NAMES[args[4]] || formatNum(args[4]);
+    const shape = SHAPE_NAMES[args[7]] || formatNum(args[7] ?? 0);
+    const nums = [
+      ...args.slice(0, 4).map(formatNum),
+      dec,
+      formatNum(args[5]),
+      formatNum(args[6]),
+      shape,
     ];
     return `${indent}[${[name, ...nums].join(', ')}]`;
   }
@@ -109,6 +138,27 @@ const roundCall = (call: number[]) => {
     }
     if (next.length > 4) {
       next[4] = Math.round(next[4]);
+    }
+    return next;
+  }
+  if (next[0] === 12) {
+    if (next.length > 1) {
+      next[1] = Math.round(next[1]);
+    }
+    if (next.length > 2) {
+      next[2] = Math.round(next[2]);
+    }
+    if (next.length > 5) {
+      next[5] = Math.round(next[5]);
+    }
+    if (next.length > 6) {
+      next[6] = Math.round(next[6]);
+    }
+    if (next.length > 7) {
+      next[7] = Math.round(next[7]);
+    }
+    if (next.length > 8) {
+      next[8] = Math.round(next[8]);
     }
     return next;
   }
@@ -174,6 +224,7 @@ export const generateLevelsTs = (
   const builderNames = new Set<string>();
   const sideNames = new Set<string>();
   const triggerNames = new Set<string>();
+  const decNames = new Set<string>();
   for (const section of sections) {
     for (const call of section[5]) {
       const name = BUILDER_NAMES[call[0]];
@@ -184,6 +235,16 @@ export const generateLevelsTs = (
         const trig = TRIGGER_NAMES[call[5]];
         if (trig) {
           triggerNames.add(trig);
+        }
+      }
+      if (call[0] === 12) {
+        const dec = DEC_NAMES[call[5]];
+        if (dec) {
+          decNames.add(dec);
+        }
+        const shape = SHAPE_NAMES[call[8]];
+        if (shape) {
+          decNames.add(shape);
         }
       }
     }
@@ -202,6 +263,9 @@ export const generateLevelsTs = (
       : `import {} from './model/builders';\n`) +
     (triggerNames.size > 0
       ? `import {\n  ${[...triggerNames].sort().join(',\n  ')},\n} from './model/Trigger';\n`
+      : '') +
+    (decNames.size > 0
+      ? `import {\n  ${[...decNames].sort().join(',\n  ')},\n} from './model/parts/Decoration';\n`
       : '');
 
   const sectionLines: string[] = [];

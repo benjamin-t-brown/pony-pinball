@@ -7,7 +7,7 @@ import {
   removeChild,
   setStyle,
 } from '../dom';
-import { getStateGlobal } from '../state/StateManagerInterface';
+import { getState } from '../state/State';
 import type { Ball } from '../model/Ball';
 import type { Section } from '../model/Section';
 import { findSectionAt } from '../model/Section';
@@ -16,6 +16,8 @@ import { BoardSection } from './BoardSection';
 import {
   CAM_SCALE_STEP,
   clampCamScale,
+  getCamFitScale,
+  getCamLook,
   getCamPan,
   lerpCam,
 } from '../model/camera';
@@ -28,12 +30,14 @@ export class Board extends UiElement {
   camX = 0;
   camY = 0;
   camScale = 1;
-  targetX = 0;
-  targetY = 0;
+  lookX = 0;
+  lookY = 0;
+  targetLookX = 0;
+  targetLookY = 0;
+  targetScale = 1;
 
   constructor() {
     super();
-    this.setId('board');
     this.shouldPropagateEventsToChildren = false;
   }
 
@@ -63,7 +67,7 @@ export class Board extends UiElement {
   }
 
   syncBalls() {
-    const state = getStateGlobal();
+    const state = getState();
     for (const ball of state.balls) {
       if (
         !this.balls.some(el => {
@@ -110,14 +114,29 @@ export class Board extends UiElement {
     this.height = h;
   }
 
-  setPanTarget(section: Section, snap: boolean) {
-    const pan = getCamPan(section, this.width, this.height, this.camScale);
-    this.targetX = pan.x;
-    this.targetY = pan.y;
+  applyLook() {
+    const pan = getCamPan(
+      this.lookX,
+      this.lookY,
+      this.width,
+      this.height,
+      this.camScale
+    );
+    this.camX = pan.x;
+    this.camY = pan.y;
+  }
+
+  setCamTarget(section: Section, snap: boolean) {
+    const look = getCamLook(section);
+    this.targetLookX = look.x;
+    this.targetLookY = look.y;
+    this.targetScale = getCamFitScale(section, this.width, this.height);
     if (snap) {
-      this.camX = pan.x;
-      this.camY = pan.y;
+      this.lookX = look.x;
+      this.lookY = look.y;
+      this.camScale = this.targetScale;
     }
+    this.applyLook();
   }
 
   applyCamera() {
@@ -138,7 +157,7 @@ export class Board extends UiElement {
   }
 
   build() {
-    const state = getStateGlobal();
+    const state = getState();
     const root = getGameRoot();
     if (!root) {
       return;
@@ -174,7 +193,7 @@ export class Board extends UiElement {
     this.syncBalls();
     this.section = state.sections[0];
     if (this.section) {
-      this.setPanTarget(this.section, true);
+      this.setCamTarget(this.section, true);
     }
     this.applyCamera();
   }
@@ -183,7 +202,7 @@ export class Board extends UiElement {
     this.width = width;
     this.height = height;
     if (this.section) {
-      this.setPanTarget(this.section, true);
+      this.setCamTarget(this.section, true);
       this.applyCamera();
     }
     super.checkResizeEvent(width, height);
@@ -195,9 +214,8 @@ export class Board extends UiElement {
     } else {
       this.camScale = clampCamScale(this.camScale * CAM_SCALE_STEP);
     }
-    if (this.section) {
-      this.setPanTarget(this.section, true);
-    }
+    this.targetScale = this.camScale;
+    this.applyLook();
     this.applyCamera();
   }
 
@@ -207,7 +225,7 @@ export class Board extends UiElement {
     }
     const wx = this.camX + x / this.camScale;
     const wy = this.camY + y / this.camScale;
-    const state = getStateGlobal();
+    const state = getState();
     const section = findSectionAt(state.sections, wx, wy, null);
     if (!section) {
       return;
@@ -224,7 +242,7 @@ export class Board extends UiElement {
 
   update(dt: number) {
     this.syncBalls();
-    const state = getStateGlobal();
+    const state = getState();
     const ball = state.balls[0];
     if (ball) {
       const next = findSectionAt(
@@ -235,11 +253,13 @@ export class Board extends UiElement {
       );
       if (next && next !== this.section) {
         this.section = next;
-        this.setPanTarget(next, false);
+        this.setCamTarget(next, false);
       }
     }
-    this.camX = lerpCam(this.camX, this.targetX, dt);
-    this.camY = lerpCam(this.camY, this.targetY, dt);
+    this.lookX = lerpCam(this.lookX, this.targetLookX, dt);
+    this.lookY = lerpCam(this.lookY, this.targetLookY, dt);
+    this.camScale = lerpCam(this.camScale, this.targetScale, dt);
+    this.applyLook();
     this.applyCamera();
     super.update(dt);
   }

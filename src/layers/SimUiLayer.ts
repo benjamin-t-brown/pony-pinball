@@ -1,4 +1,4 @@
-import { getStateGlobal } from '../state/StateManagerInterface';
+import { getState } from '../state/State';
 import { Board } from '../ui/Board';
 import {
   CONTROL_LEFT,
@@ -9,7 +9,7 @@ import { Layer } from './Layer';
 
 export class SimUiLayer extends Layer {
   constructor(parent: HTMLElement) {
-    super(parent, 'ui');
+    super(parent);
     this.addUiElement(new Board());
     this.onResize(
       parent.clientWidth || innerWidth,
@@ -18,7 +18,7 @@ export class SimUiLayer extends Layer {
   }
 
   setControl(key: string, down: boolean) {
-    const state = getStateGlobal();
+    const state = getState();
     if (key === 'KeyZ' || key === 'ArrowLeft') {
       state.input[CONTROL_LEFT] = down;
     } else if (key === 'Slash' || key === 'ArrowRight') {

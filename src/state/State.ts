@@ -15,6 +15,16 @@ export type State = {
   collected: number[];
 };
 
+export let state: State;
+
+export const getState = () => {
+  return state;
+};
+
+export const setState = (s: State) => {
+  state = s;
+};
+
 export const createState = (): State => {
   const sections = buildLevel(SECTIONS, LINKS);
   return {

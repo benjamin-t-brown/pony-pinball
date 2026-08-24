@@ -1,4 +1,4 @@
-import type { State } from './State';
+import type { State } from '../../src/state/State';
 import type { StateManager } from './StateManager';
 
 export abstract class AbstractAction {

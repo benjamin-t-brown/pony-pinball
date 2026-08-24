@@ -1,21 +1,14 @@
 import type { Section } from './Section';
 
 export const CAM_SCALE_MIN = 0.25;
-export const CAM_SCALE_MAX = 4;
+export const CAM_SCALE_MAX = 8;
 export const CAM_SCALE_STEP = 1.1;
 export const CAM_PAN_MS = 300;
-
-export const getCamPan = (
-  section: Section,
-  viewW: number,
-  viewH: number,
-  scale: number
-) => {
-  return {
-    x: section.x + section.w / 2 - viewW / (2 * scale),
-    y: section.y + section.h / 2 - viewH / (2 * scale),
-  };
-};
+/** Applied after fitting the section in the viewport. 1 = exact fit; lower = zoomed out. */
+export const CAM_ZOOM_FACTOR = 0.85;
+/** Sections smaller than this on both axes skip fit-zoom and use CAM_SMALL_SCALE. */
+export const CAM_SMALL_SIZE = 250;
+export const CAM_SMALL_SCALE = 3;
 
 export const clampCamScale = (scale: number) => {
   if (scale < CAM_SCALE_MIN) {
@@ -25,6 +18,38 @@ export const clampCamScale = (scale: number) => {
     return CAM_SCALE_MAX;
   }
   return scale;
+};
+
+export const getCamLook = (section: Section) => {
+  return {
+    x: section.x + section.w / 2,
+    y: section.y + section.h / 2,
+  };
+};
+
+export const getCamFitScale = (
+  section: Section,
+  viewW: number,
+  viewH: number
+) => {
+  if (section.w < CAM_SMALL_SIZE && section.h < CAM_SMALL_SIZE) {
+    return CAM_SMALL_SCALE;
+  }
+  const fit = Math.min(viewW / section.w, viewH / section.h);
+  return clampCamScale(fit * CAM_ZOOM_FACTOR);
+};
+
+export const getCamPan = (
+  lookX: number,
+  lookY: number,
+  viewW: number,
+  viewH: number,
+  scale: number
+) => {
+  return {
+    x: lookX - viewW / (2 * scale),
+    y: lookY - viewH / (2 * scale),
+  };
 };
 
 export const lerpCam = (cur: number, target: number, dt: number) => {

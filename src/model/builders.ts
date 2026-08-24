@@ -1,8 +1,9 @@
 import { lineCreate } from '../sim/physics';
 import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
-import { PADDLE_LEN } from './constants';
+import { GATE_COLORS, PADDLE_LEN } from './constants';
 import { Collectable } from './parts/Collectable';
+import { Decoration } from './parts/Decoration';
 import { Field } from './parts/Field';
 import { Launcher } from './parts/Launcher';
 import { makeCircle, makeFan } from './parts/Obstacle';
@@ -12,8 +13,7 @@ import { type Section, sectionCreate } from './Section';
 import { TRIGGERS, Trigger } from './Trigger';
 
 export const BG = ['#555', '#466', '#645'];
-/** Gate wall stroke colors; builder `color` indexes this list. */
-export const GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
+export { GATE_COLORS };
 
 export const B_WALLS = 0;
 export const B_WALL_RESTI = 1;
@@ -27,6 +27,7 @@ export const B_COLLECTABLE = 8;
 export const B_FAN = 9;
 export const B_PORTAL = 10;
 export const B_TRIANGLE = 11;
+export const B_DECORATION = 12;
 
 export const SECTION_SIDE_BOTTOM = 0;
 export const SECTION_SIDE_TOP = 1;
@@ -182,6 +183,20 @@ BUILDERS[B_TRIANGLE] = (
   s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0));
   s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
   s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
+};
+
+BUILDERS[B_DECORATION] = (s, data) => {
+  s.parts.push(
+    new Decoration(
+      data[0],
+      data[1],
+      data[2],
+      data[3],
+      data[4],
+      data[5],
+      data.slice(6)
+    )
+  );
 };
 
 // assumes an edge can only have one hole in it at max

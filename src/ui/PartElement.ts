@@ -1,4 +1,5 @@
 import {
+  CIRCLE,
   DIV,
   LINE,
   POINTER_EVENTS,
@@ -14,6 +15,13 @@ import {
 } from '../dom';
 import { GATE_COLORS } from '../model/builders';
 import type { Collectable } from '../model/parts/Collectable';
+import {
+  CHEVRON_D,
+  SHAPE_CIRCLE,
+  SHAPE_SQUARE,
+  getTextureClass,
+  type Decoration,
+} from '../model/parts/Decoration';
 import type { Field } from '../model/parts/Field';
 import type { Launcher } from '../model/parts/Launcher';
 import type { Obstacle } from '../model/parts/Obstacle';
@@ -21,6 +29,7 @@ import type { Paddle } from '../model/parts/Paddle';
 import type { Portal } from '../model/parts/Portal';
 import {
   PART_COLLECTABLE,
+  PART_DECORATION,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
@@ -78,6 +87,38 @@ const addPortalMouth = (
   g.appendChild(spin);
   host.appendChild(g);
   return spin;
+};
+
+const addDecorationShape = (g: SVGElement, shape: number) => {
+  if (shape === SHAPE_CIRCLE) {
+    g.appendChild(
+      createSvgElement(CIRCLE, {
+        'r': '8',
+        'stroke-width': '3',
+      })
+    );
+    return;
+  }
+  if (shape === SHAPE_SQUARE) {
+    g.appendChild(
+      createSvgElement('rect', {
+        'x': '-8',
+        'y': '-8',
+        width: '16',
+        height: '16',
+        'stroke-width': '3',
+      })
+    );
+    return;
+  }
+  g.appendChild(
+    createSvgElement('path', {
+      'd': CHEVRON_D,
+      'stroke-width': '3',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+    })
+  );
 };
 
 export class PartElement extends UiElement {
@@ -163,6 +204,43 @@ export class PartElement extends UiElement {
       });
       this.attach(el);
       this.render(0);
+      return;
+    }
+
+    if (part.type === PART_DECORATION) {
+      const dec = part as Decoration;
+      const svg = createSvgElement(SVG, {
+        width: '1',
+        height: '1',
+      }) as SVGSVGElement;
+      setStyle(svg as unknown as HTMLElement, {
+        position: 'absolute',
+        left: '0',
+        top: '0',
+        overflow: 'visible',
+        [POINTER_EVENTS]: 'none',
+      });
+      const g = createSvgElement('g', {
+        transform:
+          'translate(' +
+          stringify(dec.x) +
+          ' ' +
+          stringify(dec.y) +
+          ') rotate(' +
+          stringify((dec.rot * 180) / Math.PI) +
+          ') scale(' +
+          stringify(dec.scale) +
+          ')',
+        'class': getTextureClass(dec.texture),
+      });
+      addDecorationShape(g, dec.shape);
+      if (dec.interval > 0) {
+        setStyle(g as unknown as HTMLElement, {
+          'animation': 'k ' + stringify(dec.interval) + 'ms step-end infinite',
+        });
+      }
+      svg.appendChild(g);
+      this.attach(svg as unknown as HTMLElement);
       return;
     }
 
@@ -287,6 +365,10 @@ export class PartElement extends UiElement {
           top: px(coin.y - coin.r),
         });
       }
+      return;
+    }
+
+    if (part.type === PART_DECORATION) {
       return;
     }
 

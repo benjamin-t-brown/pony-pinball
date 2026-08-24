@@ -11,7 +11,7 @@ import {
 } from '../dom';
 import { findSectionAt } from '../model/Section';
 import { vecLen } from '../sim/physics';
-import { getStateGlobal } from '../state/StateManagerInterface';
+import { getState } from '../state/State';
 import { Layer } from './Layer';
 
 const DEBUG_N = 60;
@@ -47,7 +47,7 @@ export class DebugLayer extends Layer {
   avgSteps = 0;
 
   constructor() {
-    super(null, 'debug');
+    super();
     const root = getGameRoot();
     if (!root) {
       return;
@@ -82,7 +82,7 @@ export class DebugLayer extends Layer {
     if (!this.el) {
       return;
     }
-    const state = getStateGlobal();
+    const state = getState();
     const ball = state.balls[0];
     let speed = 0;
     let zone = 'none';

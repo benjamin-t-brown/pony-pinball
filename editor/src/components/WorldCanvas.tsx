@@ -1,7 +1,8 @@
 import { memo, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
-import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_PORTAL, B_TRIANGLE, B_WALL_RESTI, B_WALLS, GATE_COLORS, buildLevel, triangleVerts } from '@game/model/builders';
+import { B_CIRCLE, B_COLLECTABLE, B_CONVEYER, B_DECORATION, B_FAN, B_FIELD, B_FLIPPER_LEFT, B_LAUNCHER, B_PORTAL, B_TRIANGLE, B_WALL_RESTI, B_WALLS, GATE_COLORS, buildLevel, triangleVerts } from '@game/model/builders';
 import {
   PART_COLLECTABLE,
+  PART_DECORATION,
   PART_FIELD,
   PART_LAUNCHER,
   PART_PADDLE,
@@ -12,6 +13,13 @@ import {
   LAUNCHER_LEN,
 } from '@game/model/constants';
 import type { Collectable } from '@game/model/parts/Collectable';
+import type { Decoration } from '@game/model/parts/Decoration';
+import {
+  CHEVRON_D,
+  SHAPE_CIRCLE,
+  SHAPE_SQUARE,
+  getTextureClass,
+} from '@game/model/parts/Decoration';
 import type { Field } from '@game/model/parts/Field';
 import type { Launcher } from '@game/model/parts/Launcher';
 import type { Obstacle } from '@game/model/parts/Obstacle';
@@ -211,6 +219,38 @@ const hitTriangleTip = (
   return Math.hypot(sx - hx, sy - hy) <= 10;
 };
 
+const DEC_AIM_LEN = 18;
+
+const decorationTipWorld = (section: SectionData, call: number[]) => {
+  const ox = section[0] + call[1];
+  const oy = section[1] + call[2];
+  const scale = call[3] || 1;
+  const rot = call[4] || 0;
+  const len = DEC_AIM_LEN * scale;
+  return {
+    x: ox + Math.cos(rot) * len,
+    y: oy + Math.sin(rot) * len,
+    ox,
+    oy,
+  };
+};
+
+const hitDecorationTip = (
+  section: SectionData,
+  call: number[],
+  sx: number,
+  sy: number,
+  cam: Cam
+) => {
+  if (call[0] !== B_DECORATION) {
+    return false;
+  }
+  const tip = decorationTipWorld(section, call);
+  const hx = (tip.x - cam.x) * cam.scale;
+  const hy = (tip.y - cam.y) * cam.scale;
+  return Math.hypot(sx - hx, sy - hy) <= 10;
+};
+
 const launcherDrawLen = (call: number[]) => {
   return call[8] > 0 ? call[8] : LAUNCHER_LEN;
 };
@@ -255,7 +295,8 @@ const hitAimTip = (
   return (
     hitConveyerTip(section, call, sx, sy, cam) ||
     hitLauncherTip(section, call, sx, sy, cam) ||
-    hitTriangleTip(section, call, sx, sy, cam)
+    hitTriangleTip(section, call, sx, sy, cam) ||
+    hitDecorationTip(section, call, sx, sy, cam)
   );
 };
 
@@ -357,6 +398,10 @@ const hitsCall = (
   }
   if (call[0] === B_COLLECTABLE) {
     const r = call[3] ?? 14;
+    return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
+  }
+  if (call[0] === B_DECORATION) {
+    const r = Math.max(12, (call[3] || 1) * 12);
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
   if (call[0] === B_TRIANGLE && call.length >= 6) {
@@ -1348,6 +1393,14 @@ export const WorldCanvas = ({
           ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
         }
         nextCall[5] = ang;
+      } else if (call[0] === B_DECORATION) {
+        const ox = s[0] + call[1];
+        const oy = s[1] + call[2];
+        let ang = Math.atan2(wy - oy, wx - ox);
+        if (e.shiftKey) {
+          ang = Math.round(ang / ANGLE_SNAP) * ANGLE_SNAP;
+        }
+        nextCall[4] = ang;
       }
       bumpDraft();
       return;
@@ -2071,6 +2124,33 @@ const callMarker = (
             );
           })()
         : null}
+      {call[0] === B_DECORATION
+        ? (() => {
+            const tip = decorationTipWorld(s, call);
+            const r = 5 / scale;
+            return (
+              <g>
+                <line
+                  x1={tip.ox}
+                  y1={tip.oy}
+                  x2={tip.x}
+                  y2={tip.y}
+                  stroke="#fc8"
+                  strokeWidth={2 / scale}
+                  strokeLinecap="round"
+                />
+                <circle
+                  cx={tip.x}
+                  cy={tip.y}
+                  r={r}
+                  fill="#fff"
+                  stroke="#000"
+                  strokeWidth={1 / scale}
+                />
+              </g>
+            );
+          })()
+        : null}
       {!isRectBuilder(call[0]) && call[0] !== B_LAUNCHER ? (
         <rect
           x={origin.x - hs}
@@ -2303,6 +2383,43 @@ const PartPreview = ({ part }: { part: Section['parts'][number] }) => {
         stroke="#a80"
         strokeWidth={2}
       />
+    );
+  }
+  if (part.type === PART_DECORATION) {
+    const dec = part as Decoration;
+    return (
+      <g
+        className={getTextureClass(dec.texture)}
+        style={
+          dec.interval > 0
+            ? {
+                animation: `k ${dec.interval}ms step-end infinite`,
+              }
+            : undefined
+        }
+        transform={`translate(${dec.x} ${dec.y}) rotate(${(dec.rot * 180) / Math.PI}) scale(${dec.scale})`}
+      >
+        {dec.shape === SHAPE_CIRCLE ? (
+          <circle r={8} fill="none" strokeWidth={3} />
+        ) : dec.shape === SHAPE_SQUARE ? (
+          <rect
+            x={-8}
+            y={-8}
+            width={16}
+            height={16}
+            fill="none"
+            strokeWidth={3}
+          />
+        ) : (
+          <path
+            d={CHEVRON_D}
+            fill="none"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+      </g>
     );
   }
   if (part.type === PART_FIELD) {

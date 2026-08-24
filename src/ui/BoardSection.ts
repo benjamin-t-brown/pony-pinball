@@ -20,7 +20,6 @@ export class BoardSection extends UiElement {
   constructor(section: Section, parent?: UiElement) {
     super(parent);
     this.section = section;
-    this.setId(stringify(section.id));
     this.setPos(section.x, section.y);
     this.width = section.w;
     this.height = section.h;

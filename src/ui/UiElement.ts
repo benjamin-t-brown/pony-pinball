@@ -6,8 +6,6 @@ export abstract class UiElement {
   y = 0;
   width = 0;
   height = 0;
-  scale = 1;
-  id = '';
   isHovered = false;
   isClicked = false;
   shouldPropagateEventsToChildren = true;
@@ -18,58 +16,9 @@ export abstract class UiElement {
     }
   }
 
-  getChildById(id: string): UiElement | null {
-    if (this.id === id) {
-      return this;
-    }
-    for (const child of this.children) {
-      const found = child.getChildById(id);
-      if (found) {
-        return found;
-      }
-    }
-    return null;
-  }
-
-  removeChildById(id: string) {
-    const child = this.getChildById(id);
-    if (!child || !child.parent) {
-      return;
-    }
-    child.parent.removeChildAtIndex(child.parent.children.indexOf(child));
-  }
-
   setPos(x: number, y: number) {
     this.x = x;
     this.y = y;
-  }
-
-  setScale(scale: number) {
-    this.scale = scale;
-  }
-
-  getPos(): [number, number] {
-    return [this.x, this.y];
-  }
-
-  getDims(): [number, number] {
-    return [this.width * this.scale, this.height * this.scale];
-  }
-
-  setId(id: string) {
-    this.id = id;
-  }
-
-  getId() {
-    return this.id;
-  }
-
-  getChildren() {
-    return this.children;
-  }
-
-  getParent() {
-    return this.parent;
   }
 
   getChildHostEl(): HTMLElement | null {
@@ -93,12 +42,11 @@ export abstract class UiElement {
   }
 
   hit(mouseX: number, mouseY: number) {
-    const [width, height] = this.getDims();
     return (
       mouseX >= this.x &&
       mouseY >= this.y &&
-      mouseX <= this.x + width &&
-      mouseY <= this.y + height
+      mouseX <= this.x + this.width &&
+      mouseY <= this.y + this.height
     );
   }
 

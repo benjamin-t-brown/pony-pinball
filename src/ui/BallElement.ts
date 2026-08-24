@@ -19,7 +19,6 @@ export class BallElement extends UiElement {
   constructor(ball: Ball, parent?: UiElement) {
     super(parent);
     this.ball = ball;
-    this.setId('ball');
   }
 
   build() {

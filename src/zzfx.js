@@ -147,7 +147,8 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
           (g += x + x * E * Z(a ** 5)),
           n && ++n > z && ((b += v), (C += v), (n = 0)),
           !l || ++I % l || ((b = C), (u = G), (n = n || 1)));
-      ((X = zzfxX || (zzfxX = new AudioContext())), (p = X.createBuffer(1, h, R)));
+      ((X = zzfxX || (zzfxX = new AudioContext())),
+        (p = X.createBuffer(1, h, R)));
       p.getChannelData(0).set(k);
       b = X.createBufferSource();
       b.buffer = p;
@@ -457,6 +458,18 @@ export const SOUND_PORTAL_IN = 13;
 export const SOUND_PORTAL_OUT = 14;
 export const SOUND_HIT_FAN = 15;
 
+const soundsPlayedThisTick = {};
+
 export const playSound = i => {
+  if (soundsPlayedThisTick[i]) {
+    return;
+  }
   zzfx(...SOUNDS[i]);
+  soundsPlayedThisTick[i] = true;
+};
+
+export const clearSoundsPlayedThisTick = () => {
+  for (const i in soundsPlayedThisTick) {
+    delete soundsPlayedThisTick[i];
+  }
 };
