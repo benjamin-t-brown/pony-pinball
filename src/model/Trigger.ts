@@ -98,49 +98,6 @@ export class DeactivateWallTrigger extends Trigger {
   }
 }
 
-export class MoveDoorTrigger extends Trigger {
-  x0 = 0;
-  y0 = 0;
-  x1 = 0;
-  y1 = 0;
-  held = false;
-
-  onActivated(section: Section) {
-    const wall = section.walls[this.args[0]];
-    if (!wall) {
-      return;
-    }
-    this.held = true;
-    this.x0 = wall.a.x;
-    this.y0 = wall.a.y;
-    this.x1 = wall.b.x;
-    this.y1 = wall.b.y;
-  }
-
-  onDeactivated(section: Section) {
-    this.held = false;
-    const wall = section.walls[this.args[0]];
-    if (!wall) {
-      return;
-    }
-    wall.a.x = this.x0;
-    wall.a.y = this.y0;
-    wall.b.x = this.x1;
-    wall.b.y = this.y1;
-  }
-
-  onUpdate(dt: number, section: Section) {
-    if (!this.held) {
-      return;
-    }
-    const s = dt / 1000;
-    // wall.a.x += this.args[1] * s;
-    // wall.a.y += this.args[2] * s;
-    // wall.b.x += this.args[1] * s;
-    // wall.b.y += this.args[2] * s;
-  }
-}
-
 /**
  * Hardcoded collectable goal: after 5 group-0 coins, disable wall 39 and
  * turn on light 22 in section 4.
@@ -271,7 +228,6 @@ export class PlaySoundTrigger extends Trigger {
 
 export const TRIGGERS: (typeof Trigger)[] = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
-TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
 TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
 TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
 TRIGGERS[TRIGGER_MOVE_BALL] = MoveBallTrigger;

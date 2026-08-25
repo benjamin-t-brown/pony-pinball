@@ -5,7 +5,7 @@ import {
   vecMul,
   vecNorm,
 } from '../../sim/physics';
-import { LAUNCHER_LEN } from '../constants';
+import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE } from '../constants';
 import { PART_LAUNCHER, Part } from '../Part';
 import type { Section } from '../Section';
 import {
@@ -17,8 +17,8 @@ import {
 export class Launcher extends Part {
   dir: Vec;
   force = 0;
-  range = 0;
-  chargeMs = 500;
+  range = LAUNCHER_RANGE;
+  chargeMs = LAUNCHER_CHARGE_MS;
   len = LAUNCHER_LEN;
   charge = 0;
   pendingFire = false;
@@ -27,11 +27,11 @@ export class Launcher extends Part {
     x: number,
     y: number,
     control: number,
-    dx: number,
-    dy: number,
-    force: number,
-    range: number,
-    chargeMs = 500,
+    dx = 0,
+    dy = -1,
+    force = LAUNCHER_FORCE,
+    range = LAUNCHER_RANGE,
+    chargeMs = LAUNCHER_CHARGE_MS,
     len = LAUNCHER_LEN
   ) {
     super(x, y, PART_LAUNCHER, control);

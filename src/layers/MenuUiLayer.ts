@@ -1,7 +1,6 @@
 import {
   DIV,
   INNER_HTML,
-  POINTER_EVENTS,
   appendChild,
   createElement,
   domAddEventListener,
@@ -10,6 +9,7 @@ import {
   setStyle,
 } from '../dom';
 import { formatTime, getState, startPlay } from '../state/State';
+import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
 import { UiElement } from '../ui/UiElement';
 import { playSound, SOUND_START_GAME } from '../zzfx.js';
 import { LAYER_OFF, Layer } from './Layer';
@@ -65,54 +65,22 @@ class MenuHud extends UiElement {
       return;
     }
     const overlay = createElement(DIV);
-    setStyle(overlay, {
-      position: 'absolute',
-      inset: '0',
-      'z-index': '8',
-      background: 'rgba(0,0,0,0.2)',
-      [POINTER_EVENTS]: 'none',
-    });
+    setStyle(overlay, hudOverlay);
 
     const btn = createElement('button');
     btn[INNER_HTML] = 'Start Game';
-    setStyle(btn, {
-      position: 'absolute',
-      [POINTER_EVENTS]: 'auto',
-      cursor: 'pointer',
-      color: '#123',
-      background: '#fc8',
-      border: '0',
-      padding: '0',
-      'font-size': '18px',
-      'font-weight': 'bold',
-    });
+    setStyle(btn, hudBtn);
     domAddEventListener(btn, 'click', () => {
       this.onStart();
     });
     appendChild(overlay, btn);
 
     const lastEl = createElement(DIV);
-    setStyle(lastEl, {
-      position: 'absolute',
-      left: '0',
-      right: '0',
-      'text-align': 'center',
-      color: '#fc8',
-      'font-size': '16px',
-      [POINTER_EVENTS]: 'none',
-    });
+    setStyle(lastEl, { ...hudLabel, color: '#fc8' });
     appendChild(overlay, lastEl);
 
     const bestEl = createElement(DIV);
-    setStyle(bestEl, {
-      position: 'absolute',
-      left: '0',
-      right: '0',
-      'text-align': 'center',
-      color: '#8cf',
-      'font-size': '16px',
-      [POINTER_EVENTS]: 'none',
-    });
+    setStyle(bestEl, { ...hudLabel, color: '#8cf' });
     appendChild(overlay, bestEl);
 
     appendChild(root, overlay);

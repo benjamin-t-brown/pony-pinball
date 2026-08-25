@@ -1,5 +1,4 @@
 import {
-  BR,
   DIV,
   INNER_HTML,
   POINTER_EVENTS,
@@ -8,11 +7,11 @@ import {
   getGameRoot,
   setStyle,
   stringify,
-} from '../dom';
-import { findSectionAt } from '../model/Section';
-import { vecLen } from '../sim/physics';
-import { getState } from '../state/State';
-import { Layer } from './Layer';
+} from '../src/dom';
+import { findSectionAt } from '../src/model/Section';
+import { vecLen } from '../src/sim/physics';
+import { getState } from '../src/state/State';
+import { Layer } from '../src/layers/Layer';
 
 const DEBUG_N = 60;
 
@@ -38,6 +37,7 @@ const rollPush = (
   return roll.sum / roll.filled;
 };
 
+/** Dev overlay. Copy back to src/layers and add to main.ts to use. */
 export class DebugLayer extends Layer {
   el: HTMLElement | null = null;
   stepsThisFrame = 0;
@@ -101,13 +101,13 @@ export class DebugLayer extends Layer {
     this.el[INNER_HTML] =
       'fps ' +
       this.fps.toFixed(0) +
-      BR +
+      '<br>' +
       'int ' +
       this.avgSteps.toFixed(2) +
-      BR +
+      '<br>' +
       'spd ' +
       speed.toFixed(0) +
-      BR +
+      '<br>' +
       'zone ' +
       zone;
   }

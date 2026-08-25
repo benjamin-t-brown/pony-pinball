@@ -61,6 +61,41 @@ let px = (n) => {
 let stringify = (n) => {
     return n + '';
 };
+let W = 400;
+let H = 600;
+let BALL_R = 10;
+let PADDLE_LEN = 58;
+let PADDLE_SPEED = 18;
+let PADDLE_RETURN = 10;
+// Matches the rendered stroke, so the ball rides on the paddle's face rather
+// than sinking to its centre line.
+let PADDLE_HALF_WIDTH = 3;
+let PADDLE_REST = 0.35;
+let PADDLE_FRICTION = 0.25;
+// A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
+// the ball arrived with, so the cap has to clear that or the kick gets shaved.
+let MAX_BALL_SPEED = 1500;
+let PORTAL_WARP_MS = 300;
+let LAUNCHER_X = 384;
+let LAUNCHER_Y = 582;
+let LAUNCHER_FORCE = 1250;
+let LAUNCHER_RANGE = 36;
+let LAUNCHER_CHARGE_MS = 600;
+let LAUNCHER_LEN = 24;
+/** Section shown behind the start menu. */
+let MENU_SECTION = 17;
+/** Section that ends the run. */
+let COMPLETE_SECTION = 16;
+/** Gate wall and decoration texture colors. */
+let GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
+let SECTION_BG = '#123';
+let SECTION_DOT = '#345';
+let LEFT_PIVOT = { x: 118, y: 450 };
+let RIGHT_PIVOT = { x: 282, y: 450 };
+let LEFT_REST_ANGLE = 0.45;
+let LEFT_UP = -0.55;
+let RIGHT_REST_ANGLE = Math.PI - 0.45;
+let RIGHT_UP = Math.PI + 0.55;
 // Extra distance the solver pushes a body past the surface, so the next step
 // starts outside instead of exactly on the boundary.
 let CONTACT_SLOP = 0.01;
@@ -799,7 +834,6 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
 // prettier-ignore
 let SOUNDS = [
   [.5,,106,,,.004,3,3.2,1,,,,,,37,,,.97,.16,,-1153], // gate closed
-  [.7,,10,.07,.01,.15,2,3.9,,,41,.01,.03,,11,,,.83,.03,.06,136], // hit special wall
   [1.6,.5,398,.07,.03,.16,,3.3,,-1,,,,,,,,.63,.1,,354], // hit small circle
   [1.8,,225,.01,.15,.17,1,1.3,,,,,,,22,,.16,.74,.03,,-1030], // Launch
   [1.6,,127,.2,.08,.2,4,2.7,,,,,,,,.1,,.55,.13,,-1202], // Launch Pull Back
@@ -809,7 +843,6 @@ let SOUNDS = [
   [,,845,.31,.13,,3,2.2,2,,,,.03,.1,276,,,.64,.1,.3], // Secret
   [.6,,14,.05,.42,,1,.9,-13,1,,,,.6,412,,,.77,.36,,391], // Gate Open
   [,,286,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // Paddle Flipper
-  [,,527,,,.03,5,1.70,-63,,,,,,,.5,,.93,,,401], // Wall Reappear
   [,,186,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // paddle flipper down
   [3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal in
   [3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal out
@@ -818,22 +851,20 @@ let SOUNDS = [
 ];
 
 let SOUND_GATE_CLOSED = 0;
-let SOUND_HIT_SPECIAL_WALL = 1;
-let SOUND_HIT_SMALL_CIRCLE = 2;
-let SOUND_LAUNCH = 3;
-let SOUND_LAUNCH_PULL_BACK = 4;
-let SOUND_START_GAME = 5;
-let SOUND_BALL_TRAVELING = 6;
-let SOUND_GET_COIN = 7;
-let SOUND_SECRET = 8;
-let SOUND_GATE_OPEN = 9;
-let SOUND_PADDLE_FLIPPER = 10;
-let SOUND_WALL_REAPPEAR = 11;
-let SOUND_PADDLE_FLIPPER_DOWN = 12;
-let SOUND_PORTAL_IN = 13;
-let SOUND_PORTAL_OUT = 14;
-let SOUND_HIT_FAN = 15;
-let SOUND_GAME_WIN = 16;
+let SOUND_HIT_SMALL_CIRCLE = 1;
+let SOUND_LAUNCH = 2;
+let SOUND_LAUNCH_PULL_BACK = 3;
+let SOUND_START_GAME = 4;
+let SOUND_BALL_TRAVELING = 5;
+let SOUND_GET_COIN = 6;
+let SOUND_SECRET = 7;
+let SOUND_GATE_OPEN = 8;
+let SOUND_PADDLE_FLIPPER = 9;
+let SOUND_PADDLE_FLIPPER_DOWN = 10;
+let SOUND_PORTAL_IN = 11;
+let SOUND_PORTAL_OUT = 12;
+let SOUND_HIT_FAN = 13;
+let SOUND_GAME_WIN = 14;
 
 let soundsPlayedThisTick = {};
 
@@ -850,41 +881,6 @@ let clearSoundsPlayedThisTick = () => {
     delete soundsPlayedThisTick[i];
   }
 };
-let W = 400;
-let H = 600;
-let BALL_R = 10;
-let PADDLE_LEN = 58;
-let PADDLE_SPEED = 18;
-let PADDLE_RETURN = 10;
-// Matches the rendered stroke, so the ball rides on the paddle's face rather
-// than sinking to its centre line.
-let PADDLE_HALF_WIDTH = 3;
-let PADDLE_REST = 0.35;
-let PADDLE_FRICTION = 0.25;
-// A tip hit adds PADDLE_SPEED * PADDLE_LEN of surface speed on top of whatever
-// the ball arrived with, so the cap has to clear that or the kick gets shaved.
-let MAX_BALL_SPEED = 1500;
-let PORTAL_WARP_MS = 300;
-let LAUNCHER_X = 384;
-let LAUNCHER_Y = 582;
-let LAUNCHER_FORCE = 1250;
-let LAUNCHER_RANGE = 36;
-let LAUNCHER_CHARGE_MS = 600;
-let LAUNCHER_LEN = 24;
-/** Section shown behind the start menu. */
-let MENU_SECTION = 17;
-/** Section that ends the run. */
-let COMPLETE_SECTION = 16;
-/** Gate wall and decoration texture colors. */
-let GATE_COLORS = ['#fc8', '#8cf', '#f66', '#6c6', '#c8f', '#fa6'];
-let SECTION_BG = '#123';
-let SECTION_DOT = '#345';
-let LEFT_PIVOT = { x: 118, y: 450 };
-let RIGHT_PIVOT = { x: 282, y: 450 };
-let LEFT_REST_ANGLE = 0.45;
-let LEFT_UP = -0.55;
-let RIGHT_REST_ANGLE = Math.PI - 0.45;
-let RIGHT_UP = Math.PI + 0.55;
 let ballCreate = (x = 0, y = 0) => {
     let b = circleCreate(x, y, BALL_R, 1);
     return {
@@ -1036,7 +1032,7 @@ let ICON_PONY = 2;
 let CHEVRON_D = 'M-6-8L6 0L-6 8';
 let WAND_D = 'M-6.5 8-4.6 9.6 4.2-4.8 2.3-6.4Z';
 let HAT_D = 'M0-8.5 7.5 5Q0 12-7.5 5Z';
-let PONY_D = 'M9.3-9.2 1.9-4.4C2.6-3.8 3.2-3.5 3.7-3ZM1.7-6.3C1.2-6.3.6-6.1.2-5.9-.1-5.7-.4-5.5-.5-5.3-.7-5.1-.8-4.9-.8-4.8L-.8-4.6-1-4.5C-4.8-2.5-6.8-.2-9.3 2.1V9.3H-2.8C-2.6 8.7-2.3 8-2.2 7.4-2.2 7.1-2.3 6.6-2.5 6.1-2.8 5.5-3 4.9-2.8 4.3-2.7 3.7-2.3 3.3-1.9 2.9-1.7 2.7-1.6 2.6-1.4 2.4-1.7 2.1-2 1.7-2.1 1.1L-1.4 1C-1.3 1.6-.8 2.1-.5 2.5C-.1 3.1.2 3.6.7 4 1.2 4.4 1.9 4.6 3.3 4.4L3.6 4.4 3.7 4.6C3.9 5.2 4.2 5.6 4.5 5.7 4.7 5.9 5 6 5.2 5.9 5.7 5.9 6.2 5.5 6.3 5.4 6.5 5.2 6.7 5 6.8 4.7 7 4.5 7 4.2 7 3.9 5.3 2.5 4.2-.3 3.4-2 3.1-2.8 2-3.4 1.4-3.9 1.3-4 1.3-4 1.2-4.1 1.1-4.9 1.4-5.7 1.7-6.3ZM-7.7-4.7C-7-4.5-6.2-4.3-5.4-4.1-4.9-3.9-4.3-3.8-3.8-3.6-3.1-4.1-2.3-4.5-1.5-5-3.5-5.5-5.8-5.1-7.7-4.7ZM-6.6-3.6C-7.5-3.5-8.4-3.2-9.2-3-8.5-2.8-7.7-2.7-6.9-2.6-6.4-2.5-6-2.4-5.6-2.3L-4.5-3.1C-4.9-3.2-5.2-3.3-5.6-3.4-5.9-3.5-6.2-3.6-6.6-3.6ZM-8.1-2.1C-8.5-2-8.9-1.9-9.3-1.8V-1.1L-8.5-1C-8.1-.9-7.7-.8-7.3-.7-7-1.1-6.6-1.4-6.2-1.7-6.5-1.8-6.8-1.8-7-1.9-7.4-1.9-7.8-2-8.1-2.1ZM-9.3-.4V.7C-9.1.7-9 .7-8.8.7-8.5.4-8.2.1-7.9-.1L-8.6-.3-9.3-.4Z';
+let PONY_D = 'M8-9 2-4 3.2-1 2.2 1.5 4 3.6 1.4 5.6 2.4 8.5H-3.2L-4.2 5.6-2.2 3.8-5.6 4.8-8.2 7.8-8.8 4.8-5.8 2-7.6.2-5-1.8-3.2-5-.2-3.6 2.4-6.8 5.2-6 6.4-8.8Z';
 let TEX_PALETTE = GATE_COLORS.length;
 let TEX_ARROWS = GATE_COLORS.length + 1;
 let getTextureClass = (texture) => {
@@ -1124,18 +1120,14 @@ class Decoration extends Part {
         this.y1 = y;
         this.active = true;
         if (decorationType === DEC_BLINKING_LIGHT) {
-            if (args[0] > 0) {
-                this.interval = args[0];
-            }
-            this.shape = args[1] | 0;
-            if (args[2] === 0) {
+            this.shape = args[0] | 0;
+            if (args[1] === 0) {
                 this.active = false;
             }
+            this.interval = args[2] == null ? 1000 : args[2];
         }
         if (decorationType === DEC_BLINKING_LIGHT_LINE) {
-            if (args[0] > 0) {
-                this.interval = args[0];
-            }
+            this.interval = args[0] == null ? 400 : args[0];
             this.shape = args[1] | 0;
             let n = args[2] | 0;
             this.count = n < 1 ? 1 : n;
@@ -1292,12 +1284,12 @@ class Field extends Part {
 class Launcher extends Part {
     dir;
     force = 0;
-    range = 0;
-    chargeMs = 500;
+    range = LAUNCHER_RANGE;
+    chargeMs = LAUNCHER_CHARGE_MS;
     len = LAUNCHER_LEN;
     charge = 0;
     pendingFire = false;
-    constructor(x, y, control, dx, dy, force, range, chargeMs = 500, len = LAUNCHER_LEN) {
+    constructor(x, y, control, dx = 0, dy = -1, force = LAUNCHER_FORCE, range = LAUNCHER_RANGE, chargeMs = LAUNCHER_CHARGE_MS, len = LAUNCHER_LEN) {
         super(x, y, PART_LAUNCHER, control);
         this.dir = vecNorm(vecCreate(dx, dy));
         this.force = force;
@@ -1580,31 +1572,14 @@ let makeCircle = (x, y, resolution, restitution, radius, vx = 0, vy = 0, omega =
     let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(radius, resolution, restitution), vx, vy, omega);
     o.r = radius;
     o.isCircle = true;
-    if (icon == null) {
-        o.icon = ((x + y) | 0) % 3;
-    }
-    else {
-        o.icon = icon | 0;
-    }
-    if (color == null) {
-        o.color = ((x + y) | 0) % GATE_COLORS.length;
-    }
-    else {
-        o.color = color | 0;
-    }
+    o.icon = icon | 0;
+    o.color = color | 0;
     return o;
 };
 let makeFan = (x, y, paddles, restitution, radius, vx = 0, vy = 0, omega = 0) => {
     let o = new Obstacle(x, y, PART_OBSTACLE, makeFanWalls(radius, paddles, restitution), vx, vy, omega);
     o.r = radius;
     o.isFan = true;
-    return o;
-};
-/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
-let makeBumper = (x, y, r, n, rest = 1.2, vx = 0, vy = 0, omega = 0) => {
-    let o = new Obstacle(x, y, PART_OBSTACLE, makeCircleWalls(r, n, rest), vx, vy, omega);
-    o.r = r;
-    o.isCircle = true;
     return o;
 };
 class Paddle extends Part {
@@ -1826,45 +1801,6 @@ class DeactivateWallTrigger extends Trigger {
         }
     }
 }
-class MoveDoorTrigger extends Trigger {
-    x0 = 0;
-    y0 = 0;
-    x1 = 0;
-    y1 = 0;
-    held = false;
-    onActivated(section) {
-        let wall = section.walls[this.args[0]];
-        if (!wall) {
-            return;
-        }
-        this.held = true;
-        this.x0 = wall.a.x;
-        this.y0 = wall.a.y;
-        this.x1 = wall.b.x;
-        this.y1 = wall.b.y;
-    }
-    onDeactivated(section) {
-        this.held = false;
-        let wall = section.walls[this.args[0]];
-        if (!wall) {
-            return;
-        }
-        wall.a.x = this.x0;
-        wall.a.y = this.y0;
-        wall.b.x = this.x1;
-        wall.b.y = this.y1;
-    }
-    onUpdate(dt, section) {
-        if (!this.held) {
-            return;
-        }
-        let s = dt / 1000;
-        // wall.a.x += this.args[1] * s;
-        // wall.a.y += this.args[2] * s;
-        // wall.b.x += this.args[1] * s;
-        // wall.b.y += this.args[2] * s;
-    }
-}
 /**
  * Hardcoded collectable goal: after 5 group-0 coins, disable wall 39 and
  * turn on light 22 in section 4.
@@ -1983,7 +1919,6 @@ class PlaySoundTrigger extends Trigger {
 }
 let TRIGGERS = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
-TRIGGERS[TRIGGER_MOVE_DOOR] = MoveDoorTrigger;
 TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
 TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
 TRIGGERS[TRIGGER_MOVE_BALL] = MoveBallTrigger;
@@ -2026,7 +1961,9 @@ BUILDERS[B_WALL_GATE] = (section, [x0, y0, x1, y1, color]) => {
     section.walls.push(lineCreate(x0, y0, x1, y1, 0.5, c < 0 ? 0 : c % GATE_COLORS.length));
 };
 BUILDERS[B_FLIPPER_LEFT] = (section, [x, y, restAngle, upAngle, isFlipped, flipperLength]) => {
-    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - restAngle : restAngle, isFlipped ? Math.PI - upAngle : upAngle, flipperLength > 0 ? flipperLength : PADDLE_LEN));
+    let rest = restAngle == null ? LEFT_REST_ANGLE : restAngle;
+    let up = upAngle == null ? LEFT_UP : upAngle;
+    section.parts.push(new Paddle(x, y, isFlipped ? CONTROL_RIGHT : CONTROL_LEFT, isFlipped ? Math.PI - rest : rest, isFlipped ? Math.PI - up : up, flipperLength > 0 ? flipperLength : PADDLE_LEN));
 };
 BUILDERS[B_LAUNCHER] = (s, [x, y, dx, dy, force, range, chargeMs, launcherLength]) => {
     s.parts.push(new Launcher(x, y, CONTROL_START, dx, dy, force, range, chargeMs, launcherLength));
@@ -2050,7 +1987,7 @@ BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
 BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius, dx, dy, omega, icon, color]) => {
     section.parts.push(makeCircle(x, y, resolution, restitution, radius, dx, dy, omega, icon, color));
 };
-BUILDERS[B_FAN] = (section, [x, y, paddles, restitution, radius, dx, dy, omega]) => {
+BUILDERS[B_FAN] = (section, [x, y, paddles, restitution, radius, omega, dx, dy]) => {
     section.parts.push(makeFan(x, y, paddles, restitution, radius, dx, dy, omega));
 };
 BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
@@ -2169,15 +2106,15 @@ let SECTIONS = [
                 0, 103, 173, 147,
                 307, 167, 400, 107
             ],
-            [B_FLIPPER_LEFT, 114, 369, 0.45, -0.55, 0, 58],
-            [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1, 58],
+            [B_FLIPPER_LEFT, 114, 369],
+            [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1],
             [B_LAUNCHER, 387, 495, 0, -1, 850, 36, 400, 16],
             [B_CIRCLE, 162, 67, 10, 1.2, 40, 0, 0, 1.2, CIRCLE_STAR, 1],
-            [B_CIRCLE, 82, 256, 10, 1.2, 40, 0, 0, 1.2, CIRCLE_SMILE, 0],
-            [B_DECORATION, 19, 394, 1, 0, DEC_BLINKING_LIGHT, 0, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 162, 274, 1, -1.0472, DEC_BLINKING_LIGHT, 1, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 279, 75, 1, -1.8846, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 386, 416, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CHEVRON, 5, 386, 330, 50, 1],
+            [B_CIRCLE, 82, 256, 10, 1.2, 40, 0, 0, 1.2],
+            [B_DECORATION, 19, 394, 1, 0, DEC_BLINKING_LIGHT, 0],
+            [B_DECORATION, 162, 274, 1, -1.0472, DEC_BLINKING_LIGHT, 1],
+            [B_DECORATION, 279, 75, 1, -1.8846, DEC_BLINKING_LIGHT, 2],
+            [B_DECORATION, 386, 416, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CHEVRON, 5, 386, 330, 50],
             [B_DECORATION, 141, 376, 15, -0.0091, DEC_ICON, 1, ICON_PONY, 0.25],
         ],
     ],
@@ -2210,21 +2147,21 @@ let SECTIONS = [
                 168, 247, 233, 264,
                 354, 336, 169, 312
             ],
-            [B_LAUNCHER, 135, 369, -0.7071, -0.7071, 1000, 36, 400, 24],
+            [B_LAUNCHER, 135, 369, -0.7071, -0.7071, 1000, 36, 400],
             [B_CONVEYER, 176, 341, 173, 39, 3.1416, 320, 400, 35, 6],
             [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 27, 800, 500],
             [B_CONVEYER, 254, 45, 104, 23, 0.1444, 400, 160, 6],
-            [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1, 58],
+            [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1],
             [B_FLIPPER_LEFT, 235, 271, 0.7, -0.5, 0, 35],
             [B_CONVEYER, 173, 160, 30, 68, 1.5708, 400, 160, 6],
-            [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2, CIRCLE_SMILE, 0],
+            [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2],
             [B_WALL_GATE, 354, 376, 400, 376, 2],
             [B_FIELD, 359, 329, 38, 42, TRIGGER_ACTIVATE_LIGHT, 9, 800, 500],
-            [B_DECORATION, 378, 348, 1, 1.5708, DEC_BLINKING_LIGHT, 0, 400, SHAPE_SQUARE, 0],
-            [B_DECORATION, 110, 342, 1, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_CHEVRON, 5, 49, 283, 50, 1],
-            [B_DECORATION, 186, 70, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, 3, 400, SHAPE_CHEVRON, 5, 186, 127, 50, 1],
+            [B_DECORATION, 378, 348, 1, 1.5708, DEC_BLINKING_LIGHT, 0, SHAPE_SQUARE, 0, 400],
+            [B_DECORATION, 110, 342, 1, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_CHEVRON, 5, 49, 283, 50],
+            [B_DECORATION, 186, 70, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, 3, 400, SHAPE_CHEVRON, 5, 186, 127, 50],
             [B_DECORATION, 187, 199, 15, -0.0091, DEC_ICON, 5, ICON_HAT, 0.25],
-            [B_DECORATION, 33, 362, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
+            [B_DECORATION, 33, 362, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
         ],
     ],
     [
@@ -2244,18 +2181,18 @@ let SECTIONS = [
                 93, 368, 116, 399
             ],
             [B_CONVEYER, 32, 87, 45, 198, 1.5708, 400, 160, 6],
-            [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970, 36, 600, 24],
+            [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970],
             [B_CIRCLE, 160, 161, 15, 1.2, 22, 0, 160, 1.2, CIRCLE_STAR, 4],
             [B_CIRCLE, 249, 283, 15, 1.2, 37, 0, 150, 1.2, CIRCLE_STAR, 4],
             [B_CIRCLE, 398, 50, 15, 1.2, 36, 0, 150, 1.2, CIRCLE_STAR, 4],
             [B_LAUNCHER, 575, 143, 0, -1, 2500, 50, 500, 38],
             [B_CIRCLE, 336, 370, 15, 1.2, 22, 0, 250, 1.2, CIRCLE_STAR, 4],
-            [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1, 58],
-            [B_DECORATION, 163, 250, 1, -0.7849, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 325, 159, 1, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 574, 32, 1, -1.5708, DEC_BLINKING_LIGHT, 4, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 65, 69, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 65, 0, 50, 1],
-            [B_DECORATION, 520, 342, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 520, 273, 50, 1],
+            [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1],
+            [B_DECORATION, 163, 250, 1, -0.7849, DEC_BLINKING_LIGHT, 2],
+            [B_DECORATION, 325, 159, 1, -0.6751, DEC_BLINKING_LIGHT, 3],
+            [B_DECORATION, 574, 32, 1, -1.5708, DEC_BLINKING_LIGHT, 4],
+            [B_DECORATION, 65, 69, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 65, 0, 50],
+            [B_DECORATION, 520, 342, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 520, 273, 50],
         ],
     ],
     [
@@ -2267,10 +2204,10 @@ let SECTIONS = [
             [B_WALLS, 588, 56, 4, 105, 116, 45, 116, 2],
             [B_FIELD, 72, 48, 63, 56, TRIGGER_DEACTIVATE_WALL, 8, 800, 800],
             [B_WALL_GATE, 116, 46, 61, 100, 2],
-            [B_DECORATION, 212, 58, 2.8, -0.0889, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_SQUARE, 1],
-            [B_DECORATION, 304, 50, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 396, 42, 2.8, -0.0889, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_SQUARE, 1],
-            [B_DECORATION, 487, 35, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
+            [B_DECORATION, 212, 58, 2.8, -0.0889, DEC_BLINKING_LIGHT, 3, SHAPE_SQUARE],
+            [B_DECORATION, 304, 50, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 396, 42, 2.8, -0.0889, DEC_BLINKING_LIGHT, 3, SHAPE_SQUARE],
+            [B_DECORATION, 487, 35, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
             [B_FIELD, 83, 68, 28, 27, TRIGGER_PLAY_SOUND, SOUND_GATE_CLOSED],
         ],
     ],
@@ -2313,8 +2250,8 @@ let SECTIONS = [
                 214, 159, 214, 61,
                 270, 63, 264, 8
             ],
-            [B_FLIPPER_LEFT, 332, 586, 0.45, -0.55, 1, 58],
-            [B_FLIPPER_LEFT, 185, 586, 0.45, -0.55, 0, 58],
+            [B_FLIPPER_LEFT, 332, 586, 0.45, -0.55, 1],
+            [B_FLIPPER_LEFT, 185, 586],
             [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2, CIRCLE_DIAMOND, 4],
             [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2, CIRCLE_STAR, 1],
             [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, -2, CIRCLE_DIAMOND, 3],
@@ -2325,7 +2262,7 @@ let SECTIONS = [
             [B_LAUNCHER, 18, 577, 0, -1, 1450, 50, 600, 50],
             [B_FIELD, 3, 506, 18, 107, TRIGGER_DEACTIVATE_WALL, 37, 0, 1000],
             [B_FIELD, 14, 483, 18, 130, TRIGGER_DEACTIVATE_WALL, 36, 0, 1000],
-            [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6, CIRCLE_SMILE, 0],
+            [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
             [B_WALL_GATE, 30, 160, 0, 128, 4],
             [B_WALL_GATE, 31, 161, 0, 193, 4],
             [B_WALL_GATE, 483, 48, 495, 27, 2],
@@ -2337,14 +2274,14 @@ let SECTIONS = [
             [B_COLLECTABLE, 284, 210, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 181, 19, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 249, 417, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_FAN, 124, 98, 4, 1, 80, 0, 0, -1.1],
+            [B_FAN, 124, 98, 4, 1, 80, -1.1],
             [B_TRIANGLE, 126, 524, 79, 44, -1.5708, 1.5, 0.5, 0.5, 1],
             [B_TRIANGLE, 397, 524, 79, -44, -1.5708, 1.5, 0.5, 0.5, 1],
-            [B_DECORATION, 16, 55, 1, -1.5708, DEC_BLINKING_LIGHT, 5, 1000, SHAPE_CHEVRON, 1],
+            [B_DECORATION, 16, 55, 1, -1.5708, DEC_BLINKING_LIGHT, 5],
             [B_DECORATION, 212, 347, 2, -2.3101, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 100, SHAPE_CHEVRON, 5, 125, 250, 25, 0],
             [B_CONVEYER, 195, 5, 49, 27, -3.1416, 400, 160, 50],
-            [B_DECORATION, 274, 244, 1, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 436, 292, 1, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
+            [B_DECORATION, 274, 244, 1, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 436, 292, 1, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
             [B_FIELD, 487, 189, 19, 67, TRIGGER_PLAY_SOUND, SOUND_GATE_OPEN],
         ],
     ],
@@ -2389,9 +2326,9 @@ let SECTIONS = [
             [B_FLIPPER_LEFT, 71, 165, 0.45, -0.55, 1, 42],
             [B_CIRCLE, 36, 261, 10, 1.25, 11, 0, 0, 1, CIRCLE_SMILE, 3],
             [B_CIRCLE, 35, 372, 10, 1.25, 11, 0, 0, -1, CIRCLE_DIAMOND, 5],
-            [B_DECORATION, 98, 134, 1, -2.2845, DEC_BLINKING_LIGHT, 0, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 35, 57, 1, -1.5708, DEC_BLINKING_LIGHT, 1, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 167, 375, 1, -0.7118, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
+            [B_DECORATION, 98, 134, 1, -2.2845, DEC_BLINKING_LIGHT, 0],
+            [B_DECORATION, 35, 57, 1, -1.5708, DEC_BLINKING_LIGHT, 1],
+            [B_DECORATION, 167, 375, 1, -0.7118, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 181, 84, 4, 0.3807, DEC_ICON, 1, ICON_WAND, 0.5],
         ],
     ],
@@ -2414,25 +2351,25 @@ let SECTIONS = [
                 320, 673, 398, 615,
                 211, 210, 67, 248
             ],
-            [B_FLIPPER_LEFT, 212, 347, 0.7, -0.3, 1, 58],
-            [B_FLIPPER_LEFT, 216, 209, 0.65, -0.25, 0, 58],
+            [B_FLIPPER_LEFT, 212, 347, 0.7, -0.3, 1],
+            [B_FLIPPER_LEFT, 216, 209, 0.65, -0.25],
             [B_CIRCLE, 340, 283, 6, 1.25, 29, 0, 0, 2, CIRCLE_DIAMOND, 5],
-            [B_DECORATION, 72, 495, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 64, 136, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 328, 45, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 301, 594, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 281, 423, 1.4, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 183, 267, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 337, 208, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 184, 147, 1.5, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 50, 646, 1.6, -0.6751, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CIRCLE, 1],
-            [B_DECORATION, 165, 538, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 165, 469, 50, 1],
-            [B_DECORATION, 210, 640, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 210, 571, 50, 1],
-            [B_DECORATION, 350, 494, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 350, 425, 150, 1],
-            [B_DECORATION, 66, 396, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 66, 327, 75, 1],
-            [B_DECORATION, 110, 233, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 110, 164, 25, 1],
-            [B_DECORATION, 218, 80, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 218, 11, 50, 1],
-            [B_DECORATION, 372, 399, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 372, 330, 100, 1],
+            [B_DECORATION, 72, 495, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 64, 136, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 328, 45, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 301, 594, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 281, 423, 1.4, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 183, 267, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 337, 208, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 184, 147, 1.5, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 50, 646, 1.6, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 165, 538, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 165, 469, 50],
+            [B_DECORATION, 210, 640, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 210, 571, 50],
+            [B_DECORATION, 350, 494, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 350, 425, 150],
+            [B_DECORATION, 66, 396, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 66, 327, 75],
+            [B_DECORATION, 110, 233, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 110, 164, 25],
+            [B_DECORATION, 218, 80, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 218, 11, 50],
+            [B_DECORATION, 372, 399, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 372, 330, 100],
         ],
     ],
     [
@@ -2442,8 +2379,8 @@ let SECTIONS = [
         125,
         [
             [B_WALLS, 48, 124, 48, 0],
-            [B_FAN, 236, 63, 4, 1, 57, 0, 0, 1.05],
-            [B_FAN, 114, 63, 4, 1, 57, 0, 0, 1.05],
+            [B_FAN, 236, 63, 4, 1, 57, 1.05],
+            [B_FAN, 114, 63, 4, 1, 57, 1.05],
         ],
     ],
     [
@@ -2482,25 +2419,25 @@ let SECTIONS = [
                 36, 645, 43, 644
             ],
             [B_CONVEYER, 92, 625, 143, 49, 3.1416, 500, 160, 8],
-            [B_FLIPPER_LEFT, 116, 531, 0.45, -0.55, 0, 58],
-            [B_FLIPPER_LEFT, 270, 531, 0.45, -0.55, 1, 58],
+            [B_FLIPPER_LEFT, 116, 531],
+            [B_FLIPPER_LEFT, 270, 531, 0.45, -0.55, 1],
             [B_WALL_RESTI, 0, 47, 47, 0, 1.5],
             [B_CONVEYER, 52, 625, 40, 48, -2.55, 400, 160, 6],
             [B_LAUNCHER, 19, 612, 0, -1, 1450, 50, 600, 50],
             [B_PORTAL, 60, 136, 331, 53, 18, 0],
             [B_PORTAL, 53, 84, 342, 262, 18, 1],
             [B_WALL_RESTI, 328, 283, 400, 288, 0.5],
-            [B_LAUNCHER, 362, 275, -1, 0, 1400, 36, 100, 24],
+            [B_LAUNCHER, 362, 275, -1, 0, 1400, 36, 100],
             [B_WALL_RESTI, 395, 285, 395, 225, 0.25],
-            [B_FAN, 218, 150, 6, 1, 40, 0, 0, 1.5],
-            [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25, 0.5, 0.5, 0],
-            [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25, 0.5, 0.5, 0],
-            [B_CIRCLE, 85, 323, 10, 1.25, 14, 0, 0, 1, CIRCLE_SMILE, 0],
+            [B_FAN, 218, 150, 6, 1, 40, 1.5],
+            [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25],
+            [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25],
+            [B_CIRCLE, 85, 323, 10, 1.25, 14, 0, 0, 1],
             [B_CIRCLE, 324, 338, 10, 1.25, 14, 0, 0, 1, CIRCLE_DIAMOND, 2],
-            [B_CIRCLE, 315, 579, 10, 1.25, 14, 0, 0, 1, CIRCLE_SMILE, 0],
+            [B_CIRCLE, 315, 579, 10, 1.25, 14, 0, 0, 1],
             [B_CONVEYER, 333, 125, 25, 67, 1.5708, 400, 160, 6],
-            [B_DECORATION, 89, 191, 1, -2.0554, DEC_BLINKING_LIGHT, 1, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 21, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
+            [B_DECORATION, 89, 191, 1, -2.0554, DEC_BLINKING_LIGHT, 1],
+            [B_DECORATION, 21, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 206, 446, 18, 0, DEC_ICON, 4, ICON_PONY, 0.33],
         ],
     ],
@@ -2539,9 +2476,9 @@ let SECTIONS = [
             [B_CIRCLE, 304, 139, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
             [B_CIRCLE, 108, 151, 3, 1, 8, 0, 0, 4, CIRCLE_STAR, 1],
             [B_CIRCLE, 50, 233, 3, 1, 8, 0, 0, 4, CIRCLE_STAR, 1],
-            [B_CIRCLE, 361, 263, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND, 0],
-            [B_CIRCLE, 170, 280, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 0],
-            [B_CIRCLE, 89, 277, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 0],
+            [B_CIRCLE, 361, 263, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND],
+            [B_CIRCLE, 170, 280, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
+            [B_CIRCLE, 89, 277, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
             [B_CIRCLE, 311, 282, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
             [B_CIRCLE, 346, 25, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
             [B_CONVEYER, 90, 6, 44, 20, 0, 400, 160, 6],
@@ -2553,8 +2490,8 @@ let SECTIONS = [
             [B_CONVEYER, 217, 371, 27, 72, 1.5708, 400, 160, 6],
             [B_CONVEYER, 307, 367, 27, 72, 1.5708, 400, 160, 6],
             [B_CIRCLE, 219, 102, 3, 0.5, 8, 0, 0, -4, CIRCLE_DIAMOND, 3],
-            [B_DECORATION, 381, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 232, 317, 1, 1.5708, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CHEVRON, 1],
+            [B_DECORATION, 381, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
+            [B_DECORATION, 232, 317, 1, 1.5708, DEC_BLINKING_LIGHT, 3],
         ],
     ],
     [
@@ -2588,8 +2525,8 @@ let SECTIONS = [
             [B_PORTAL, 20, 23, 229, 474, 18, 1],
             [B_CONVEYER, 9, 54, 17, 395, -1.5708, 1400, 1400, 60],
             [B_CONVEYER, 221, 53, 17, 394, -1.5708, 1400, 1400, 60],
-            [B_DECORATION, 191, 464, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CIRCLE, 20, 191, 28, 50, 1],
-            [B_DECORATION, 49, 467, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_SQUARE, 20, 49, 28, 50, 1],
+            [B_DECORATION, 191, 464, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CIRCLE, 20, 191, 28, 50],
+            [B_DECORATION, 49, 467, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_SQUARE, 20, 49, 28, 50],
         ],
     ],
     [
@@ -2625,10 +2562,10 @@ let SECTIONS = [
             [B_FLIPPER_LEFT, 217, 333, 0.45, -0.6, 1, 35],
             [B_FLIPPER_LEFT, 83, 236, 0.45, -0.5, 0, 35],
             [B_CIRCLE, 236, 98, 10, 1, 20, 0, 0, 0, CIRCLE_STAR, 4],
-            [B_FAN, 140, 397, 3, 1, 22, 0, 0, 1],
-            [B_DECORATION, 108, 314, 1, -0.7854, DEC_BLINKING_LIGHT, 3, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 233, 196, 1, -2.3562, DEC_BLINKING_LIGHT, 4, 1000, SHAPE_CHEVRON, 1],
-            [B_DECORATION, 153, 103, 1, -0.9768, DEC_BLINKING_LIGHT, 5, 1000, SHAPE_CHEVRON, 1],
+            [B_FAN, 140, 397, 3, 1, 22, 1],
+            [B_DECORATION, 108, 314, 1, -0.7854, DEC_BLINKING_LIGHT, 3],
+            [B_DECORATION, 233, 196, 1, -2.3562, DEC_BLINKING_LIGHT, 4],
+            [B_DECORATION, 153, 103, 1, -0.9768, DEC_BLINKING_LIGHT, 5],
             [B_DECORATION, 143, 260, 10, -0.7854, DEC_ICON, 1, ICON_WAND, 0.5],
         ],
     ],
@@ -2641,8 +2578,8 @@ let SECTIONS = [
             [B_WALLS, 173, 202, 76, 209],
             [B_CONVEYER, 5, 38, 29, 169, -1.5708, 300, 300, 20],
             [B_CONVEYER, 6, 5, 38, 25, 0, 300, 160, 6],
-            [B_LAUNCHER, 155, 170, 0, -1, 1250, 36, 600, 24],
-            [B_LAUNCHER, 106, 170, 0, -1, 1250, 36, 600, 24],
+            [B_LAUNCHER, 155, 170],
+            [B_LAUNCHER, 106, 170],
             [B_CONVEYER, 44, 36, 28, 151, 1.5708, 100, 100, 50],
             [B_CONVEYER, 44, 186, 32, 21, 0, 800, 800, 1],
             [B_DECORATION, 131, 183, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, 1, 400, SHAPE_CHEVRON, 9, 131, 17, 50, 0],
@@ -2656,7 +2593,7 @@ let SECTIONS = [
         89,
         [
             [B_WALLS, 65, 78, 77, 87, 66, 76, 75, 59],
-            [B_FAN, 35, 44, 3, 1, 38, 0, 0, 1.5],
+            [B_FAN, 35, 44, 3, 1, 38, 1.5],
         ],
     ],
     [
@@ -2674,13 +2611,13 @@ let SECTIONS = [
             [B_CIRCLE, 44, 235, 10, 1, 10, 75, 0, 0, CIRCLE_SMILE, 3],
             [B_CIRCLE, 59, 215, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
             [B_CIRCLE, 74, 195, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 75, 393, 10, 1, 10, 75, 0, 0, CIRCLE_SMILE, 0],
+            [B_CIRCLE, 75, 393, 10, 1, 10, 75],
             [B_CIRCLE, 14, 374, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
             [B_CIRCLE, 29, 354, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 44, 334, 10, 1, 10, 75, 0, 0, CIRCLE_SMILE, 0],
+            [B_CIRCLE, 44, 334, 10, 1, 10, 75],
             [B_CIRCLE, 58, 313, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 73, 293, 10, 1, 10, 75, 0, 0, CIRCLE_SMILE, 0],
-            [B_DECORATION, 49, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2, 1000, SHAPE_CHEVRON, 1],
+            [B_CIRCLE, 73, 293, 10, 1, 10, 75],
+            [B_DECORATION, 49, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
         ],
     ],
     [
@@ -2834,210 +2771,6 @@ let createState = () => {
         newBest: false,
     };
 };
-let LAYER_ON = 0;
-let LAYER_OFF = 1;
-class Layer {
-    window;
-    layerState = LAYER_ON;
-    uiElements = [];
-    removeFlag = false;
-    constructor(window = null) {
-        this.window = window;
-        if (this.window) {
-            let host = this.window;
-            let pos = (e) => {
-                let r = host.getBoundingClientRect();
-                let p = e;
-                return {
-                    x: p.clientX - r.left,
-                    y: p.clientY - r.top,
-                    b: p.button || 0,
-                    d: p.deltaY || 0,
-                    s: p.shiftKey,
-                };
-            };
-            domAddEventListener(host, 'pointerdown', e => {
-                let p = pos(e);
-                this.onMouseDown(p.x, p.y, p.b, p.s);
-            });
-            domAddEventListener(host, 'pointerup', e => {
-                let p = pos(e);
-                this.onMouseUp(p.x, p.y, p.b);
-            });
-            domAddEventListener(host, 'pointermove', e => {
-                let p = pos(e);
-                this.onMouseHover(p.x, p.y);
-            });
-            addEventListener('keydown', e => {
-                this.onKeyDown(e.code, e.keyCode);
-            });
-            addEventListener('keyup', e => {
-                this.onKeyUp(e.code, e.keyCode);
-            });
-            addEventListener('resize', () => {
-                this.onResize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
-            });
-            host.addEventListener('wheel', e => {
-                e.preventDefault();
-                let p = pos(e);
-                this.onMouseWheel(p.x, p.y, p.d);
-            }, { passive: false });
-        }
-    }
-    onMouseDown(x, y, button, shift = false) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
-                return;
-            }
-        }
-    }
-    onMouseUp(x, y, button) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseUpEvent(x, y, button)) {
-                return;
-            }
-        }
-    }
-    onMouseHover(x, y) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkHoverEvent(x, y)) {
-                return;
-            }
-        }
-    }
-    onMouseWheel(x, y, dir) {
-        if (this.layerState !== LAYER_ON) {
-            return;
-        }
-        for (let i = this.uiElements.length - 1; i >= 0; i--) {
-            if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
-                return;
-            }
-        }
-    }
-    onResize(width, height) {
-        if (this.layerState === LAYER_OFF) {
-            return;
-        }
-        for (let elem of this.uiElements) {
-            elem.checkResizeEvent(width, height);
-        }
-    }
-    onKeyDown(_key, _keyCode) { }
-    onKeyUp(_key, _keyCode) { }
-    remove() {
-        this.removeFlag = true;
-    }
-    shouldRemove() {
-        return this.removeFlag;
-    }
-    addUiElement(element) {
-        this.uiElements.push(element);
-        element.build();
-    }
-    update(dt) {
-        for (let elem of this.uiElements) {
-            elem.update(dt);
-        }
-    }
-    render(dt) {
-        for (let elem of this.uiElements) {
-            elem.render(dt);
-        }
-    }
-}
-let DEBUG_N = 60;
-let rollCreate = () => {
-    let hist = [];
-    for (let i = 0; i < DEBUG_N; i++) {
-        hist.push(0);
-    }
-    return { hist, i: 0, sum: 0, filled: 0 };
-};
-let rollPush = (roll, value) => {
-    roll.sum -= roll.hist[roll.i];
-    roll.hist[roll.i] = value;
-    roll.sum += value;
-    roll.i = (roll.i + 1) % DEBUG_N;
-    if (roll.filled < DEBUG_N) {
-        roll.filled++;
-    }
-    return roll.sum / roll.filled;
-};
-class DebugLayer extends Layer {
-    el = null;
-    stepsThisFrame = 0;
-    stepRoll = rollCreate();
-    fpsRoll = rollCreate();
-    fps = 0;
-    avgSteps = 0;
-    constructor() {
-        super();
-        let root = getGameRoot();
-        if (!root) {
-            return;
-        }
-        let el = createElement(DIV);
-        setStyle(el, {
-            position: 'absolute',
-            left: '8px',
-            top: '8px',
-            padding: '6px',
-            color: '#0f0',
-            background: 'rgba(0,0,0,0.55)',
-            'z-index': '9',
-            [POINTER_EVENTS]: 'none',
-            'white-space': 'pre',
-            'font-family': 'monospace',
-            'font-size': '12px',
-        });
-        appendChild(root, el);
-        this.el = el;
-    }
-    update(_dt) {
-        this.stepsThisFrame++;
-    }
-    render(dt) {
-        this.avgSteps = rollPush(this.stepRoll, this.stepsThisFrame);
-        this.stepsThisFrame = 0;
-        this.fps = rollPush(this.fpsRoll, dt > 0 ? 1000 / dt : 0);
-        if (!this.el) {
-            return;
-        }
-        let state = getState();
-        let ball = state.balls[0];
-        let speed = 0;
-        let zone = 'none';
-        if (ball) {
-            speed = vecLen(ball.vel);
-            let section = findSectionAt(state.sections, ball.pos.x, ball.pos.y, null);
-            if (section) {
-                zone = stringify(section.id);
-            }
-        }
-        this.el[INNER_HTML] =
-            'fps ' +
-                this.fps.toFixed(0) +
-                BR +
-                'int ' +
-                this.avgSteps.toFixed(2) +
-                BR +
-                'spd ' +
-                speed.toFixed(0) +
-                BR +
-                'zone ' +
-                zone;
-    }
-}
 class UiElement {
     parent = null;
     children = [];
@@ -3169,6 +2902,153 @@ class UiElement {
         }
     }
 }
+let hudOverlay = {
+    position: 'absolute',
+    inset: '0',
+    'z-index': '8',
+    background: 'rgba(0,0,0,0.2)',
+    [POINTER_EVENTS]: 'none',
+};
+let hudBtn = {
+    position: 'absolute',
+    [POINTER_EVENTS]: 'auto',
+    cursor: 'pointer',
+    color: '#123',
+    background: '#fc8',
+    border: '0',
+    padding: '0',
+    'font-size': '18px',
+    'font-weight': 'bold',
+};
+let hudLabel = {
+    position: 'absolute',
+    left: '0',
+    right: '0',
+    'text-align': 'center',
+    'font-size': '16px',
+    [POINTER_EVENTS]: 'none',
+};
+let LAYER_ON = 0;
+let LAYER_OFF = 1;
+class Layer {
+    window;
+    layerState = LAYER_ON;
+    uiElements = [];
+    removeFlag = false;
+    constructor(window = null) {
+        this.window = window;
+        if (this.window) {
+            let host = this.window;
+            let pos = (e) => {
+                let r = host.getBoundingClientRect();
+                let p = e;
+                return {
+                    x: p.clientX - r.left,
+                    y: p.clientY - r.top,
+                    b: p.button || 0,
+                    d: p.deltaY || 0,
+                    s: p.shiftKey,
+                };
+            };
+            domAddEventListener(host, 'pointerdown', e => {
+                let p = pos(e);
+                this.onMouseDown(p.x, p.y, p.b, p.s);
+            });
+            domAddEventListener(host, 'pointerup', e => {
+                let p = pos(e);
+                this.onMouseUp(p.x, p.y, p.b);
+            });
+            domAddEventListener(host, 'pointermove', e => {
+                let p = pos(e);
+                this.onMouseHover(p.x, p.y);
+            });
+            addEventListener('keydown', e => {
+                this.onKeyDown(e.code, e.keyCode);
+            });
+            addEventListener('keyup', e => {
+                this.onKeyUp(e.code, e.keyCode);
+            });
+            addEventListener('resize', () => {
+                this.onResize(host.clientWidth || innerWidth, host.clientHeight || innerHeight);
+            });
+            host.addEventListener('wheel', e => {
+                e.preventDefault();
+                let p = pos(e);
+                this.onMouseWheel(p.x, p.y, p.d);
+            }, { passive: false });
+        }
+    }
+    onMouseDown(x, y, button, shift = false) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseDownEvent(x, y, button, shift)) {
+                return;
+            }
+        }
+    }
+    onMouseUp(x, y, button) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseUpEvent(x, y, button)) {
+                return;
+            }
+        }
+    }
+    onMouseHover(x, y) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkHoverEvent(x, y)) {
+                return;
+            }
+        }
+    }
+    onMouseWheel(x, y, dir) {
+        if (this.layerState !== LAYER_ON) {
+            return;
+        }
+        for (let i = this.uiElements.length - 1; i >= 0; i--) {
+            if (this.uiElements[i].checkMouseWheelEvent(x, y, dir)) {
+                return;
+            }
+        }
+    }
+    onResize(width, height) {
+        if (this.layerState === LAYER_OFF) {
+            return;
+        }
+        for (let elem of this.uiElements) {
+            elem.checkResizeEvent(width, height);
+        }
+    }
+    onKeyDown(_key, _keyCode) { }
+    onKeyUp(_key, _keyCode) { }
+    remove() {
+        this.removeFlag = true;
+    }
+    shouldRemove() {
+        return this.removeFlag;
+    }
+    addUiElement(element) {
+        this.uiElements.push(element);
+        element.build();
+    }
+    update(dt) {
+        for (let elem of this.uiElements) {
+            elem.update(dt);
+        }
+    }
+    render(dt) {
+        for (let elem of this.uiElements) {
+            elem.render(dt);
+        }
+    }
+}
 class CompleteHud extends UiElement {
     timeEl = null;
     bestEl = null;
@@ -3225,48 +3105,23 @@ class CompleteHud extends UiElement {
             return;
         }
         let overlay = createElement(DIV);
-        setStyle(overlay, {
-            position: 'absolute',
-            inset: '0',
-            'z-index': '8',
-            background: 'rgba(0,0,0,0.2)',
-            [POINTER_EVENTS]: 'none',
-            display: 'none',
-        });
-        let labelStyle = {
-            position: 'absolute',
-            left: '0',
-            right: '0',
-            'text-align': 'center',
-            'font-size': '16px',
-            [POINTER_EVENTS]: 'none',
-        };
+        setStyle(overlay, { ...hudOverlay, display: 'none' });
         let timeEl = createElement(DIV);
-        setStyle(timeEl, { ...labelStyle, color: '#fc8' });
+        setStyle(timeEl, { ...hudLabel, color: '#fc8' });
         appendChild(overlay, timeEl);
         let bestEl = createElement(DIV);
-        setStyle(bestEl, { ...labelStyle, color: '#8cf' });
+        setStyle(bestEl, { ...hudLabel, color: '#8cf' });
         appendChild(overlay, bestEl);
         let newEl = createElement(DIV);
         setStyle(newEl, {
-            ...labelStyle,
+            ...hudLabel,
             color: '#6c6',
             'font-weight': 'bold',
         });
         appendChild(overlay, newEl);
         let btn = createElement('button');
         btn[INNER_HTML] = 'Restart';
-        setStyle(btn, {
-            position: 'absolute',
-            [POINTER_EVENTS]: 'auto',
-            cursor: 'pointer',
-            color: '#123',
-            background: '#fc8',
-            border: '0',
-            padding: '0',
-            'font-size': '18px',
-            'font-weight': 'bold',
-        });
+        setStyle(btn, hudBtn);
         domAddEventListener(btn, 'click', () => {
             this.onRestart();
         });
@@ -3420,51 +3275,19 @@ class MenuHud extends UiElement {
             return;
         }
         let overlay = createElement(DIV);
-        setStyle(overlay, {
-            position: 'absolute',
-            inset: '0',
-            'z-index': '8',
-            background: 'rgba(0,0,0,0.2)',
-            [POINTER_EVENTS]: 'none',
-        });
+        setStyle(overlay, hudOverlay);
         let btn = createElement('button');
         btn[INNER_HTML] = 'Start Game';
-        setStyle(btn, {
-            position: 'absolute',
-            [POINTER_EVENTS]: 'auto',
-            cursor: 'pointer',
-            color: '#123',
-            background: '#fc8',
-            border: '0',
-            padding: '0',
-            'font-size': '18px',
-            'font-weight': 'bold',
-        });
+        setStyle(btn, hudBtn);
         domAddEventListener(btn, 'click', () => {
             this.onStart();
         });
         appendChild(overlay, btn);
         let lastEl = createElement(DIV);
-        setStyle(lastEl, {
-            position: 'absolute',
-            left: '0',
-            right: '0',
-            'text-align': 'center',
-            color: '#fc8',
-            'font-size': '16px',
-            [POINTER_EVENTS]: 'none',
-        });
+        setStyle(lastEl, { ...hudLabel, color: '#fc8' });
         appendChild(overlay, lastEl);
         let bestEl = createElement(DIV);
-        setStyle(bestEl, {
-            position: 'absolute',
-            left: '0',
-            right: '0',
-            'text-align': 'center',
-            color: '#8cf',
-            'font-size': '16px',
-            [POINTER_EVENTS]: 'none',
-        });
+        setStyle(bestEl, { ...hudLabel, color: '#8cf' });
         appendChild(overlay, bestEl);
         appendChild(root, overlay);
         this.el = overlay;
@@ -3586,18 +3409,6 @@ class BallElement extends UiElement {
         }
     }
 }
-let spiralD = (maxR) => {
-    let d = '';
-    let steps = 36;
-    for (let i = 0; i <= steps; i++) {
-        let t = (i / steps) * Math.PI * 5;
-        let r = (i / steps) * maxR;
-        let x = Math.cos(t) * r;
-        let y = Math.sin(t) * r;
-        d += (i ? 'L' : 'M') + stringify(x) + ' ' + stringify(y);
-    }
-    return d;
-};
 let addPortalMouth = (host, cx, cy, r, fill) => {
     let rx = r * 0.55;
     let ry = r;
@@ -3614,12 +3425,14 @@ let addPortalMouth = (host, cx, cy, r, fill) => {
         'stroke-width': '2',
     }));
     let spin = createSvgElement('g');
-    spin.appendChild(createSvgElement('path', {
-        d: spiralD(rx * 0.85),
+    spin.appendChild(createSvgElement('ellipse', {
+        cx: '0',
+        cy: '0',
+        rx: stringify(rx * 0.35),
+        ry: stringify(ry * 0.7),
         fill: 'none',
         stroke: '#000',
         'stroke-width': '1.5',
-        'stroke-linecap': 'round',
     }));
     g.appendChild(spin);
     host.appendChild(g);
@@ -4458,7 +4271,6 @@ let startGame = () => {
         new SimUiLayer(root),
         new MenuUiLayer(root),
         new GameCompleteUiLayer(root),
-        new DebugLayer(),
     ]).start();
 };
 addEventListener('load', startGame);

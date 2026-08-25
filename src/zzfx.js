@@ -425,7 +425,6 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
 // prettier-ignore
 const SOUNDS = [
   [.5,,106,,,.004,3,3.2,1,,,,,,37,,,.97,.16,,-1153], // gate closed
-  [.7,,10,.07,.01,.15,2,3.9,,,41,.01,.03,,11,,,.83,.03,.06,136], // hit special wall
   [1.6,.5,398,.07,.03,.16,,3.3,,-1,,,,,,,,.63,.1,,354], // hit small circle
   [1.8,,225,.01,.15,.17,1,1.3,,,,,,,22,,.16,.74,.03,,-1030], // Launch
   [1.6,,127,.2,.08,.2,4,2.7,,,,,,,,.1,,.55,.13,,-1202], // Launch Pull Back
@@ -435,7 +434,6 @@ const SOUNDS = [
   [,,845,.31,.13,,3,2.2,2,,,,.03,.1,276,,,.64,.1,.3], // Secret
   [.6,,14,.05,.42,,1,.9,-13,1,,,,.6,412,,,.77,.36,,391], // Gate Open
   [,,286,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // Paddle Flipper
-  [,,527,,,.03,5,1.70,-63,,,,,,,.5,,.93,,,401], // Wall Reappear
   [,,186,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // paddle flipper down
   [3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal in
   [3.6,,75,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal out
@@ -444,22 +442,20 @@ const SOUNDS = [
 ];
 
 export const SOUND_GATE_CLOSED = 0;
-export const SOUND_HIT_SPECIAL_WALL = 1;
-export const SOUND_HIT_SMALL_CIRCLE = 2;
-export const SOUND_LAUNCH = 3;
-export const SOUND_LAUNCH_PULL_BACK = 4;
-export const SOUND_START_GAME = 5;
-export const SOUND_BALL_TRAVELING = 6;
-export const SOUND_GET_COIN = 7;
-export const SOUND_SECRET = 8;
-export const SOUND_GATE_OPEN = 9;
-export const SOUND_PADDLE_FLIPPER = 10;
-export const SOUND_WALL_REAPPEAR = 11;
-export const SOUND_PADDLE_FLIPPER_DOWN = 12;
-export const SOUND_PORTAL_IN = 13;
-export const SOUND_PORTAL_OUT = 14;
-export const SOUND_HIT_FAN = 15;
-export const SOUND_GAME_WIN = 16;
+export const SOUND_HIT_SMALL_CIRCLE = 1;
+export const SOUND_LAUNCH = 2;
+export const SOUND_LAUNCH_PULL_BACK = 3;
+export const SOUND_START_GAME = 4;
+export const SOUND_BALL_TRAVELING = 5;
+export const SOUND_GET_COIN = 6;
+export const SOUND_SECRET = 7;
+export const SOUND_GATE_OPEN = 8;
+export const SOUND_PADDLE_FLIPPER = 9;
+export const SOUND_PADDLE_FLIPPER_DOWN = 10;
+export const SOUND_PORTAL_IN = 11;
+export const SOUND_PORTAL_OUT = 12;
+export const SOUND_HIT_FAN = 13;
+export const SOUND_GAME_WIN = 14;
 
 const soundsPlayedThisTick = {};
 

@@ -169,9 +169,9 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'paddles', step: 1 },
       { name: 'restitution', step: 0.05 },
       { name: 'radius' },
+      { name: 'omega', step: 0.05 },
       { name: 'dx' },
       { name: 'dy' },
-      { name: 'omega', step: 0.05 },
     ],
   },
   {
@@ -236,7 +236,7 @@ export const DECORATION_DEFS = [
   {
     id: DEC_BLINKING_LIGHT,
     name: 'Blinking light',
-    args: ['interval', 'shape', 'startOn'],
+    args: ['shape', 'startOn', 'interval'],
   },
   {
     id: DEC_BLINKING_LIGHT_LINE,
@@ -283,7 +283,7 @@ export const isDecRainbow = (call: number[]) => {
 
 export const decArgDefault = (name: string, call: number[]) => {
   if (name === 'interval') {
-    return 400;
+    return (call[5] | 0) === DEC_BLINKING_LIGHT_LINE ? 400 : 1000;
   }
   if (name === 'count') {
     return 5;
@@ -356,22 +356,20 @@ export const TRIGGER_DEFS = [
 
 export const SOUND_DEFS = [
   { id: 0, name: 'gate closed', key: 'SOUND_GATE_CLOSED' },
-  { id: 1, name: 'hit special wall', key: 'SOUND_HIT_SPECIAL_WALL' },
-  { id: 2, name: 'hit small circle', key: 'SOUND_HIT_SMALL_CIRCLE' },
-  { id: 3, name: 'launch', key: 'SOUND_LAUNCH' },
-  { id: 4, name: 'launch pull back', key: 'SOUND_LAUNCH_PULL_BACK' },
-  { id: 5, name: 'start game', key: 'SOUND_START_GAME' },
-  { id: 6, name: 'ball traveling', key: 'SOUND_BALL_TRAVELING' },
-  { id: 7, name: 'get coin', key: 'SOUND_GET_COIN' },
-  { id: 8, name: 'secret', key: 'SOUND_SECRET' },
-  { id: 9, name: 'gate open', key: 'SOUND_GATE_OPEN' },
-  { id: 10, name: 'paddle flipper', key: 'SOUND_PADDLE_FLIPPER' },
-  { id: 11, name: 'wall reappear', key: 'SOUND_WALL_REAPPEAR' },
-  { id: 12, name: 'paddle flipper down', key: 'SOUND_PADDLE_FLIPPER_DOWN' },
-  { id: 13, name: 'portal in', key: 'SOUND_PORTAL_IN' },
-  { id: 14, name: 'portal out', key: 'SOUND_PORTAL_OUT' },
-  { id: 15, name: 'hit fan', key: 'SOUND_HIT_FAN' },
-  { id: 16, name: 'game win', key: 'SOUND_GAME_WIN' },
+  { id: 1, name: 'hit small circle', key: 'SOUND_HIT_SMALL_CIRCLE' },
+  { id: 2, name: 'launch', key: 'SOUND_LAUNCH' },
+  { id: 3, name: 'launch pull back', key: 'SOUND_LAUNCH_PULL_BACK' },
+  { id: 4, name: 'start game', key: 'SOUND_START_GAME' },
+  { id: 5, name: 'ball traveling', key: 'SOUND_BALL_TRAVELING' },
+  { id: 6, name: 'get coin', key: 'SOUND_GET_COIN' },
+  { id: 7, name: 'secret', key: 'SOUND_SECRET' },
+  { id: 8, name: 'gate open', key: 'SOUND_GATE_OPEN' },
+  { id: 9, name: 'paddle flipper', key: 'SOUND_PADDLE_FLIPPER' },
+  { id: 10, name: 'paddle flipper down', key: 'SOUND_PADDLE_FLIPPER_DOWN' },
+  { id: 11, name: 'portal in', key: 'SOUND_PORTAL_IN' },
+  { id: 12, name: 'portal out', key: 'SOUND_PORTAL_OUT' },
+  { id: 13, name: 'hit fan', key: 'SOUND_HIT_FAN' },
+  { id: 14, name: 'game win', key: 'SOUND_GAME_WIN' },
 ];
 
 export const isMoveBallField = (call: number[]) => {
@@ -421,22 +419,10 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
     ];
   }
   if (id === B_CIRCLE) {
-    return [
-      B_CIRCLE,
-      x,
-      y,
-      10,
-      1,
-      20,
-      0,
-      0,
-      0,
-      ((x + y) | 0) % 3,
-      ((x + y) | 0) % GATE_COLORS.length,
-    ];
+    return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0, 0, 0];
   }
   if (id === B_FAN) {
-    return [B_FAN, x, y, 4, 1, 40, 0, 0, 1];
+    return [B_FAN, x, y, 4, 1, 40, 1, 0, 0];
   }
   if (id === B_FIELD) {
     const trig = triggerDefFor(TRIGGER_DEACTIVATE_WALL);

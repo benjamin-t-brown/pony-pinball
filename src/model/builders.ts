@@ -1,7 +1,7 @@
 import { lineCreate } from '../sim/physics';
 import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
-import { GATE_COLORS, PADDLE_LEN } from './constants';
+import { GATE_COLORS, LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from './constants';
 import { Collectable } from './parts/Collectable';
 import { Decoration } from './parts/Decoration';
 import { Field } from './parts/Field';
@@ -64,13 +64,15 @@ BUILDERS[B_FLIPPER_LEFT] = (
   section,
   [x, y, restAngle, upAngle, isFlipped, flipperLength]
 ) => {
+  const rest = restAngle == null ? LEFT_REST_ANGLE : restAngle;
+  const up = upAngle == null ? LEFT_UP : upAngle;
   section.parts.push(
     new Paddle(
       x,
       y,
       isFlipped ? CONTROL_RIGHT : CONTROL_LEFT,
-      isFlipped ? Math.PI - restAngle : restAngle,
-      isFlipped ? Math.PI - upAngle : upAngle,
+      isFlipped ? Math.PI - rest : rest,
+      isFlipped ? Math.PI - up : up,
       flipperLength > 0 ? flipperLength : PADDLE_LEN
     )
   );
@@ -130,7 +132,7 @@ BUILDERS[B_CIRCLE] = (
 
 BUILDERS[B_FAN] = (
   section,
-  [x, y, paddles, restitution, radius, dx, dy, omega]
+  [x, y, paddles, restitution, radius, omega, dx, dy]
 ) => {
   section.parts.push(
     makeFan(x, y, paddles, restitution, radius, dx, dy, omega)

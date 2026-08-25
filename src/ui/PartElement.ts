@@ -58,19 +58,6 @@ import {
 } from '../model/Part';
 import { UiElement } from './UiElement';
 
-const spiralD = (maxR: number) => {
-  let d = '';
-  const steps = 36;
-  for (let i = 0; i <= steps; i++) {
-    const t = (i / steps) * Math.PI * 5;
-    const r = (i / steps) * maxR;
-    const x = Math.cos(t) * r;
-    const y = Math.sin(t) * r;
-    d += (i ? 'L' : 'M') + stringify(x) + ' ' + stringify(y);
-  }
-  return d;
-};
-
 const addPortalMouth = (
   host: SVGSVGElement,
   cx: number,
@@ -96,12 +83,14 @@ const addPortalMouth = (
   );
   const spin = createSvgElement('g');
   spin.appendChild(
-    createSvgElement('path', {
-      d: spiralD(rx * 0.85),
+    createSvgElement('ellipse', {
+      cx: '0',
+      cy: '0',
+      rx: stringify(rx * 0.35),
+      ry: stringify(ry * 0.7),
       fill: 'none',
       stroke: '#000',
       'stroke-width': '1.5',
-      'stroke-linecap': 'round',
     })
   );
   g.appendChild(spin);

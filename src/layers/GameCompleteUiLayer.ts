@@ -1,7 +1,6 @@
 import {
   DIV,
   INNER_HTML,
-  POINTER_EVENTS,
   appendChild,
   createElement,
   domAddEventListener,
@@ -18,6 +17,7 @@ import {
   startPlay,
 } from '../state/State';
 import { UiElement } from '../ui/UiElement';
+import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
 import { playSound, SOUND_START_GAME } from '../zzfx.js';
 import { Layer } from './Layer';
 
@@ -83,35 +83,19 @@ class CompleteHud extends UiElement {
       return;
     }
     const overlay = createElement(DIV);
-    setStyle(overlay, {
-      position: 'absolute',
-      inset: '0',
-      'z-index': '8',
-      background: 'rgba(0,0,0,0.2)',
-      [POINTER_EVENTS]: 'none',
-      display: 'none',
-    });
-
-    const labelStyle = {
-      position: 'absolute',
-      left: '0',
-      right: '0',
-      'text-align': 'center',
-      'font-size': '16px',
-      [POINTER_EVENTS]: 'none',
-    };
+    setStyle(overlay, { ...hudOverlay, display: 'none' });
 
     const timeEl = createElement(DIV);
-    setStyle(timeEl, { ...labelStyle, color: '#fc8' });
+    setStyle(timeEl, { ...hudLabel, color: '#fc8' });
     appendChild(overlay, timeEl);
 
     const bestEl = createElement(DIV);
-    setStyle(bestEl, { ...labelStyle, color: '#8cf' });
+    setStyle(bestEl, { ...hudLabel, color: '#8cf' });
     appendChild(overlay, bestEl);
 
     const newEl = createElement(DIV);
     setStyle(newEl, {
-      ...labelStyle,
+      ...hudLabel,
       color: '#6c6',
       'font-weight': 'bold',
     });
@@ -119,17 +103,7 @@ class CompleteHud extends UiElement {
 
     const btn = createElement('button');
     btn[INNER_HTML] = 'Restart';
-    setStyle(btn, {
-      position: 'absolute',
-      [POINTER_EVENTS]: 'auto',
-      cursor: 'pointer',
-      color: '#123',
-      background: '#fc8',
-      border: '0',
-      padding: '0',
-      'font-size': '18px',
-      'font-weight': 'bold',
-    });
+    setStyle(btn, hudBtn);
     domAddEventListener(btn, 'click', () => {
       this.onRestart();
     });

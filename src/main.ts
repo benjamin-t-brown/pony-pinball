@@ -1,6 +1,5 @@
 import { getGameRoot } from './dom';
 import { LayerManager } from './layers/LayerManager';
-import { DebugLayer } from './layers/DebugLayer';
 import { GameCompleteUiLayer } from './layers/GameCompleteUiLayer';
 import { MenuUiLayer } from './layers/MenuUiLayer';
 import { SimLayer } from './layers/SimLayer';
@@ -24,7 +23,6 @@ export const startGame = () => {
     new SimUiLayer(root),
     new MenuUiLayer(root),
     new GameCompleteUiLayer(root),
-    new DebugLayer(),
   ]).start();
 };
 

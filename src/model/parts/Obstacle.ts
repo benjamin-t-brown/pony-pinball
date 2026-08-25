@@ -206,16 +206,8 @@ export const makeCircle = (
   );
   o.r = radius;
   o.isCircle = true;
-  if (icon == null) {
-    o.icon = ((x + y) | 0) % 3;
-  } else {
-    o.icon = icon | 0;
-  }
-  if (color == null) {
-    o.color = ((x + y) | 0) % GATE_COLORS.length;
-  } else {
-    o.color = color | 0;
-  }
+  o.icon = icon | 0;
+  o.color = color | 0;
   return o;
 };
 
@@ -240,30 +232,5 @@ export const makeFan = (
   );
   o.r = radius;
   o.isFan = true;
-  return o;
-};
-
-/** A round bumper: n-gon walls, flashes and kicks the ball back on contact. */
-export const makeBumper = (
-  x: number,
-  y: number,
-  r: number,
-  n: number,
-  rest = 1.2,
-  vx = 0,
-  vy = 0,
-  omega = 0
-) => {
-  const o = new Obstacle(
-    x,
-    y,
-    PART_OBSTACLE,
-    makeCircleWalls(r, n, rest),
-    vx,
-    vy,
-    omega
-  );
-  o.r = r;
-  o.isCircle = true;
   return o;
 };

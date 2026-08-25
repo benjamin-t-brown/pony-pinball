@@ -1,4 +1,4 @@
-import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
+import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE, LAUNCHER_X, LAUNCHER_Y, LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from '@game/model/constants';
 import { roundAngle } from './geometry';
 import {
   TRIGGER_ACTIVATE_LIGHT,
@@ -161,15 +161,34 @@ const formatCall = (call: number[], indent: string) => {
       ];
       return `${indent}[${[name, ...nums].join(', ')}]`;
     }
-    const shape = SHAPE_NAMES[args[7]] || formatNum(args[7] ?? 0);
+    if (args[4] === DEC_BLINKING_LIGHT) {
+      const nums = [
+        ...args.slice(0, 4).map(formatNum),
+        dec,
+        tex,
+      ];
+      if (args.length > 6) {
+        nums.push(SHAPE_NAMES[args[6]] || formatNum(args[6]));
+        for (let i = 7; i < args.length; i++) {
+          nums.push(formatNum(args[i]));
+        }
+      }
+      return `${indent}[${[name, ...nums].join(', ')}]`;
+    }
     const nums = [
       ...args.slice(0, 4).map(formatNum),
       dec,
       tex,
-      formatNum(args[6]),
-      shape,
-      ...args.slice(8).map(formatNum),
     ];
+    if (args.length > 6) {
+      nums.push(formatNum(args[6]));
+    }
+    if (args.length > 7) {
+      nums.push(SHAPE_NAMES[args[7]] || formatNum(args[7]));
+      for (let i = 8; i < args.length; i++) {
+        nums.push(formatNum(args[i]));
+      }
+    }
     return `${indent}[${[name, ...nums].join(', ')}]`;
   }
   return `${indent}[${[name, ...args.map(formatNum)].join(', ')}]`;
@@ -346,13 +365,73 @@ export const roundLevel = (
   };
 };
 
+const trimCall = (call: number[]) => {
+  const next = call.slice();
+  const defs: (number | undefined)[] = [];
+  if (next[0] === 5) {
+    defs[3] = LEFT_REST_ANGLE;
+    defs[4] = LEFT_UP;
+    defs[5] = 0;
+    defs[6] = PADDLE_LEN;
+  } else if (next[0] === 2) {
+    defs[3] = 0;
+    defs[4] = -1;
+    defs[5] = LAUNCHER_FORCE;
+    defs[6] = LAUNCHER_RANGE;
+    defs[7] = LAUNCHER_CHARGE_MS;
+    defs[8] = LAUNCHER_LEN;
+  } else if (next[0] === 6) {
+    defs[6] = 0;
+    defs[7] = 0;
+    defs[8] = 0;
+    defs[9] = 0;
+    defs[10] = 0;
+  } else if (next[0] === 9) {
+    defs[7] = 0;
+    defs[8] = 0;
+  } else if (next[0] === 11) {
+    defs[6] = 0.5;
+    defs[7] = 0.5;
+    defs[8] = 0.5;
+    defs[9] = 0;
+  } else if (next[0] === 12) {
+    const type = next[5] | 0;
+    if (type === DEC_BLINKING_LIGHT) {
+      defs[7] = SHAPE_CHEVRON;
+      defs[8] = 1;
+      defs[9] = 1000;
+    } else if (type === DEC_BLINKING_LIGHT_LINE) {
+      defs[7] = 400;
+      defs[8] = SHAPE_CHEVRON;
+      defs[12] = 0;
+      defs[13] = 1;
+    } else if (type === DEC_ICON) {
+      defs[8] = 1;
+    }
+  }
+  while (
+    next.length > 3 &&
+    defs[next.length - 1] !== undefined &&
+    next[next.length - 1] === defs[next.length - 1]
+  ) {
+    next.pop();
+  }
+  return next;
+};
+
 export const generateLevelsTs = (
   sections: SectionData[],
   links: number[][],
   start?: number[] | { x: number; y: number } | null
 ): string => {
   const rounded = roundLevel(sections, links, start);
-  sections = rounded.sections;
+  sections = rounded.sections.map(s => [
+    s[0],
+    s[1],
+    s[2],
+    s[3],
+    s[4].map(trimCall),
+  ]) as SectionData[];
   links = rounded.links;
   const spawn = rounded.start;
   const builderNames = new Set<string>();
@@ -379,7 +458,7 @@ export const generateLevelsTs = (
           }
         }
       }
-      if (call[0] === 6) {
+      if (call[0] === 6 && call.length > 9) {
         const icon = CIRCLE_ICON_NAMES[call[9]];
         if (icon) {
           circleIconNames.add(icon);
@@ -396,7 +475,9 @@ export const generateLevelsTs = (
             decNames.add(glyph);
           }
         } else if ((call[5] | 0) !== DEC_RAINBOW) {
-          const shape = SHAPE_NAMES[call[8]];
+          const shapeIdx =
+            (call[5] | 0) === DEC_BLINKING_LIGHT ? 7 : 8;
+          const shape = SHAPE_NAMES[call[shapeIdx]];
           if (shape) {
             decNames.add(shape);
           }
