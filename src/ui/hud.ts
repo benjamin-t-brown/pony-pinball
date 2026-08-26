@@ -1,4 +1,5 @@
 import { POINTER_EVENTS } from '../dom';
+import { ACCENT, SECTION_BG } from '../model/constants';
 
 export const hudOverlay: Record<string, string> = {
   position: 'absolute',
@@ -12,8 +13,8 @@ export const hudBtn: Record<string, string> = {
   position: 'absolute',
   [POINTER_EVENTS]: 'auto',
   cursor: 'pointer',
-  color: '#123',
-  background: '#fc8',
+  color: SECTION_BG,
+  background: ACCENT,
   border: '0',
   padding: '0',
   'font-size': '18px',

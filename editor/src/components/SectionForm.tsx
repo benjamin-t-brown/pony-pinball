@@ -5,14 +5,12 @@ type Props = {
   sections: SectionData[];
   selection: Selection;
   onChange: (sections: SectionData[]) => void;
-  onSelect: (index: number) => void;
 };
 
 export const SectionForm = ({
   sections,
   selection,
   onChange,
-  onSelect,
 }: Props) => {
   const index = selection && selection.kind === 'section' ? selection.index : -1;
   const section = index >= 0 ? sections[index] : null;
@@ -26,40 +24,25 @@ export const SectionForm = ({
     onChange(next);
   };
 
+  if (!section) {
+    return null;
+  }
+
   return (
     <div>
-      <h2>Sections</h2>
-      <div className="section-list">
-        {sections.map((s, i) => (
-          <button
-            key={i}
-            className={i === index ? 'active' : ''}
-            onClick={() => {
-              onSelect(i);
+      <h2>Section {index}</h2>
+      {(['x', 'y', 'w', 'h'] as const).map((name, i) => (
+        <div className="field" key={name}>
+          <label>{name}</label>
+          <input
+            type="number"
+            value={section[i] as number}
+            onChange={e => {
+              setField(i as 0 | 1 | 2 | 3, Number(e.target.value));
             }}
-          >
-            {i}: {s[2]}×{s[3]} at ({s[0]}, {s[1]})
-          </button>
-        ))}
-      </div>
-      {section ? (
-        <>
-          {(['x', 'y', 'w', 'h'] as const).map((name, i) => (
-            <div className="field" key={name}>
-              <label>{name}</label>
-              <input
-                type="number"
-                value={section[i] as number}
-                onChange={e => {
-                  setField(i as 0 | 1 | 2 | 3, Number(e.target.value));
-                }}
-              />
-            </div>
-          ))}
-        </>
-      ) : (
-        <p className="status">Select a section to edit its rect.</p>
-      )}
+          />
+        </div>
+      ))}
     </div>
   );
 };

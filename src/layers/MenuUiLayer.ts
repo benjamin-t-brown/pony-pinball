@@ -8,6 +8,7 @@ import {
   px,
   setStyle,
 } from '../dom';
+import { ACCENT } from '../model/constants';
 import { formatTime, getState, startPlay } from '../state/State';
 import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
 import { UiElement } from '../ui/UiElement';
@@ -76,7 +77,7 @@ class MenuHud extends UiElement {
     appendChild(overlay, btn);
 
     const lastEl = createElement(DIV);
-    setStyle(lastEl, { ...hudLabel, color: '#fc8' });
+    setStyle(lastEl, { ...hudLabel, color: ACCENT });
     appendChild(overlay, lastEl);
 
     const bestEl = createElement(DIV);

@@ -20,7 +20,6 @@ import {
   HAT_D,
   ICON_HAT,
   ICON_PONY,
-  PONY_D,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
   TEX_ARROWS,
@@ -2674,7 +2673,7 @@ const PartPreview = ({
               <circle cx={0} cy={-9.2} r={2.2} fill={fill} />
             </>
           ) : glyph === ICON_PONY ? (
-            <path d={PONY_D} fill={fill} />
+            <path d={STAR_D} fill={fill} transform="scale(9)" />
           ) : (
             <>
               <path d={WAND_D} fill={fill} />

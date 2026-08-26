@@ -1,3 +1,5 @@
+import { playSound } from '../zzfx.js';
+
 export type Vec = { x: number; y: number };
 
 export type Circle = {
@@ -14,6 +16,8 @@ export type Line = {
   rest: number;
   /** Palette index for gate walls; -1 = normal wall. */
   color: number;
+  /** zzfx id played on bounce; 0 = silent. */
+  sound: number;
 };
 
 // Extra distance the solver pushes a body past the surface, so the next step
@@ -53,7 +57,7 @@ export const circleApplyImpulse = (c: Circle, j: Vec): Circle => {
   return c;
 };
 
-export const GRAVITY = 900;
+export const GRAVITY = 950;
 
 export const circleIntegrate = (
   c: Circle,
@@ -71,12 +75,14 @@ export const lineCreate = (
   x2: number,
   y2: number,
   rest = 0.5,
-  color = -1
+  color = -1,
+  sound = 0
 ): Line => ({
   a: vecCreate(x1, y1),
   b: vecCreate(x2, y2),
   rest,
   color,
+  sound,
 });
 
 export const lineSet = (
@@ -127,7 +133,8 @@ export const resolveCircleSurface = (
   depth: number,
   rest: number,
   friction: number,
-  surfaceVel: Vec | null
+  surfaceVel: Vec | null,
+  sound = 0
 ): boolean => {
   if (depth <= 0) {
     return false;
@@ -140,6 +147,9 @@ export const resolveCircleSurface = (
     // Already separating in the surface's frame: this is a resting or trailing
     // contact, so correcting the position is the whole job.
     return true;
+  }
+  if (sound) {
+    playSound(sound);
   }
 
   const relT = vecSub(rel, vecMul(n, vn));
@@ -185,8 +195,23 @@ export const resolveCircleLine = (
     c.r - dist,
     l.rest,
     friction,
-    surfaceVel
+    surfaceVel,
+    l.sound
   );
+};
+
+export const resolveBallWalls = (
+  ball: Circle,
+  walls: Line[],
+  surfaceVel: Vec | null = null
+) => {
+  let hit = false;
+  for (let i = 0; i < walls.length; i++) {
+    if (resolveCircleLine(ball, walls[i], 0, surfaceVel)) {
+      hit = true;
+    }
+  }
+  return hit;
 };
 
 export const resolveCircleCircle = (

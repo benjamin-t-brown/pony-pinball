@@ -1,5 +1,4 @@
 import { lineCreate } from '../sim/physics';
-import type { SectionData } from '../levels';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START } from './Part';
 import { GATE_COLORS, LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from './constants';
 import { Collectable } from './parts/Collectable';
@@ -11,8 +10,11 @@ import { Paddle } from './parts/Paddle';
 import { Portal } from './parts/Portal';
 import { type Section, sectionCreate } from './Section';
 import { TRIGGERS, Trigger } from './Trigger';
+import { SOUND_HIT_FAN } from '../zzfx.js';
 
 export { GATE_COLORS };
+
+type SectionData = [number, number, number, number, number[][]];
 
 export const B_WALLS = 0;
 export const B_WALL_RESTI = 1;
@@ -191,7 +193,9 @@ BUILDERS[B_TRIANGLE] = (
     v.y2,
     c < 0 ? 0 : c % GATE_COLORS.length,
   ]);
-  s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0));
+  s.walls.push(
+    lineCreate(v.x1, v.y1, v.x2, v.y2, resti0, -1, SOUND_HIT_FAN)
+  );
   s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
   s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
 };

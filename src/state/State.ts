@@ -1,7 +1,10 @@
 import { Ball, ballCreate } from '../model/Ball';
 import { buildLevel } from '../model/builders';
-import { COMPLETE_SECTION, MENU_SECTION } from '../model/constants';
-import { Section, flattenSectionWalls } from '../model/Section';
+import { COMPLETE_SECTION } from '../model/constants';
+import { PART_COLLECTABLE } from '../model/Part';
+import type { Collectable } from '../model/parts/Collectable';
+import { Section, flattenSectionWalls, forEachPart } from '../model/Section';
+import { resetGateSection4 } from '../model/Trigger';
 import { Line } from '../sim/physics';
 import { LINKS, SECTIONS, START } from '../levels';
 
@@ -52,15 +55,8 @@ export const sectionCenter = (sections: Section[], id: number) => {
   };
 };
 
-export const menuBallPos = (sections: Section[]) => {
-  return sectionCenter(sections, MENU_SECTION);
-};
-
-export const idleBallPos = (s: State) => {
-  return sectionCenter(
-    s.sections,
-    s.complete ? COMPLETE_SECTION : MENU_SECTION
-  );
+export const idleBallPos = (sections: Section[]) => {
+  return sectionCenter(sections, COMPLETE_SECTION);
 };
 
 export const startPlay = () => {
@@ -72,6 +68,16 @@ export const startPlay = () => {
   s.input[0] = false;
   s.input[1] = false;
   s.input[2] = false;
+  s.collected.length = 0;
+  forEachPart(s.sections, part => {
+    if (part.type !== PART_COLLECTABLE) {
+      return;
+    }
+    const coin = part as Collectable;
+    coin.taken = false;
+    coin.active = true;
+  });
+  resetGateSection4(s.sections);
   s.balls[0] = ballCreate(s.startX, s.startY);
 };
 
@@ -94,7 +100,7 @@ export const finishPlay = () => {
 
 export const createState = (): State => {
   const sections = buildLevel(SECTIONS, LINKS);
-  const spawn = menuBallPos(sections);
+  const spawn = idleBallPos(sections);
   return {
     balls: [ballCreate(spawn.x, spawn.y)],
     sections,

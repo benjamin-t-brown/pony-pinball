@@ -86,9 +86,6 @@ export const Sidebar = ({
         sections={sections}
         selection={selection}
         onChange={onSections}
-        onSelect={index => {
-          onSelection({ kind: 'section', index });
-        }}
       />
       <BuilderForm
         sections={sections}

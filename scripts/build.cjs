@@ -107,10 +107,13 @@ async function embedJs(html, chunk) {
   const { Packer } = await import('roadroller');
   const packer = new Packer(inputs, options);
   fs.writeFileSync(`${path.join(__dirname, '../')}/output.js`, htmlInJs);
-  await Promise.all([
-    // fs.writeFileSync(`${path.join(__dirname, 'dist')}/output.js`, htmlInJs),
-    packer.optimize(true ? 2 : 0), // Regular builds use level 2, but rr config builds use the supplied params
-  ]);
+  if (!USE_RR_CONFIG) {
+    // No precalculated config: let roadroller search for good params itself.
+    // (Bug fixed: this used to run unconditionally, silently overwriting
+    // numAbbreviations/sparseSelectors from roadroller-config.json every
+    // build via its internal re-search, regardless of USE_RR_CONFIG.)
+    await packer.optimize(2);
+  }
   const { firstLine, secondLine } = packer.makeDecoder();
   return `<script>\n${firstLine}\n${secondLine}\n</script>`;
 

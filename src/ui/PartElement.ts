@@ -14,6 +14,7 @@ import {
   stringify,
 } from '../dom';
 import { GATE_COLORS } from '../model/builders';
+import { ACCENT, SECTION_BG } from '../model/constants';
 import type { Collectable } from '../model/parts/Collectable';
 import {
   CHEVRON_D,
@@ -22,7 +23,6 @@ import {
   HAT_D,
   ICON_HAT,
   ICON_PONY,
-  PONY_D,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
   TEX_ARROWS,
@@ -153,8 +153,9 @@ const addDecorationIcon = (g: SVGElement, dec: Decoration) => {
   if (glyph === ICON_PONY) {
     g.appendChild(
       createSvgElement('path', {
-        'd': PONY_D,
+        'd': STAR_D,
         fill,
+        transform: 'scale(9)',
       })
     );
     return;
@@ -209,14 +210,14 @@ const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
     g.appendChild(
       createSvgElement('path', {
         'd': STAR_D,
-        fill: '#123',
+        fill: SECTION_BG,
       })
     );
   } else if (icon === CIRCLE_DIAMOND) {
     g.appendChild(
       createSvgElement('path', {
         'd': DIAMOND_D,
-        fill: '#123',
+        fill: SECTION_BG,
       })
     );
   } else {
@@ -225,7 +226,7 @@ const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
         cx: '-.32',
         cy: '-.22',
         r: '.13',
-        fill: '#123',
+        fill: SECTION_BG,
       })
     );
     g.appendChild(
@@ -233,14 +234,14 @@ const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
         cx: '.32',
         cy: '-.22',
         r: '.13',
-        fill: '#123',
+        fill: SECTION_BG,
       })
     );
     g.appendChild(
       createSvgElement('path', {
         'd': 'M-.4.22A.48.48 0 0 0 .4.22',
         fill: 'none',
-        stroke: '#123',
+        stroke: SECTION_BG,
         'stroke-width': '.12',
         'stroke-linecap': 'round',
       })
@@ -331,7 +332,7 @@ export class PartElement extends UiElement {
         width: px(d),
         height: px(d),
         'border-radius': '50%',
-        background: '#fc8',
+        background: ACCENT,
         [POINTER_EVENTS]: 'none',
       });
       this.attach(el);
@@ -484,7 +485,7 @@ export class PartElement extends UiElement {
         '#c84',
         '8'
       );
-      this.addLine(svg, 0, 0, 0, 0, '#fc8', '8');
+      this.addLine(svg, 0, 0, 0, 0, ACCENT, '8');
     } else {
       const obstacle = part as Obstacle;
       if (obstacle.isCircle) {

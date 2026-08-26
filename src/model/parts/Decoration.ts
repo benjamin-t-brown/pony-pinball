@@ -17,8 +17,6 @@ export const ICON_PONY = 2;
 export const CHEVRON_D = 'M-6-8L6 0L-6 8';
 export const WAND_D = 'M-6.5 8-4.6 9.6 4.2-4.8 2.3-6.4Z';
 export const HAT_D = 'M0-8.5 7.5 5Q0 12-7.5 5Z';
-export const PONY_D =
-  'M8-9 2-4 3.2-1 2.2 1.5 4 3.6 1.4 5.6 2.4 8.5H-3.2L-4.2 5.6-2.2 3.8-5.6 4.8-8.2 7.8-8.8 4.8-5.8 2-7.6.2-5-1.8-3.2-5-.2-3.6 2.4-6.8 5.2-6 6.4-8.8Z';
 
 export const TEX_PALETTE = GATE_COLORS.length;
 export const TEX_ARROWS = GATE_COLORS.length + 1;
@@ -47,7 +45,7 @@ export const lightAnimation = (dec: Decoration) => {
 };
 
 export const injectTextureCss = () => {
-  const rain = '#f66,#fa6,#fc8,#6c6,#8cf,#c8f,#f66';
+  const rain = GATE_COLORS.join(',') + ',' + GATE_COLORS[0];
   const arrow =
     'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'%3E%3Cpath fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/%3E%3C/svg%3E")';
   const n = GATE_COLORS.length;

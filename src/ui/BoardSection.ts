@@ -12,6 +12,7 @@ import {
 } from '../dom';
 import type { Section } from '../model/Section';
 import { GATE_COLORS } from '../model/builders';
+import { ACCENT } from '../model/constants';
 import { PartElement } from './PartElement';
 import { UiElement } from './UiElement';
 
@@ -75,7 +76,7 @@ export class BoardSection extends UiElement {
     for (const wall of section.walls) {
       const gate = wall.color >= 0;
       const stroke = gate
-        ? GATE_COLORS[wall.color % GATE_COLORS.length] || '#fc8'
+        ? GATE_COLORS[wall.color % GATE_COLORS.length] || ACCENT
         : '#888';
       const attrs: Record<string, string> = {
         x1: stringify(wall.a.x),
@@ -117,7 +118,7 @@ export class BoardSection extends UiElement {
         wall.rest < 0
           ? 'rgba(136,136,136,0.2)'
           : gate
-            ? GATE_COLORS[wall.color % GATE_COLORS.length] || '#fc8'
+            ? GATE_COLORS[wall.color % GATE_COLORS.length] || ACCENT
             : '#888';
       setAttribute(this.wallEls[i] as unknown as HTMLElement, 'stroke', stroke);
     }

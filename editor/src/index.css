@@ -145,12 +145,6 @@ select {
   color: #db6;
 }
 
-.section-list button {
-  width: 100%;
-  text-align: left;
-  margin-bottom: 4px;
-}
-
 .canvas-wrap {
   position: relative;
   overflow: hidden;

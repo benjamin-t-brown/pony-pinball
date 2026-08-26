@@ -98,36 +98,52 @@ export class DeactivateWallTrigger extends Trigger {
   }
 }
 
+const GATE4_SECTION = 4;
+const GATE4_WALL = 40;
+const GATE4_LIGHT = 22;
+const GATE4_NEEDED = 6;
+
 /**
- * Hardcoded collectable goal: after 5 group-0 coins, disable wall 39 and
- * turn on light 22 in section 4.
+ * Hardcoded collectable goal: after 6 group-0 coins, disable a wall and
+ * turn on a light in section 4.
  */
 export class GateSection4Trigger extends Trigger {
   onCollect(_section: Section, state: CollectState, groupType: number) {
     if (groupType !== 0) {
       return;
     }
-    const needed = 6;
-    const section = 4;
-    const wallIndex = 39;
-    const lightIndex = 22;
-    if ((state.collected[0] || 0) < needed) {
+    if ((state.collected[0] || 0) < GATE4_NEEDED) {
       return;
     }
-    const target = state.sections[section];
+    const target = state.sections[GATE4_SECTION];
     if (!target) {
       return;
     }
-    if (target.walls[wallIndex].rest !== -1) {
-      target.walls[wallIndex].rest = -1;
+    if (target.walls[GATE4_WALL].rest !== -1) {
+      target.walls[GATE4_WALL].rest = -1;
       playSound(SOUND_SECRET);
     }
-    const light = target.parts[lightIndex];
+    const light = target.parts[GATE4_LIGHT];
     if (light && light.type === PART_DECORATION) {
       light.activate();
     }
   }
 }
+
+export const resetGateSection4 = (sections: Section[]) => {
+  const target = sections[GATE4_SECTION];
+  if (!target) {
+    return;
+  }
+  const wall = target.walls[GATE4_WALL];
+  if (wall && wall.rest < 0) {
+    wall.rest = 0.5;
+  }
+  const light = target.parts[GATE4_LIGHT];
+  if (light && light.type === PART_DECORATION) {
+    light.unactivate();
+  }
+};
 
 export class ActivateLightTrigger extends Trigger {
   disableIn = -1;

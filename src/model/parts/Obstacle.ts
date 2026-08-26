@@ -1,8 +1,13 @@
-import type { Circle, Line } from '../../sim/physics';
-import { lineCreate, lineSet, vecCreate } from '../../sim/physics';
-import { resolveBallWalls } from '../../sim/updateSimulation';
+import {
+  type Circle,
+  type Line,
+  lineCreate,
+  lineSet,
+  resolveBallWalls,
+  vecCreate,
+} from '../../sim/physics';
 import type { Section } from '../Section';
-import { GATE_COLORS } from '../constants';
+import { ACCENT, GATE_COLORS } from '../constants';
 import { PART_OBSTACLE, Part } from '../Part';
 import { playSound, SOUND_HIT_FAN, SOUND_HIT_SMALL_CIRCLE } from '../../zzfx.js';
 
@@ -164,13 +169,13 @@ export const DIAMOND_D = 'M0-1L1 0 0 1-1 0Z';
 
 export const circleFill = (active: boolean, color = 0) => {
   if (active) {
-    return '#fc8';
+    return ACCENT;
   }
   return GATE_COLORS[(color | 0) % GATE_COLORS.length];
 };
 
 export const circleStroke = (active: boolean) => {
-  return active ? '#fc8' : '#fff';
+  return active ? ACCENT : '#fff';
 };
 
 export const obstacleStroke = (o: Obstacle) => {
@@ -178,9 +183,9 @@ export const obstacleStroke = (o: Obstacle) => {
     return circleStroke(o.active);
   }
   if (o.isFan) {
-    return o.active ? '#fc8' : GATE_COLORS[1];
+    return o.active ? ACCENT : GATE_COLORS[1];
   }
-  return o.active ? '#fc8' : '#888';
+  return o.active ? ACCENT : '#888';
 };
 
 export const makeCircle = (

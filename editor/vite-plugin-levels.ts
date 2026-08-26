@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import fs from 'fs';
 import path from 'path';
-import type { Plugin, ViteDevServer } from 'vite';
+import {
+  normalizePath,
+  type ModuleNode,
+  type Plugin,
+  type ViteDevServer,
+} from 'vite';
 
 const readBody = (req: IncomingMessage) => {
   return new Promise<string>((resolve, reject) => {
@@ -37,15 +42,42 @@ const ensureStartExport = (source: string, start: number[]) => {
   return `${source.replace(/\s*$/, '')}\n\n/** world x, y */\n${line}\n`;
 };
 
+const isLevelsFile = (file: string, levelsFile: string) => {
+  return normalizePath(file) === levelsFile;
+};
+
+const invalidateLevels = (server: ViteDevServer, levelsFile: string) => {
+  const seen = new Set<ModuleNode>();
+  const drop = (mod: ModuleNode | undefined) => {
+    if (!mod || seen.has(mod)) {
+      return;
+    }
+    seen.add(mod);
+    server.moduleGraph.invalidateModule(mod);
+  };
+  drop(server.moduleGraph.getModuleById(levelsFile));
+  drop(server.moduleGraph.getModuleById('@game/levels.ts'));
+  const byFile = server.moduleGraph.getModulesByFile(levelsFile);
+  if (byFile) {
+    for (const mod of byFile) {
+      drop(mod);
+    }
+  }
+  server.watcher.unwatch(levelsFile);
+};
+
 export const levelsApiPlugin = (repoRoot: string): Plugin => {
-  const levelsPath = path.join(repoRoot, 'src', 'levels.ts');
+  const levelsFile = normalizePath(path.resolve(repoRoot, 'src', 'levels.ts'));
   return {
     name: 'levels-api',
     configureServer(server: ViteDevServer) {
+      server.watcher.unwatch(levelsFile);
       server.middlewares.use('/api/levels', (req, res, next) => {
         const handle = async () => {
           if (req.method === 'GET') {
+            invalidateLevels(server, levelsFile);
             const mod = await server.ssrLoadModule('@game/levels.ts');
+            server.watcher.unwatch(levelsFile);
             sendJson(res, 200, {
               sections: mod.SECTIONS,
               links: mod.LINKS,
@@ -64,7 +96,7 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
               sendJson(res, 400, { error: 'sections and links arrays required' });
               return;
             }
-            const resolved = path.resolve(levelsPath);
+            const resolved = path.resolve(levelsFile);
             const root = path.resolve(repoRoot);
             const rel = path.relative(root, resolved);
             if (rel.startsWith('..') || path.isAbsolute(rel)) {
@@ -82,6 +114,7 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
             let source = gen.generateLevelsTs(data.sections, data.links, start);
             source = ensureStartExport(source, start);
             fs.writeFileSync(resolved, source);
+            invalidateLevels(server, levelsFile);
             sendJson(res, 200, { ok: true });
             return;
           }
@@ -91,6 +124,11 @@ export const levelsApiPlugin = (repoRoot: string): Plugin => {
           sendJson(res, 500, { error: String(err) });
         });
       });
+    },
+    handleHotUpdate({ file }) {
+      if (isLevelsFile(file, levelsFile)) {
+        return [];
+      }
     },
   };
 };

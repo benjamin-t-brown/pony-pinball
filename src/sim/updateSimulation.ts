@@ -14,10 +14,7 @@ import {
 import {
   GRAVITY,
   circleIntegrate,
-  resolveCircleLine,
-  type Circle,
-  type Line,
-  type Vec,
+  resolveBallWalls,
   vecLen,
   vecMul,
 } from './physics';
@@ -42,20 +39,6 @@ export const clampBallSpeed = (ball: Ball, maxSpeed = MAX_BALL_SPEED) => {
   if (speed > maxSpeed) {
     ball.vel = vecMul(ball.vel, maxSpeed / speed);
   }
-};
-
-export const resolveBallWalls = (
-  ball: Circle,
-  walls: Line[],
-  surfaceVel: Vec | null = null
-) => {
-  let hit = false;
-  for (let i = 0; i < walls.length; i++) {
-    if (resolveCircleLine(ball, walls[i], 0, surfaceVel)) {
-      hit = true;
-    }
-  }
-  return hit;
 };
 
 export const updateParts = (state: State, dt: number) => {
@@ -128,7 +111,7 @@ export const updateSimulation = (state: State, dt: number) => {
       if (state.playing) {
         state.balls[i] = ballCreate(state.startX, state.startY);
       } else {
-        const spawn = idleBallPos(state);
+        const spawn = idleBallPos(state.sections);
         state.balls[i] = ballCreate(spawn.x, spawn.y);
       }
     }

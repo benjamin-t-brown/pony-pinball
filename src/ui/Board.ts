@@ -9,18 +9,18 @@ import {
 } from '../dom';
 import { getState } from '../state/State';
 import type { Ball } from '../model/Ball';
-import { COMPLETE_SECTION, MENU_SECTION } from '../model/constants';
+import { COMPLETE_SECTION } from '../model/constants';
 import type { Section } from '../model/Section';
 import { findSectionAt } from '../model/Section';
 import { BallElement } from './BallElement';
 import { BoardSection } from './BoardSection';
 import {
-  CAM_MENU_SCALE,
   CAM_SCALE_STEP,
   clampCamScale,
   getCamFitScale,
   getCamLook,
   getCamPan,
+  getMenuTourCam,
   lerpCam,
 } from '../model/camera';
 import { UiElement } from './UiElement';
@@ -38,6 +38,7 @@ export class Board extends UiElement {
   targetLookY = 0;
   targetScale = 1;
   wasPlaying = false;
+  menuTourMs = 0;
 
   constructor() {
     super();
@@ -129,15 +130,29 @@ export class Board extends UiElement {
     this.camY = pan.y;
   }
 
-  setCamTarget(section: Section, snap: boolean) {
-    const look = getCamLook(section);
-    const state = getState();
+  applyMenuTour(dt: number) {
+    this.menuTourMs += dt;
+    const look = getMenuTourCam(
+      this.menuTourMs,
+      getState().sections,
+      this.width,
+      this.height
+    );
+    this.section = look.section;
+    this.lookX = look.x;
+    this.lookY = look.y;
+    this.camScale = look.scale;
     this.targetLookX = look.x;
     this.targetLookY = look.y;
-    this.targetScale =
-      state.playing || state.complete
-        ? getCamFitScale(section, this.width, this.height)
-        : CAM_MENU_SCALE;
+    this.targetScale = look.scale;
+    this.applyLook();
+  }
+
+  setCamTarget(section: Section, snap: boolean) {
+    const look = getCamLook(section);
+    this.targetLookX = look.x;
+    this.targetLookY = look.y;
+    this.targetScale = getCamFitScale(section, this.width, this.height);
     if (snap) {
       this.lookX = look.x;
       this.lookY = look.y;
@@ -197,12 +212,16 @@ export class Board extends UiElement {
     }
 
     this.syncBalls();
-    const ball = state.balls[0];
-    this.section = ball
-      ? findSectionAt(state.sections, ball.pos.x, ball.pos.y, null)
-      : state.sections[0];
-    if (this.section) {
-      this.setCamTarget(this.section, true);
+    if (!state.playing && !state.complete) {
+      this.applyMenuTour(0);
+    } else {
+      const ball = state.balls[0];
+      this.section = ball
+        ? findSectionAt(state.sections, ball.pos.x, ball.pos.y, null)
+        : state.sections[0];
+      if (this.section) {
+        this.setCamTarget(this.section, true);
+      }
     }
     this.applyCamera();
   }
@@ -210,7 +229,11 @@ export class Board extends UiElement {
   checkResizeEvent(width: number, height: number) {
     this.width = width;
     this.height = height;
-    if (this.section) {
+    const state = getState();
+    if (!state.playing && !state.complete) {
+      this.applyMenuTour(0);
+      this.applyCamera();
+    } else if (this.section) {
       this.setCamTarget(this.section, true);
       this.applyCamera();
     }
@@ -256,17 +279,13 @@ export class Board extends UiElement {
     this.syncBalls();
     const state = getState();
     const ball = state.balls[0];
-    if (!state.playing) {
-      const lockId = state.complete ? COMPLETE_SECTION : MENU_SECTION;
-      const room = state.sections[lockId];
+    if (!state.playing && !state.complete) {
+      this.applyMenuTour(dt);
+    } else if (!state.playing) {
+      const room = state.sections[COMPLETE_SECTION];
       if (room && this.section !== room) {
         this.section = room;
         this.setCamTarget(room, true);
-      }
-      if (room && state.complete) {
-        this.targetScale = getCamFitScale(room, this.width, this.height);
-      } else {
-        this.targetScale = CAM_MENU_SCALE;
       }
     } else if (ball) {
       const next = findSectionAt(
@@ -280,7 +299,7 @@ export class Board extends UiElement {
         (next !== this.section || state.playing !== this.wasPlaying)
       ) {
         this.section = next;
-        this.setCamTarget(next, state.playing !== this.wasPlaying);
+        this.setCamTarget(next, false);
       }
     }
     this.wasPlaying = state.playing;

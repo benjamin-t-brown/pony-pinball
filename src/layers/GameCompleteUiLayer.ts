@@ -8,7 +8,7 @@ import {
   px,
   setStyle,
 } from '../dom';
-import { COMPLETE_SECTION } from '../model/constants';
+import { ACCENT, COMPLETE_SECTION } from '../model/constants';
 import { findSectionAt } from '../model/Section';
 import {
   finishPlay,
@@ -86,7 +86,7 @@ class CompleteHud extends UiElement {
     setStyle(overlay, { ...hudOverlay, display: 'none' });
 
     const timeEl = createElement(DIV);
-    setStyle(timeEl, { ...hudLabel, color: '#fc8' });
+    setStyle(timeEl, { ...hudLabel, color: ACCENT });
     appendChild(overlay, timeEl);
 
     const bestEl = createElement(DIV);

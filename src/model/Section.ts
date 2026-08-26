@@ -217,8 +217,11 @@ export const flattenSectionWalls = (
         lineSet(walls[n], x0, y0, x1, y1);
         walls[n].rest = wall.rest;
         walls[n].color = wall.color;
+        walls[n].sound = wall.sound;
       } else {
-        walls.push(lineCreate(x0, y0, x1, y1, wall.rest, wall.color));
+        walls.push(
+          lineCreate(x0, y0, x1, y1, wall.rest, wall.color, wall.sound)
+        );
       }
       n++;
     }
