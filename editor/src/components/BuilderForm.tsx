@@ -13,7 +13,6 @@ import {
   DECORATION_DEFS,
   SHAPE_DEFS,
   CIRCLE_ICON_DEFS,
-  ICON_DEFS,
   decorationDefFor,
   decArgDefault,
   defFor,
@@ -315,19 +314,6 @@ export const BuilderForm = ({
                   </option>
                 ))}
               </select>
-            ) : param.name === 'glyph' ? (
-              <select
-                value={call[i + 1] ?? 0}
-                onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
-                }}
-              >
-                {ICON_DEFS.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
             ) : param.name === 'startOn' ? (
               <select
                 value={call[i + 1] ?? 1}
@@ -396,7 +382,6 @@ export const BuilderForm = ({
                       param.name === 'texture' ||
                       param.name === 'shape' ||
                       param.name === 'icon' ||
-                      param.name === 'glyph' ||
                       param.name === 'color' ||
                       param.name === 'count' ||
                       param.name === 'delay'

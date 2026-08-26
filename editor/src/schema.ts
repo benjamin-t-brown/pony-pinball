@@ -19,9 +19,6 @@ import {
   DEC_BLINKING_LIGHT_LINE,
   DEC_ICON,
   DEC_RAINBOW,
-  ICON_HAT,
-  ICON_PONY,
-  ICON_WAND,
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
@@ -246,19 +243,13 @@ export const DECORATION_DEFS = [
   {
     id: DEC_ICON,
     name: 'Icon',
-    args: ['glyph', 'opacity'],
+    args: ['opacity'],
   },
   {
     id: DEC_RAINBOW,
     name: 'Rainbow',
     args: ['w', 'h'],
   },
-];
-
-export const ICON_DEFS = [
-  { id: ICON_WAND, name: 'wand' },
-  { id: ICON_HAT, name: 'princess hat' },
-  { id: ICON_PONY, name: 'unicorn' },
 ];
 
 export const CIRCLE_ICON_DEFS = [

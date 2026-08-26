@@ -17,13 +17,9 @@ import {
   CHEVRON_D,
   DEC_ICON,
   DEC_RAINBOW,
-  HAT_D,
-  ICON_HAT,
-  ICON_PONY,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
   TEX_ARROWS,
-  WAND_D,
   decorationFill,
   decorationLightAt,
   decorationLightCount,
@@ -2661,27 +2657,12 @@ const PartPreview = ({
     }
     if (dec.decorationType === DEC_ICON) {
       const fill = decorationFill(dec.texture);
-      const glyph = dec.shape % 3;
       return (
         <g
           transform={`translate(${dec.x} ${dec.y}) rotate(${rot}) scale(${dec.scale})`}
           opacity={dec.opacity}
         >
-          {glyph === ICON_HAT ? (
-            <>
-              <path d={HAT_D} fill={fill} />
-              <circle cx={0} cy={-9.2} r={2.2} fill={fill} />
-            </>
-          ) : glyph === ICON_PONY ? (
-            <path d={STAR_D} fill={fill} transform="scale(9)" />
-          ) : (
-            <>
-              <path d={WAND_D} fill={fill} />
-              <g transform="translate(5.2 -6.8) scale(4.2)">
-                <path d={STAR_D} fill={fill} />
-              </g>
-            </>
-          )}
+          <path d={STAR_D} fill={fill} transform="scale(9)" />
         </g>
       );
     }

@@ -13,9 +13,6 @@ import {
   DEC_BLINKING_LIGHT_LINE,
   DEC_ICON,
   DEC_RAINBOW,
-  ICON_HAT,
-  ICON_PONY,
-  ICON_WAND,
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
@@ -50,12 +47,6 @@ const DEC_NAMES: Record<number, string> = {
   [DEC_BLINKING_LIGHT_LINE]: 'DEC_BLINKING_LIGHT_LINE',
   [DEC_ICON]: 'DEC_ICON',
   [DEC_RAINBOW]: 'DEC_RAINBOW',
-};
-
-const ICON_NAMES: Record<number, string> = {
-  [ICON_WAND]: 'ICON_WAND',
-  [ICON_HAT]: 'ICON_HAT',
-  [ICON_PONY]: 'ICON_PONY',
 };
 
 const SHAPE_NAMES: Record<number, string> = {
@@ -142,13 +133,11 @@ const formatCall = (call: number[], indent: string) => {
     const tex =
       args[5] === TEX_PALETTE ? 'TEX_PALETTE' : formatNum(args[5]);
     if (args[4] === DEC_ICON) {
-      const glyph = ICON_NAMES[args[6]] || formatNum(args[6] ?? 0);
       const nums = [
         ...args.slice(0, 4).map(formatNum),
         dec,
         tex,
-        glyph,
-        ...args.slice(7).map(formatNum),
+        ...args.slice(6).map(formatNum),
       ];
       return `${indent}[${[name, ...nums].join(', ')}]`;
     }
@@ -260,7 +249,7 @@ const roundCall = (call: number[]) => {
     if (next.length > 6) {
       next[6] = Math.round(next[6]);
     }
-    if (next.length > 7) {
+    if ((next[5] | 0) !== DEC_ICON && next.length > 7) {
       next[7] = Math.round(next[7]);
     }
     if ((next[5] | 0) !== DEC_ICON && next.length > 8) {
@@ -406,7 +395,7 @@ const trimCall = (call: number[]) => {
       defs[12] = 0;
       defs[13] = 1;
     } else if (type === DEC_ICON) {
-      defs[8] = 1;
+      defs[7] = 1;
     }
   }
   while (
@@ -469,12 +458,7 @@ export const generateLevelsTs = (
         if (dec) {
           decNames.add(dec);
         }
-        if ((call[5] | 0) === DEC_ICON) {
-          const glyph = ICON_NAMES[call[7]];
-          if (glyph) {
-            decNames.add(glyph);
-          }
-        } else if ((call[5] | 0) !== DEC_RAINBOW) {
+        if ((call[5] | 0) !== DEC_ICON && (call[5] | 0) !== DEC_RAINBOW) {
           const shapeIdx =
             (call[5] | 0) === DEC_BLINKING_LIGHT ? 7 : 8;
           const shape = SHAPE_NAMES[call[shapeIdx]];

@@ -10,13 +10,7 @@ export const SHAPE_CHEVRON = 0;
 export const SHAPE_CIRCLE = 1;
 export const SHAPE_SQUARE = 2;
 
-export const ICON_WAND = 0;
-export const ICON_HAT = 1;
-export const ICON_PONY = 2;
-
 export const CHEVRON_D = 'M-6-8L6 0L-6 8';
-export const WAND_D = 'M-6.5 8-4.6 9.6 4.2-4.8 2.3-6.4Z';
-export const HAT_D = 'M0-8.5 7.5 5Q0 12-7.5 5Z';
 
 export const TEX_PALETTE = GATE_COLORS.length;
 export const TEX_ARROWS = GATE_COLORS.length + 1;
@@ -143,15 +137,14 @@ export class Decoration extends Part {
       }
     }
     if (decorationType === DEC_ICON) {
-      this.shape = args[0] | 0;
-      if (args[1] == null) {
+      if (args[0] == null) {
         this.opacity = 1;
-      } else if (args[1] < 0) {
+      } else if (args[0] < 0) {
         this.opacity = 0;
-      } else if (args[1] > 1) {
+      } else if (args[0] > 1) {
         this.opacity = 1;
       } else {
-        this.opacity = args[1];
+        this.opacity = args[0];
       }
     }
     if (decorationType === DEC_RAINBOW) {

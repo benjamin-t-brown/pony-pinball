@@ -20,13 +20,9 @@ import {
   CHEVRON_D,
   DEC_ICON,
   DEC_RAINBOW,
-  HAT_D,
-  ICON_HAT,
-  ICON_PONY,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
   TEX_ARROWS,
-  WAND_D,
   decorationFill,
   decorationLightAt,
   decorationLightCount,
@@ -131,51 +127,13 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
 };
 
 const addDecorationIcon = (g: SVGElement, dec: Decoration) => {
-  const fill = decorationFill(dec.texture);
-  const glyph = dec.shape % 3;
-  if (glyph === ICON_HAT) {
-    g.appendChild(
-      createSvgElement('path', {
-        'd': HAT_D,
-        fill,
-      })
-    );
-    g.appendChild(
-      createSvgElement(CIRCLE, {
-        cx: '0',
-        cy: '-9.2',
-        r: '2.2',
-        fill,
-      })
-    );
-    return;
-  }
-  if (glyph === ICON_PONY) {
-    g.appendChild(
-      createSvgElement('path', {
-        'd': STAR_D,
-        fill,
-        transform: 'scale(9)',
-      })
-    );
-    return;
-  }
   g.appendChild(
     createSvgElement('path', {
-      'd': WAND_D,
-      fill,
-    })
-  );
-  const spark = createSvgElement('g', {
-    transform: 'translate(5.2 -6.8) scale(4.2)',
-  });
-  spark.appendChild(
-    createSvgElement('path', {
       'd': STAR_D,
-      fill,
+      fill: decorationFill(dec.texture),
+      transform: 'scale(9)',
     })
   );
-  g.appendChild(spark);
 };
 
 const syncDecorationLight = (wrap: Element, dec: Decoration) => {
