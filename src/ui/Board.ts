@@ -58,10 +58,6 @@ export class Board extends UiElement {
     return el;
   }
 
-  getBallElements() {
-    return this.balls;
-  }
-
   removeBall(ball: BallElement) {
     const i = this.balls.indexOf(ball);
     if (i < 0) {

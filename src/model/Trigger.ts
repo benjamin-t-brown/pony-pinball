@@ -99,7 +99,7 @@ export class DeactivateWallTrigger extends Trigger {
 }
 
 const GATE4_SECTION = 4;
-const GATE4_WALL = 40;
+const GATE4_WALL = 31;
 const GATE4_LIGHT = 22;
 const GATE4_NEEDED = 6;
 

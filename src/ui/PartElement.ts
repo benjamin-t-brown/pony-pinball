@@ -34,7 +34,6 @@ import type { Field } from '../model/parts/Field';
 import type { Launcher } from '../model/parts/Launcher';
 import {
   CIRCLE_DIAMOND,
-  CIRCLE_STAR,
   DIAMOND_D,
   STAR_D,
   circleFill,
@@ -98,7 +97,7 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
   if (shape === SHAPE_CIRCLE) {
     g.appendChild(
       createSvgElement(CIRCLE, {
-        'r': '8',
+        r: '8',
         'stroke-width': '3',
       })
     );
@@ -107,8 +106,8 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
   if (shape === SHAPE_SQUARE) {
     g.appendChild(
       createSvgElement('rect', {
-        'x': '-8',
-        'y': '-8',
+        x: '-8',
+        y: '-8',
         width: '16',
         height: '16',
         'stroke-width': '3',
@@ -118,7 +117,7 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
   }
   g.appendChild(
     createSvgElement('path', {
-      'd': CHEVRON_D,
+      d: CHEVRON_D,
       'stroke-width': '3',
       'stroke-linecap': 'round',
       'stroke-linejoin': 'round',
@@ -129,7 +128,7 @@ const addDecorationShape = (g: SVGElement, shape: number) => {
 const addDecorationIcon = (g: SVGElement, dec: Decoration) => {
   g.appendChild(
     createSvgElement('path', {
-      'd': STAR_D,
+      d: STAR_D,
       fill: decorationFill(dec.texture),
       transform: 'scale(9)',
     })
@@ -137,19 +136,20 @@ const addDecorationIcon = (g: SVGElement, dec: Decoration) => {
 };
 
 const syncDecorationLight = (wrap: Element, dec: Decoration) => {
-  setAttribute(wrap as unknown as HTMLElement, 'opacity', dec.active ? '1' : '0.2');
+  setAttribute(
+    wrap as unknown as HTMLElement,
+    'opacity',
+    dec.active ? '1' : '0.2'
+  );
   const anim = lightAnimation(dec);
   const kids = wrap.children;
   for (let i = 0; i < kids.length; i++) {
     const g = kids[i] as unknown as HTMLElement;
     const style: Record<string, string> = {
-      'animation': anim,
+      animation: anim,
     };
-    if (dec.delay && anim !== 'none') {
-      style['animation-delay'] = stringify(i * dec.delay) + 'ms';
-    } else {
-      style['animation-delay'] = '0ms';
-    }
+    style['animation-delay'] =
+      dec.delay && anim !== 'none' ? stringify(i * dec.delay) + 'ms' : '0ms';
     setStyle(g, style);
   }
 };
@@ -163,18 +163,10 @@ const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
   const g = createSvgElement('g', {
     transform: 'scale(' + stringify(o.r * 0.7) + ')',
   });
-  const icon = o.icon % 3;
-  if (icon === CIRCLE_STAR) {
+  if (o.icon === CIRCLE_DIAMOND) {
     g.appendChild(
       createSvgElement('path', {
-        'd': STAR_D,
-        fill: SECTION_BG,
-      })
-    );
-  } else if (icon === CIRCLE_DIAMOND) {
-    g.appendChild(
-      createSvgElement('path', {
-        'd': DIAMOND_D,
+        d: DIAMOND_D,
         fill: SECTION_BG,
       })
     );
@@ -197,7 +189,7 @@ const addCircleGlyph = (svg: SVGSVGElement, o: Obstacle) => {
     );
     g.appendChild(
       createSvgElement('path', {
-        'd': 'M-.4.22A.48.48 0 0 0 .4.22',
+        d: 'M-.4.22A.48.48 0 0 0 .4.22',
         fill: 'none',
         stroke: SECTION_BG,
         'stroke-width': '.12',
@@ -270,7 +262,9 @@ export class PartElement extends UiElement {
         overflow: 'visible',
         [POINTER_EVENTS]: 'none',
       });
-      this.spiralEls.push(addPortalMouth(svg, portal.x, portal.y, portal.r, fill));
+      this.spiralEls.push(
+        addPortalMouth(svg, portal.x, portal.y, portal.r, fill)
+      );
       this.spiralEls.push(
         addPortalMouth(svg, portal.x2, portal.y2, portal.r, fill)
       );
@@ -341,7 +335,7 @@ export class PartElement extends UiElement {
             ') scale(' +
             stringify(dec.scale) +
             ')',
-          'opacity': stringify(dec.opacity),
+          opacity: stringify(dec.opacity),
         });
         addDecorationIcon(g, dec);
         wrap.appendChild(g);
@@ -365,7 +359,7 @@ export class PartElement extends UiElement {
             ') scale(' +
             sc +
             ')',
-          'class': getTextureClass(dec.texture),
+          class: getTextureClass(dec.texture),
         });
         addDecorationShape(g, dec.shape);
         wrap.appendChild(g);
@@ -434,15 +428,7 @@ export class PartElement extends UiElement {
       const launcher = part as Launcher;
       const dir = launcher.dir;
       const drawLen = launcher.len;
-      this.addLine(
-        svg,
-        0,
-        0,
-        -dir.x * drawLen,
-        -dir.y * drawLen,
-        '#c84',
-        '8'
-      );
+      this.addLine(svg, 0, 0, -dir.x * drawLen, -dir.y * drawLen, '#c84', '8');
       this.addLine(svg, 0, 0, 0, 0, ACCENT, '8');
     } else {
       const obstacle = part as Obstacle;

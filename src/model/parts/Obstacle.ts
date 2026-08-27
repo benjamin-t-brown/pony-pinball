@@ -160,8 +160,7 @@ export const makeFanWalls = (r: number, paddles: number, rest: number): Line[] =
 };
 
 export const CIRCLE_SMILE = 0;
-export const CIRCLE_STAR = 1;
-export const CIRCLE_DIAMOND = 2;
+export const CIRCLE_DIAMOND = 1;
 
 export const STAR_D =
   'M0-1L.24-.32.95-.31.38.12.59.81 0 .4-.59.81-.38.12-.95-.31-.24-.32Z';

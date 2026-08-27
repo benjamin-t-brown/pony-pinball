@@ -27,11 +27,6 @@ export class LayerManager {
   }
 
   updateRender(dt: number) {
-    for (let i = this.layers.length - 1; i >= 0; i--) {
-      if (this.layers[i].shouldRemove()) {
-        this.layers.splice(i, 1);
-      }
-    }
     for (const layer of this.layers) {
       if (layer.layerState === LAYER_OFF) {
         continue;

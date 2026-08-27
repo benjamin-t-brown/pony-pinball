@@ -21,7 +21,6 @@ import {
 import {
   CIRCLE_DIAMOND,
   CIRCLE_SMILE,
-  CIRCLE_STAR,
 } from '@game/model/parts/Obstacle';
 import { SOUND_DEFS } from './schema';
 import type { SectionData } from './types';
@@ -57,7 +56,6 @@ const SHAPE_NAMES: Record<number, string> = {
 
 const CIRCLE_ICON_NAMES: Record<number, string> = {
   [CIRCLE_SMILE]: 'CIRCLE_SMILE',
-  [CIRCLE_STAR]: 'CIRCLE_STAR',
   [CIRCLE_DIAMOND]: 'CIRCLE_DIAMOND',
 };
 

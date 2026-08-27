@@ -41,11 +41,11 @@ export const lightAnimation = (dec: Decoration) => {
 export const injectTextureCss = () => {
   const rain = GATE_COLORS.join(',') + ',' + GATE_COLORS[0];
   const arrow =
-    'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'%3E%3Cpath fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/%3E%3C/svg%3E")';
+    'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'><path fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/></svg>")';
   const n = GATE_COLORS.length;
   let css =
     '@keyframes k{50%{opacity:0}}' +
-    '@keyframes p{to{background-position:var(--s) 0;-webkit-mask-position:var(--s) 0;mask-position:var(--s) 0}}';
+    '@keyframes p{to{background-position:var(--s) 0;mask-position:var(--s) 0}}';
   css += '@keyframes c{';
   for (let i = 0; i < n; i++) {
     css += ((i * 100) / n | 0) + '%{stroke:' + GATE_COLORS[i] + '}';
@@ -68,9 +68,9 @@ export const injectTextureCss = () => {
     ' 0 0/var(--s) var(--s);mask:' +
     arrow +
     ' 0 0/var(--s) var(--s);animation:p .6s linear infinite}' +
-    '.tr{overflow:hidden;--s:-120px;background:repeating-linear-gradient(90deg,' +
+    '.tr{overflow:hidden;background:repeating-linear-gradient(90deg,' +
     rain +
-    ');background-size:120px 100%;animation:p 3.6s linear infinite}' +
+    ');background-size:120px 100%}' +
     '.sb{background:' +
     SECTION_BG +
     ';background-image:radial-gradient(' +

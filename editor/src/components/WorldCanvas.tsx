@@ -32,7 +32,6 @@ import { MoveBallTrigger } from '@game/model/Trigger';
 import type { Launcher } from '@game/model/parts/Launcher';
 import {
   CIRCLE_DIAMOND,
-  CIRCLE_STAR,
   DIAMOND_D,
   STAR_D,
   circleFill,
@@ -2838,9 +2837,7 @@ const PartPreview = ({
       <>
         <circle r={obstacle.r} fill={circleFill(obstacle.active, obstacle.color)} />
         <g transform={`scale(${obstacle.r * 0.7})`}>
-          {obstacle.icon % 3 === CIRCLE_STAR ? (
-            <path d={STAR_D} fill="#123" />
-          ) : obstacle.icon % 3 === CIRCLE_DIAMOND ? (
+          {obstacle.icon === CIRCLE_DIAMOND ? (
             <path d={DIAMOND_D} fill="#123" />
           ) : (
             <>

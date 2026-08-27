@@ -1040,12 +1040,7 @@ let DEC_RAINBOW = 3;
 let SHAPE_CHEVRON = 0;
 let SHAPE_CIRCLE = 1;
 let SHAPE_SQUARE = 2;
-let ICON_WAND = 0;
-let ICON_HAT = 1;
-let ICON_PONY = 2;
 let CHEVRON_D = 'M-6-8L6 0L-6 8';
-let WAND_D = 'M-6.5 8-4.6 9.6 4.2-4.8 2.3-6.4Z';
-let HAT_D = 'M0-8.5 7.5 5Q0 12-7.5 5Z';
 let TEX_PALETTE = GATE_COLORS.length;
 let TEX_ARROWS = GATE_COLORS.length + 1;
 let getTextureClass = (texture) => {
@@ -1069,10 +1064,10 @@ let lightAnimation = (dec) => {
 };
 let injectTextureCss = () => {
     let rain = GATE_COLORS.join(',') + ',' + GATE_COLORS[0];
-    let arrow = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'%3E%3Cpath fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/%3E%3C/svg%3E")';
+    let arrow = 'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'><path fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/></svg>")';
     let n = GATE_COLORS.length;
     let css = '@keyframes k{50%{opacity:0}}' +
-        '@keyframes p{to{background-position:var(--s) 0;-webkit-mask-position:var(--s) 0;mask-position:var(--s) 0}}';
+        '@keyframes p{to{background-position:var(--s) 0;mask-position:var(--s) 0}}';
     css += '@keyframes c{';
     for (let i = 0; i < n; i++) {
         css += ((i * 100) / n | 0) + '%{stroke:' + GATE_COLORS[i] + '}';
@@ -1095,9 +1090,9 @@ let injectTextureCss = () => {
             ' 0 0/var(--s) var(--s);mask:' +
             arrow +
             ' 0 0/var(--s) var(--s);animation:p .6s linear infinite}' +
-            '.tr{overflow:hidden;--s:-120px;background:repeating-linear-gradient(90deg,' +
+            '.tr{overflow:hidden;background:repeating-linear-gradient(90deg,' +
             rain +
-            ');background-size:120px 100%;animation:p 3.6s linear infinite}' +
+            ');background-size:120px 100%}' +
             '.sb{background:' +
             SECTION_BG +
             ';background-image:radial-gradient(' +
@@ -1154,18 +1149,17 @@ class Decoration extends Part {
             }
         }
         if (decorationType === DEC_ICON) {
-            this.shape = args[0] | 0;
-            if (args[1] == null) {
+            if (args[0] == null) {
                 this.opacity = 1;
             }
-            else if (args[1] < 0) {
+            else if (args[0] < 0) {
                 this.opacity = 0;
             }
-            else if (args[1] > 1) {
+            else if (args[0] > 1) {
                 this.opacity = 1;
             }
             else {
-                this.opacity = args[1];
+                this.opacity = args[0];
             }
         }
         if (decorationType === DEC_RAINBOW) {
@@ -1466,8 +1460,7 @@ let makeFanWalls = (r, paddles, rest) => {
     return walls;
 };
 let CIRCLE_SMILE = 0;
-let CIRCLE_STAR = 1;
-let CIRCLE_DIAMOND = 2;
+let CIRCLE_DIAMOND = 1;
 let STAR_D = 'M0-1L.24-.32.95-.31.38.12.59.81 0 .4-.59.81-.38.12-.95-.31-.24-.32Z';
 let DIAMOND_D = 'M0-1L1 0 0 1-1 0Z';
 let circleFill = (active, color = 0) => {
@@ -1722,7 +1715,7 @@ class DeactivateWallTrigger extends Trigger {
     }
 }
 let GATE4_SECTION = 4;
-let GATE4_WALL = 40;
+let GATE4_WALL = 31;
 let GATE4_LIGHT = 22;
 let GATE4_NEEDED = 6;
 /**
@@ -2036,20 +2029,19 @@ let SECTIONS = [
                 350, 200, 400, 108,
                 373, 474, 373, 520,
                 372, 445, 372, 300,
-                0, 86, 96, 0,
                 0, 103, 173, 147,
                 307, 167, 400, 107
             ],
             [B_FLIPPER_LEFT, 114, 369],
             [B_FLIPPER_LEFT, 307, 177, 0.45, -0.55, 1],
             [B_LAUNCHER, 387, 495, 0, -1, 840, 36, 400, 16],
-            [B_CIRCLE, 162, 67, 10, 1.2, 40, 0, 0, 1.2, CIRCLE_STAR, 1],
+            [B_CIRCLE, 162, 67, 10, 1.2, 40, 0, 0, 1.2, CIRCLE_DIAMOND, 1],
             [B_CIRCLE, 82, 256, 10, 1.2, 40, 0, 0, 1.2],
             [B_DECORATION, 19, 394, 1, 0, DEC_BLINKING_LIGHT, 0],
             [B_DECORATION, 162, 274, 1, -1.0472, DEC_BLINKING_LIGHT, 1],
             [B_DECORATION, 279, 75, 1, -1.8846, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 386, 416, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CHEVRON, 5, 386, 330, 50],
-            [B_DECORATION, 198, 402, 15, -0.0091, DEC_ICON, 1, ICON_PONY, 0.25],
+            [B_DECORATION, 198, 402, 15, -0.0091, DEC_ICON, 1, 0.25],
         ],
     ],
     [
@@ -2089,7 +2081,7 @@ let SECTIONS = [
             [B_DECORATION, 378, 348, 1, 1.5708, DEC_BLINKING_LIGHT, 0, SHAPE_SQUARE, 0, 400],
             [B_DECORATION, 110, 342, 1, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_CHEVRON, 5, 49, 283, 50],
             [B_DECORATION, 186, 70, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, 3, 400, SHAPE_CHEVRON, 5, 186, 127, 50],
-            [B_DECORATION, 188, 232, 15, -0.0091, DEC_ICON, 5, ICON_HAT, 0.25],
+            [B_DECORATION, 188, 232, 15, -0.0091, DEC_ICON, 5, 0.25],
             [B_DECORATION, 33, 362, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
         ],
     ],
@@ -2106,16 +2098,15 @@ let SECTIONS = [
                 588, 174, 580, 192,
                 93, 368, 61, 400,
                 0, 339, 61, 400,
-                82, 84, 82, 278,
-                93, 368, 116, 399
+                82, 84, 82, 278
             ],
             [B_CONVEYER, 32, 87, 45, 198, 1.5708, 400, 160, 6],
             [B_LAUNCHER, 73, 367, 0.4957, -0.8685, 970],
-            [B_CIRCLE, 160, 161, 15, 1.2, 22, 0, 160, 1.2, CIRCLE_STAR, 4],
-            [B_CIRCLE, 249, 283, 15, 1.2, 37, 0, 150, 1.2, CIRCLE_STAR, 4],
-            [B_CIRCLE, 398, 50, 15, 1.2, 36, 0, 150, 1.2, CIRCLE_STAR, 4],
+            [B_CIRCLE, 160, 161, 15, 1.2, 22, 0, 160, 1.2, CIRCLE_DIAMOND, 4],
+            [B_CIRCLE, 249, 283, 15, 1.2, 37, 0, 150, 1.2, CIRCLE_DIAMOND, 4],
+            [B_CIRCLE, 398, 50, 15, 1.2, 36, 0, 150, 1.2, CIRCLE_DIAMOND, 4],
             [B_LAUNCHER, 575, 143, 0, -1, 2500, 50, 500, 38],
-            [B_CIRCLE, 336, 370, 15, 1.2, 22, 0, 250, 1.2, CIRCLE_STAR, 4],
+            [B_CIRCLE, 336, 370, 15, 1.2, 22, 0, 250, 1.2, CIRCLE_DIAMOND, 4],
             [B_FLIPPER_LEFT, 502, 155, 0.45, -0.55, 1],
             [B_DECORATION, 163, 250, 1, -0.7849, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 325, 159, 1, -0.6751, DEC_BLINKING_LIGHT, 3],
@@ -2147,23 +2138,18 @@ let SECTIONS = [
                 265, 8, 207, 0,
                 271, 63, 253, 130,
                 253, 219, 253, 129,
-                482, 287, 432, 212,
-                481, 129, 432, 210,
                 180, 581, 80, 522,
                 337, 581, 452, 522,
                 452, 522, 452, 429,
                 78, 522, 78, 437,
                 36, 437, 36, 643,
-                56, 196, 35, 198,
                 34, 199, 34, 334,
-                119, 285, 58, 196,
+                119, 285, 34, 200,
                 170, 248, 56, 161,
                 55, 161, 33, 161,
                 17, 641, 0, 591,
                 36, 592, 19, 641,
                 34, 334, 119, 285,
-                481, 287, 449, 342,
-                481, 398, 450, 343,
                 197, 218, 214, 160,
                 214, 159, 214, 61,
                 270, 63, 264, 8
@@ -2171,15 +2157,15 @@ let SECTIONS = [
             [B_FLIPPER_LEFT, 332, 586, 0.45, -0.55, 1],
             [B_FLIPPER_LEFT, 185, 586],
             [B_CIRCLE, 382, 50, 5, 1, 20, 0, 0, 2, CIRCLE_DIAMOND, 4],
-            [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2, CIRCLE_STAR, 1],
+            [B_CIRCLE, 317, 104, 5, 1, 20, 0, 0, 2, CIRCLE_DIAMOND, 1],
             [B_CIRCLE, 423, 114, 5, 1, 20, 0, 0, -2, CIRCLE_DIAMOND, 3],
-            [B_CIRCLE, 365, 171, 5, 1, 20, 0, 0, -2, CIRCLE_STAR, 5],
-            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 35, 0, 400],
+            [B_CIRCLE, 365, 171, 5, 1, 20, 0, 0, -2, CIRCLE_DIAMOND, 5],
+            [B_FIELD, 487, 68, 19, 139, TRIGGER_DEACTIVATE_WALL, 30, 0, 400],
             [B_CONVEYER, 344, 643, 133, 25, 1.5708, 400, 160, 6],
             [B_CONVEYER, 29, 166, 29, 27, -3.1416, 400, 160, 6],
             [B_LAUNCHER, 18, 577, 0, -1, 1450, 50, 600, 50],
-            [B_FIELD, 8, 509, 18, 107, TRIGGER_DEACTIVATE_WALL, 34, 0, 1000],
-            [B_CIRCLE, 104, 376, 10, 1.2, 33, 0, 0, -1.6],
+            [B_FIELD, 8, 509, 18, 107, TRIGGER_DEACTIVATE_WALL, 29, 0, 1000],
+            [B_CIRCLE, 104, 377, 10, 1.15, 44, 0, 0, -1.6],
             [B_WALL_GATE, 30, 160, 0, 128, 4],
             [B_WALL_GATE, 483, 48, 495, 27, 2],
             [B_WALL_GATE, 95, 248, 129, 219, 5],
@@ -2191,13 +2177,14 @@ let SECTIONS = [
             [B_COLLECTABLE, 181, 19, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_COLLECTABLE, 249, 417, 10, 0, TRIGGER_GATE_SECTION_4],
             [B_FAN, 124, 98, 4, 1, 80, -1.1],
-            [B_TRIANGLE, 126, 524, 79, 44, -1.5708, 1.15, 0.5, 0.5, 1],
-            [B_TRIANGLE, 397, 524, 79, -44, -1.5708, 1.15, 0.5, 0.5, 1],
+            [B_TRIANGLE, 126, 524, 79, 44, -1.5708, 1, 0.5, 0.5, 1],
+            [B_TRIANGLE, 397, 524, 79, -44, -1.5708, 1, 0.5, 0.5, 1],
             [B_DECORATION, 16, 55, 1, -1.5708, DEC_BLINKING_LIGHT, 5],
             [B_DECORATION, 212, 347, 2, -2.3101, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 100, SHAPE_CHEVRON, 5, 125, 250, 25, 0],
             [B_CONVEYER, 195, 5, 49, 27, -3.1416, 400, 160, 50],
             [B_FIELD, 487, 189, 19, 67, TRIGGER_PLAY_SOUND, SOUND_GATE_OPEN],
-            [B_TRIANGLE, 388, 221, 79, -44, 2.9792, 1.1, 0.5, 0.5, 1],
+            [B_TRIANGLE, 384, 221, 79, -44, 2.9792, 1, 0.5, 0.5, 1],
+            [B_TRIANGLE, 429, 221, 113, -60, 1.09, 1.15, 0.5, 0.5, 1],
         ],
     ],
     [
@@ -2243,8 +2230,7 @@ let SECTIONS = [
             [B_CIRCLE, 36, 312, 10, 1.25, 11, 0, 0, 1, CIRCLE_SMILE, 3],
             [B_DECORATION, 98, 134, 1, -2.2845, DEC_BLINKING_LIGHT, 0],
             [B_DECORATION, 35, 57, 1, -1.5708, DEC_BLINKING_LIGHT, 1],
-            [B_DECORATION, 167, 375, 1, -0.7118, DEC_BLINKING_LIGHT, 2],
-            [B_DECORATION, 181, 84, 4, 0.3807, DEC_ICON, 1, ICON_WAND, 0.5],
+            [B_DECORATION, 181, 84, 4, 0.3807, DEC_ICON, 1, 0.5],
         ],
     ],
     [
@@ -2278,15 +2264,7 @@ let SECTIONS = [
             [B_DECORATION, 372, 399, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 372, 330, 100],
         ],
     ],
-    [
-        78,
-        -1201,
-        221,
-        125,
-        [
-            [B_WALLS, 51, 125, 221, 109],
-        ],
-    ],
+    [78, -1201, 221, 125, []],
     [
         169,
         -2305,
@@ -2305,13 +2283,11 @@ let SECTIONS = [
                 39, 587, 228, 614,
                 400, 614, 236, 662,
                 237, 665, 237, 676,
-                256, 86, 372, 117,
-                205, 0, 255, 86,
+                274, 88, 372, 117,
+                224, 1, 274, 87,
                 39, 153, 74, 229,
                 151, 200, 75, 113,
                 74, 229, 38, 291,
-                366, 187, 400, 166,
-                366, 187, 400, 222,
                 38, 54, 104, 51,
                 327, 284, 400, 357,
                 328, 197, 327, 107,
@@ -2327,18 +2303,19 @@ let SECTIONS = [
             [B_WALL_RESTI, 0, 47, 47, 0, 1.5],
             [B_CONVEYER, 52, 625, 40, 48, -2.55, 400, 160, 6],
             [B_LAUNCHER, 19, 612, 0, -1, 1250, 50, 600, 50],
-            [B_PORTAL, 60, 136, 268, 34, 18, 0],
-            [B_PORTAL, 62, 84, 342, 262, 18, 1],
-            [B_WALL_RESTI, 328, 283, 400, 288, 0.5],
-            [B_LAUNCHER, 362, 275, -1, 0, 1350, 36, 100],
-            [B_FAN, 219, 150, 5, 0.25, 40, 1],
+            [B_PORTAL, 60, 136, 265, 25, 18, 0],
+            [B_PORTAL, 59, 86, 342, 267, 18, 1],
+            [B_WALL_RESTI, 328, 283, 400, 294, 0.5],
+            [B_LAUNCHER, 362, 275, -1, 0, 1050, 36, 100],
+            [B_FAN, 219, 150, 4, 0.25, 40, 1],
             [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25],
             [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25],
             [B_CONVEYER, 333, 125, 25, 67, 1.5708, 400, 160, 6],
             [B_DECORATION, 89, 191, 1, -2.0554, DEC_BLINKING_LIGHT, 1],
             [B_DECORATION, 21, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
-            [B_DECORATION, 195, 378, 18, 0, DEC_ICON, 4, ICON_PONY, 0.33],
+            [B_DECORATION, 190, 426, 18, 0, DEC_ICON, 4, 0.33],
             [B_DECORATION, 377, 431, 1.4, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_TRIANGLE, 365, 177, 47, -44, 0.8292, 1, 0.5, 0.5, 1],
         ],
     ],
     [
@@ -2374,12 +2351,11 @@ let SECTIONS = [
             [B_CIRCLE, 39, 193, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 2],
             [B_CIRCLE, 369, 170, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND, 5],
             [B_CIRCLE, 304, 139, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 108, 151, 3, 1, 8, 0, 0, 4, CIRCLE_STAR, 1],
+            [B_CIRCLE, 108, 151, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 1],
             [B_CIRCLE, 382, 262, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND],
             [B_CIRCLE, 170, 280, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
             [B_CIRCLE, 89, 277, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
             [B_CIRCLE, 311, 282, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 371, 38, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
             [B_CONVEYER, 90, 6, 44, 20, 0, 400, 200, 10],
             [B_CONVEYER, 4, 54, 83, 27, 0.0047, 400, 400, 40],
             [B_PORTAL, 14, 21, 129, 475, 18, 0],
@@ -2388,7 +2364,7 @@ let SECTIONS = [
             [B_CONVEYER, 138, 370, 27, 72, 1.5708, 400, 160, 6],
             [B_CONVEYER, 217, 371, 27, 72, 1.5708, 400, 160, 6],
             [B_CONVEYER, 307, 367, 27, 72, 1.5708, 400, 160, 6],
-            [B_CIRCLE, 219, 107, 3, 0.5, 8, 0, 0, -4, CIRCLE_DIAMOND, 3],
+            [B_CIRCLE, 220, 104, 3, 0.5, 8, 0, 0, -4, CIRCLE_DIAMOND, 3],
             [B_DECORATION, 381, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 232, 317, 1, 1.5708, DEC_BLINKING_LIGHT, 3],
         ],
@@ -2443,12 +2419,12 @@ let SECTIONS = [
             [B_PORTAL, 166, 503, 51, 70, 18, 0],
             [B_FLIPPER_LEFT, 238, 333, 0.45, -0.6, 1, 35],
             [B_FLIPPER_LEFT, 83, 236, 0.45, -0.5, 0, 35],
-            [B_CIRCLE, 242, 98, 10, 1, 20, 0, 0, 0, CIRCLE_STAR, 4],
+            [B_CIRCLE, 242, 98, 10, 1, 20, 0, 0, 0, CIRCLE_DIAMOND, 4],
             [B_FAN, 140, 397, 3, 1, 22, 1],
             [B_DECORATION, 108, 314, 1, -0.7854, DEC_BLINKING_LIGHT, 3],
             [B_DECORATION, 233, 196, 1, -2.3562, DEC_BLINKING_LIGHT, 4],
             [B_DECORATION, 176, 90, 1, -0.8215, DEC_BLINKING_LIGHT, 5],
-            [B_DECORATION, 162, 267, 10, -0.7854, DEC_ICON, 1, ICON_WAND, 0.5],
+            [B_DECORATION, 162, 267, 10, -0.7854, DEC_ICON, 1, 0.5],
         ],
     ],
     [
@@ -2474,21 +2450,16 @@ let SECTIONS = [
         98,
         515,
         [
-            [B_CIRCLE, 15, 475, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
+            [B_CIRCLE, 15, 475, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 4],
             [B_CIRCLE, 30, 455, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 44, 434, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
-            [B_CIRCLE, 59, 413, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
-            [B_CIRCLE, 14, 275, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 1],
+            [B_CIRCLE, 44, 434, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 4],
+            [B_CIRCLE, 59, 413, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 4],
+            [B_CIRCLE, 14, 275, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 1],
             [B_CIRCLE, 29, 255, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 2],
             [B_CIRCLE, 44, 235, 10, 1, 10, 75, 0, 0, CIRCLE_SMILE, 3],
-            [B_CIRCLE, 59, 215, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
+            [B_CIRCLE, 59, 215, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 4],
             [B_CIRCLE, 74, 195, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
             [B_CIRCLE, 75, 393, 10, 1, 10, 75],
-            [B_CIRCLE, 14, 374, 10, 1, 10, 75, 0, 0, CIRCLE_STAR, 4],
-            [B_CIRCLE, 29, 354, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 44, 334, 10, 1, 10, 75],
-            [B_CIRCLE, 58, 313, 10, 1, 10, 75, 0, 0, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 73, 293, 10, 1, 10, 75],
             [B_DECORATION, 49, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
         ],
     ],
@@ -2519,18 +2490,18 @@ let LINKS = [
     [1, SECTION_SIDE_BOTTOM, 172, 227],
     [1, SECTION_SIDE_RIGHT, 129, 138],
     [2, SECTION_SIDE_LEFT, 129, 138],
-    [2, SECTION_SIDE_BOTTOM, 117, 470],
-    [3, SECTION_SIDE_TOP, 117, 470],
+    [2, SECTION_SIDE_BOTTOM, 0, 588],
+    [3, SECTION_SIDE_TOP, 0, 588],
     [0, SECTION_SIDE_RIGHT, 0, 107],
     [3, SECTION_SIDE_LEFT, 0, 107],
-    [2, SECTION_SIDE_TOP, 412, 176],
-    [4, SECTION_SIDE_BOTTOM, 334, 176],
+    [2, SECTION_SIDE_TOP, 381, 207],
+    [4, SECTION_SIDE_BOTTOM, 303, 207],
     [4, SECTION_SIDE_TOP, 0, 33],
     [5, SECTION_SIDE_BOTTOM, 179, 33],
-    [5, SECTION_SIDE_LEFT, 428, 117],
-    [7, SECTION_SIDE_RIGHT, 0, 117],
-    [6, SECTION_SIDE_TOP, 0, 51],
-    [7, SECTION_SIDE_BOTTOM, 0, 51],
+    [5, SECTION_SIDE_LEFT, 428, 107],
+    [7, SECTION_SIDE_RIGHT, 0, 107],
+    [6, SECTION_SIDE_TOP, 0, 221],
+    [7, SECTION_SIDE_BOTTOM, 0, 221],
     [1, SECTION_SIDE_TOP, 356, 35],
     [6, SECTION_SIDE_BOTTOM, 278, 35],
     [4, SECTION_SIDE_LEFT, 437, 51],
@@ -2543,10 +2514,10 @@ let LINKS = [
     [14, SECTION_SIDE_TOP, 0, 98],
     [12, SECTION_SIDE_TOP, 77, 98],
     [14, SECTION_SIDE_BOTTOM, 0, 98],
-    [8, SECTION_SIDE_LEFT, 63, 27],
-    [14, SECTION_SIDE_RIGHT, 63, 27],
-    [9, SECTION_SIDE_RIGHT, 63, 27],
-    [14, SECTION_SIDE_LEFT, 63, 27],
+    [8, SECTION_SIDE_LEFT, 52, 35],
+    [14, SECTION_SIDE_RIGHT, 52, 35],
+    [9, SECTION_SIDE_RIGHT, 42, 32],
+    [14, SECTION_SIDE_LEFT, 42, 32],
     [10, SECTION_SIDE_TOP, 213, 32],
     [15, SECTION_SIDE_BOTTOM, 84, 32],
     [13, SECTION_SIDE_BOTTOM, 0, 79],
@@ -2557,7 +2528,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [42, 399];
+let START = [54, 396];
 let state;
 let getState = () => {
     return state;
@@ -2804,7 +2775,6 @@ class Layer {
     window;
     layerState = LAYER_ON;
     uiElements = [];
-    removeFlag = false;
     constructor(window = null) {
         this.window = window;
         if (this.window) {
@@ -2898,12 +2868,6 @@ class Layer {
     }
     onKeyDown(_key, _keyCode) { }
     onKeyUp(_key, _keyCode) { }
-    remove() {
-        this.removeFlag = true;
-    }
-    shouldRemove() {
-        return this.removeFlag;
-    }
     addUiElement(element) {
         this.uiElements.push(element);
         element.build();
@@ -3075,11 +3039,6 @@ class LayerManager {
         }
     }
     updateRender(dt) {
-        for (let i = this.layers.length - 1; i >= 0; i--) {
-            if (this.layers[i].shouldRemove()) {
-                this.layers.splice(i, 1);
-            }
-        }
         for (let layer of this.layers) {
             if (layer.layerState === LAYER_OFF) {
                 continue;
@@ -3395,15 +3354,15 @@ let addPortalMouth = (host, cx, cy, r, fill) => {
 let addDecorationShape = (g, shape) => {
     if (shape === SHAPE_CIRCLE) {
         g.appendChild(createSvgElement(CIRCLE, {
-            'r': '8',
+            r: '8',
             'stroke-width': '3',
         }));
         return;
     }
     if (shape === SHAPE_SQUARE) {
         g.appendChild(createSvgElement('rect', {
-            'x': '-8',
-            'y': '-8',
+            x: '-8',
+            y: '-8',
             width: '16',
             height: '16',
             'stroke-width': '3',
@@ -3411,48 +3370,18 @@ let addDecorationShape = (g, shape) => {
         return;
     }
     g.appendChild(createSvgElement('path', {
-        'd': CHEVRON_D,
+        d: CHEVRON_D,
         'stroke-width': '3',
         'stroke-linecap': 'round',
         'stroke-linejoin': 'round',
     }));
 };
 let addDecorationIcon = (g, dec) => {
-    let fill = decorationFill(dec.texture);
-    let glyph = dec.shape % 3;
-    if (glyph === ICON_HAT) {
-        g.appendChild(createSvgElement('path', {
-            'd': HAT_D,
-            fill,
-        }));
-        g.appendChild(createSvgElement(CIRCLE, {
-            cx: '0',
-            cy: '-9.2',
-            r: '2.2',
-            fill,
-        }));
-        return;
-    }
-    if (glyph === ICON_PONY) {
-        g.appendChild(createSvgElement('path', {
-            'd': STAR_D,
-            fill,
-            transform: 'scale(9)',
-        }));
-        return;
-    }
     g.appendChild(createSvgElement('path', {
-        'd': WAND_D,
-        fill,
+        d: STAR_D,
+        fill: decorationFill(dec.texture),
+        transform: 'scale(9)',
     }));
-    let spark = createSvgElement('g', {
-        transform: 'translate(5.2 -6.8) scale(4.2)',
-    });
-    spark.appendChild(createSvgElement('path', {
-        'd': STAR_D,
-        fill,
-    }));
-    g.appendChild(spark);
 };
 let syncDecorationLight = (wrap, dec) => {
     setAttribute(wrap, 'opacity', dec.active ? '1' : '0.2');
@@ -3461,14 +3390,10 @@ let syncDecorationLight = (wrap, dec) => {
     for (let i = 0; i < kids.length; i++) {
         let g = kids[i];
         let style = {
-            'animation': anim,
+            animation: anim,
         };
-        if (dec.delay && anim !== 'none') {
-            style['animation-delay'] = stringify(i * dec.delay) + 'ms';
-        }
-        else {
-            style['animation-delay'] = '0ms';
-        }
+        style['animation-delay'] =
+            dec.delay && anim !== 'none' ? stringify(i * dec.delay) + 'ms' : '0ms';
         setStyle(g, style);
     }
 };
@@ -3481,16 +3406,9 @@ let addCircleGlyph = (svg, o) => {
     let g = createSvgElement('g', {
         transform: 'scale(' + stringify(o.r * 0.7) + ')',
     });
-    let icon = o.icon % 3;
-    if (icon === CIRCLE_STAR) {
+    if (o.icon === CIRCLE_DIAMOND) {
         g.appendChild(createSvgElement('path', {
-            'd': STAR_D,
-            fill: SECTION_BG,
-        }));
-    }
-    else if (icon === CIRCLE_DIAMOND) {
-        g.appendChild(createSvgElement('path', {
-            'd': DIAMOND_D,
+            d: DIAMOND_D,
             fill: SECTION_BG,
         }));
     }
@@ -3508,7 +3426,7 @@ let addCircleGlyph = (svg, o) => {
             fill: SECTION_BG,
         }));
         g.appendChild(createSvgElement('path', {
-            'd': 'M-.4.22A.48.48 0 0 0 .4.22',
+            d: 'M-.4.22A.48.48 0 0 0 .4.22',
             fill: 'none',
             stroke: SECTION_BG,
             'stroke-width': '.12',
@@ -3631,7 +3549,7 @@ class PartElement extends UiElement {
                         ') scale(' +
                         stringify(dec.scale) +
                         ')',
-                    'opacity': stringify(dec.opacity),
+                    opacity: stringify(dec.opacity),
                 });
                 addDecorationIcon(g, dec);
                 wrap.appendChild(g);
@@ -3654,7 +3572,7 @@ class PartElement extends UiElement {
                         ') scale(' +
                         sc +
                         ')',
-                    'class': getTextureClass(dec.texture),
+                    class: getTextureClass(dec.texture),
                 });
                 addDecorationShape(g, dec.shape);
                 wrap.appendChild(g);
@@ -3998,9 +3916,6 @@ class Board extends UiElement {
             el.build();
         }
         return el;
-    }
-    getBallElements() {
-        return this.balls;
     }
     removeBall(ball) {
         let i = this.balls.indexOf(ball);

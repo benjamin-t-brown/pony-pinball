@@ -8,7 +8,6 @@ export abstract class Layer {
   window: HTMLElement | null;
   layerState = LAYER_ON;
   uiElements: UiElement[] = [];
-  removeFlag = false;
 
   constructor(window: HTMLElement | null = null) {
     this.window = window;
@@ -117,14 +116,6 @@ export abstract class Layer {
   onKeyDown(_key: string, _keyCode: number) {}
 
   onKeyUp(_key: string, _keyCode: number) {}
-
-  remove() {
-    this.removeFlag = true;
-  }
-
-  shouldRemove() {
-    return this.removeFlag;
-  }
 
   addUiElement(element: UiElement) {
     this.uiElements.push(element);

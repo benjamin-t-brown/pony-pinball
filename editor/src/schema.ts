@@ -254,8 +254,7 @@ export const DECORATION_DEFS = [
 
 export const CIRCLE_ICON_DEFS = [
   { id: 0, name: 'smiley' },
-  { id: 1, name: 'star' },
-  { id: 2, name: 'diamond' },
+  { id: 1, name: 'diamond' },
 ];
 
 export const SHAPE_DEFS = [
