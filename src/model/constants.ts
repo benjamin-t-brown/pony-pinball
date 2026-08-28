@@ -20,7 +20,7 @@ export const LAUNCHER_RANGE = 36;
 export const LAUNCHER_CHARGE_MS = 600;
 export const LAUNCHER_LEN = 24;
 /** Section that ends the run. */
-export const COMPLETE_SECTION = 16;
+export const COMPLETE_SECTION = 15;
 
 /** Gate wall and decoration texture colors: red, orange, yellow, green, blue, indigo, violet. */
 export const GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#a6f', '#c8f'];

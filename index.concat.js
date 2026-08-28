@@ -83,7 +83,7 @@ let LAUNCHER_RANGE = 36;
 let LAUNCHER_CHARGE_MS = 600;
 let LAUNCHER_LEN = 24;
 /** Section that ends the run. */
-let COMPLETE_SECTION = 16;
+let COMPLETE_SECTION = 15;
 /** Gate wall and decoration texture colors: red, orange, yellow, green, blue, indigo, violet. */
 let GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#a6f', '#c8f'];
 let SECTION_BG = '#123';
@@ -522,7 +522,6 @@ let // ZzFXMicro - Zuper Zmall Zound Zynth - v1.3.2 by Frank Force
 // zzfx(...[1.2,,652,.37,.01,.02,2,1.8,-13,-11,14,.1,.08,,,,.48,.92,.06,.26,728]); // game win
 // prettier-ignore
 let SOUNDS = [
-  [.5,,106,,,.004,3,3.2,1,,,,,,37,,,.97,.16,,-1153], // gate closed
   [1.6,.5,398,.07,.03,.16,,3.3,,-1,,,,,,,,.63,.1,,354], // hit small circle
   [1.8,,225,.01,.15,.17,1,1.3,,,,,,,22,,.16,.74,.03,,-1030], // Launch
   [1.6,,127,.2,.08,.2,4,2.7,,,,,,,,.1,,.55,.13,,-1202], // Launch Pull Back
@@ -530,7 +529,6 @@ let SOUNDS = [
   [.6,,323,.17,,.007,5,.5,,6,-123,,.05,,7.2,.2,.03,.83,.33,,105], // Ball Traveling
   [,,306,.11,.12,.02,,2.7,,,325,.07,.02,,,,,.7,.01,.07], // Get coin
   [,,845,.31,.13,,3,2.2,2,,,,.03,.1,276,,,.64,.1,.3], // Secret
-  [.6,,14,.05,.42,,1,.9,-13,1,,,,.6,412,,,.77,.36,,391], // Gate Open
   [,,286,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // Paddle Flipper
   [,,186,.02,.01,.01,1,2.9,,-13,,,,1.5,25,.1,,.85,.04], // paddle flipper down
   [3.6,,175,.06,.02,.33,1,2.7,,,227,.17,,.6,79,,.16,.56,,,105], // portal in
@@ -539,21 +537,19 @@ let SOUNDS = [
   [1.2,,652,.37,.01,.02,2,1.8,-13,-11,14,.1,.08,,,,.48,.92,.06,.26,728], // game win
 ];
 
-let SOUND_GATE_CLOSED = 0;
-let SOUND_HIT_SMALL_CIRCLE = 1;
-let SOUND_LAUNCH = 2;
-let SOUND_LAUNCH_PULL_BACK = 3;
-let SOUND_START_GAME = 4;
-let SOUND_BALL_TRAVELING = 5;
-let SOUND_GET_COIN = 6;
-let SOUND_SECRET = 7;
-let SOUND_GATE_OPEN = 8;
-let SOUND_PADDLE_FLIPPER = 9;
-let SOUND_PADDLE_FLIPPER_DOWN = 10;
-let SOUND_PORTAL_IN = 11;
-let SOUND_PORTAL_OUT = 12;
-let SOUND_HIT_FAN = 13;
-let SOUND_GAME_WIN = 14;
+let SOUND_HIT_SMALL_CIRCLE = 0;
+let SOUND_LAUNCH = 1;
+let SOUND_LAUNCH_PULL_BACK = 2;
+let SOUND_START_GAME = 3;
+let SOUND_BALL_TRAVELING = 4;
+let SOUND_GET_COIN = 5;
+let SOUND_SECRET = 6;
+let SOUND_PADDLE_FLIPPER = 7;
+let SOUND_PADDLE_FLIPPER_DOWN = 8;
+let SOUND_PORTAL_IN = 9;
+let SOUND_PORTAL_OUT = 10;
+let SOUND_HIT_FAN = 11;
+let SOUND_GAME_WIN = 12;
 
 let soundsPlayedThisTick = {};
 
@@ -1638,13 +1634,10 @@ class Portal extends Part {
     }
 }
 let TRIGGER_DEACTIVATE_WALL = 0;
-let TRIGGER_MOVE_DOOR = 1;
 /** Collectable: 5 coins of group 0 open all gates in section 4. */
 let TRIGGER_GATE_SECTION_4 = 2;
 /** Field: turn a decoration light on while occupied, off when left. */
 let TRIGGER_ACTIVATE_LIGHT = 3;
-/** Field: warp the ball to a random point in a dest rect (section-local). */
-let TRIGGER_MOVE_BALL = 4;
 /** Field: play a zzfx sound when the ball enters. */
 let TRIGGER_PLAY_SOUND = 5;
 /**
@@ -1716,7 +1709,7 @@ class DeactivateWallTrigger extends Trigger {
 }
 let GATE4_SECTION = 4;
 let GATE4_WALL = 31;
-let GATE4_LIGHT = 22;
+let GATE4_LIGHT = 21;
 let GATE4_NEEDED = 6;
 /**
  * Hardcoded collectable goal: after 6 group-0 coins, disable a wall and
@@ -1813,28 +1806,6 @@ class ActivateLightTrigger extends Trigger {
         }
     }
 }
-class MoveBallTrigger extends Trigger {
-    onActivated(section, ball) {
-        if (!ball) {
-            return;
-        }
-        let x = this.args[0] || 0;
-        let y = this.args[1] || 0;
-        let w = this.args[2] > 0 ? this.args[2] : 0;
-        let h = this.args[3] > 0 ? this.args[3] : 0;
-        let r = ball.r;
-        let rw = w - 2 * r;
-        let rh = h - 2 * r;
-        let tx = rw > 0
-            ? section.x + x + r + Math.random() * rw
-            : section.x + x + w * 0.5;
-        let ty = rh > 0
-            ? section.y + y + r + Math.random() * rh
-            : section.y + y + h * 0.5;
-        ball.pos.x = tx;
-        ball.pos.y = ty;
-    }
-}
 class PlaySoundTrigger extends Trigger {
     onActivated() {
         let id = this.args[0] | 0;
@@ -1848,7 +1819,6 @@ let TRIGGERS = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
 TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
 TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
-TRIGGERS[TRIGGER_MOVE_BALL] = MoveBallTrigger;
 TRIGGERS[TRIGGER_PLAY_SOUND] = PlaySoundTrigger;
 { GATE_COLORS };
 let B_WALLS = 0;
@@ -1914,18 +1884,17 @@ BUILDERS[B_CONVEYER] = (s, [x, y, w, h, angle, power, maxSpeed, drag]) => {
 BUILDERS[B_CIRCLE] = (section, [x, y, resolution, restitution, radius, dx, dy, omega, icon, color]) => {
     section.parts.push(makeCircle(x, y, resolution, restitution, radius, dx, dy, omega, icon, color));
 };
-BUILDERS[B_FAN] = (section, [x, y, paddles, restitution, radius, omega, dx, dy]) => {
-    section.parts.push(makeFan(x, y, paddles, restitution, radius, dx, dy, omega));
+BUILDERS[B_FAN] = (section, [x, y, paddles, restitution, radius, omega]) => {
+    section.parts.push(makeFan(x, y, paddles, restitution, radius, 0, 0, omega));
 };
-BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
-    let Ctor = TRIGGERS[id] || Trigger;
-    let coin = new Collectable(x, y, r, groupType);
-    coin.trigger = new Ctor([]);
+BUILDERS[B_COLLECTABLE] = (s, [x, y]) => {
+    let coin = new Collectable(x, y, 10, 0);
+    coin.trigger = new GateSection4Trigger([]);
     s.parts.push(coin);
 };
-BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, r, color]) => {
+BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, color]) => {
     let c = color | 0;
-    s.parts.push(new Portal(x0, y0, x1, y1, r, c < 0 ? 0 : c % GATE_COLORS.length));
+    s.parts.push(new Portal(x0, y0, x1, y1, 18, c < 0 ? 0 : c % GATE_COLORS.length));
 };
 /**
  * Right triangle at (x, y): side1 along `rot`, side2 along rot+90°.
@@ -1943,18 +1912,11 @@ let triangleVerts = (x, y, len1, len2, rot) => {
         y2: y + len2 * c,
     };
 };
-BUILDERS[B_TRIANGLE] = (s, [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2, color]) => {
+/** Fixed fill color index for triangle bumpers: orange. */
+let TRIANGLE_COLOR = 1;
+BUILDERS[B_TRIANGLE] = (s, [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2]) => {
     let v = triangleVerts(x, y, sideLen1, sideLen2, rot);
-    let c = color == null ? 0 : color | 0;
-    s.fills.push([
-        v.x0,
-        v.y0,
-        v.x1,
-        v.y1,
-        v.x2,
-        v.y2,
-        c < 0 ? 0 : c % GATE_COLORS.length,
-    ]);
+    s.fills.push([v.x0, v.y0, v.x1, v.y1, v.x2, v.y2, TRIANGLE_COLOR]);
     s.walls.push(lineCreate(v.x1, v.y1, v.x2, v.y2, resti0, -1, SOUND_HIT_FAN));
     s.walls.push(lineCreate(v.x0, v.y0, v.x1, v.y1, resti1));
     s.walls.push(lineCreate(v.x0, v.y0, v.x2, v.y2, resti2));
@@ -2070,15 +2032,11 @@ let SECTIONS = [
             ],
             [B_LAUNCHER, 135, 369, -0.7071, -0.7071, 1150, 36, 400],
             [B_CONVEYER, 176, 341, 173, 39, 3.1416, 320, 400, 35, 6],
-            [B_FIELD, 358, 351, 40, 21, TRIGGER_DEACTIVATE_WALL, 22, 800, 500],
             [B_CONVEYER, 254, 45, 104, 23, 0.1444, 400, 160, 6],
             [B_FLIPPER_LEFT, 250, 72, 0.45, -1.4, 1],
             [B_FLIPPER_LEFT, 235, 271, 0.7, -0.5, 0, 35],
             [B_CONVEYER, 173, 160, 30, 68, 1.5708, 400, 160, 6],
             [B_CIRCLE, 284, 178, 10, 1.2, 22, 0, 0, 1.2],
-            [B_WALL_GATE, 354, 376, 400, 376, 2],
-            [B_FIELD, 359, 329, 38, 42, TRIGGER_ACTIVATE_LIGHT, 9, 800, 500],
-            [B_DECORATION, 378, 348, 1, 1.5708, DEC_BLINKING_LIGHT, 0, SHAPE_SQUARE, 0, 400],
             [B_DECORATION, 110, 342, 1, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_CHEVRON, 5, 49, 283, 50],
             [B_DECORATION, 186, 70, 1, 1.5708, DEC_BLINKING_LIGHT_LINE, 3, 400, SHAPE_CHEVRON, 5, 186, 127, 50],
             [B_DECORATION, 188, 232, 15, -0.0091, DEC_ICON, 5, 0.25],
@@ -2170,21 +2128,20 @@ let SECTIONS = [
             [B_WALL_GATE, 483, 48, 495, 27, 2],
             [B_WALL_GATE, 95, 248, 129, 219, 5],
             [B_CONVEYER, 220, 36, 25, 192, -1.5708, 900, 900, 4],
-            [B_COLLECTABLE, 103, 77, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 41, 141, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 367, 111, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 284, 210, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 181, 19, 10, 0, TRIGGER_GATE_SECTION_4],
-            [B_COLLECTABLE, 249, 417, 10, 0, TRIGGER_GATE_SECTION_4],
+            [B_COLLECTABLE, 103, 77],
+            [B_COLLECTABLE, 41, 141],
+            [B_COLLECTABLE, 367, 111],
+            [B_COLLECTABLE, 284, 210],
+            [B_COLLECTABLE, 181, 19],
+            [B_COLLECTABLE, 249, 417],
             [B_FAN, 124, 98, 4, 1, 80, -1.1],
-            [B_TRIANGLE, 126, 524, 79, 44, -1.5708, 1, 0.5, 0.5, 1],
-            [B_TRIANGLE, 397, 524, 79, -44, -1.5708, 1, 0.5, 0.5, 1],
+            [B_TRIANGLE, 126, 524, 79, 44, -1.5708, 1],
+            [B_TRIANGLE, 397, 524, 79, -44, -1.5708, 1],
             [B_DECORATION, 16, 55, 1, -1.5708, DEC_BLINKING_LIGHT, 5],
             [B_DECORATION, 212, 347, 2, -2.3101, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 100, SHAPE_CHEVRON, 5, 125, 250, 25, 0],
             [B_CONVEYER, 195, 5, 49, 27, -3.1416, 400, 160, 50],
-            [B_FIELD, 487, 189, 19, 67, TRIGGER_PLAY_SOUND, SOUND_GATE_OPEN],
-            [B_TRIANGLE, 384, 221, 79, -44, 2.9792, 1, 0.5, 0.5, 1],
-            [B_TRIANGLE, 429, 221, 113, -60, 1.09, 1.15, 0.5, 0.5, 1],
+            [B_TRIANGLE, 384, 221, 79, -44, 2.9792, 1],
+            [B_TRIANGLE, 429, 221, 113, -60, 1.09, 1.15],
         ],
     ],
     [
@@ -2220,8 +2177,8 @@ let SECTIONS = [
             [B_LAUNCHER, 253, 510, 0, -1, 1650, 36, 700, 33],
             [B_WALL_GATE, 235, 164, 269, 130, 1],
             [B_WALL_GATE, 234, 292, 268, 258, 1],
-            [B_FIELD, 247, 363, 19, 180, TRIGGER_DEACTIVATE_WALL, 27, 200, 500],
-            [B_FIELD, 238, 374, 20, 173, TRIGGER_DEACTIVATE_WALL, 28, 200, 300],
+            [B_FIELD, 247, 363, 19, 180, TRIGGER_DEACTIVATE_WALL, 29, 200, 600],
+            [B_FIELD, 238, 374, 20, 173, TRIGGER_DEACTIVATE_WALL, 28, 200, 600],
             [B_WALL_RESTI, 137, 223, 113, 182, 0.5],
             [B_LAUNCHER, 133, 198, -0.5141, -0.8577, 540, 36, 600, 15],
             [B_FLIPPER_LEFT, 96, 421, 0.45, -0.6, 0, 48],
@@ -2241,26 +2198,20 @@ let SECTIONS = [
         [
             [
                 B_WALLS,
-                0, 42, 334, 132,
-                400, 160, 277, 193,
-                151, 327, 0, 287,
+                0, 42, 287, 112,
                 218, 349, 341, 382,
                 397, 495, 341, 382,
                 274, 675, 2, 603,
-                320, 673, 398, 615,
-                211, 210, 67, 248
+                320, 673, 398, 615
             ],
-            [B_FLIPPER_LEFT, 212, 347, 0.7, -0.3, 1],
-            [B_FLIPPER_LEFT, 216, 209, 0.65, -0.25],
-            [B_CIRCLE, 340, 283, 6, 1.25, 29, 0, 0, 2, CIRCLE_DIAMOND, 5],
+            [B_FLIPPER_LEFT, 212, 347, 0.45, -0.9, 1],
+            [B_CIRCLE, 358, 215, 6, 1.25, 29, 0, 0, 2, CIRCLE_DIAMOND, 5],
             [B_DECORATION, 72, 495, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
             [B_DECORATION, 284, 54, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
-            [B_DECORATION, 304, 563, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
-            [B_DECORATION, 183, 267, 2.8, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
-            [B_DECORATION, 149, 134, 1.5, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
+            [B_DECORATION, 248, 249, 1.5, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
             [B_DECORATION, 50, 646, 1.6, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
-            [B_DECORATION, 210, 500, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 210, 431, 75],
-            [B_DECORATION, 69, 223, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 69, 154, 25],
+            [B_DECORATION, 274, 602, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 274, 533, 75],
+            [B_DECORATION, 78, 202, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 78, 133, 25],
             [B_DECORATION, 372, 399, 1.5, -2.242, DEC_BLINKING_LIGHT_LINE, 2, 400, SHAPE_SQUARE, 1, 372, 330, 100],
         ],
     ],
@@ -2285,17 +2236,17 @@ let SECTIONS = [
                 237, 665, 237, 676,
                 274, 88, 372, 117,
                 224, 1, 274, 87,
-                39, 153, 74, 229,
-                151, 200, 75, 113,
-                74, 229, 38, 291,
+                39, 211, 68, 284,
+                85, 172, 40, 110,
+                68, 285, 38, 324,
                 38, 54, 104, 51,
                 327, 284, 400, 357,
                 328, 197, 327, 107,
-                328, 199, 348, 204,
-                348, 205, 353, 244,
-                329, 200, 353, 246,
+                329, 200, 374, 250,
                 36, 645, 43, 644,
-                351, 485, 351, 376
+                351, 485, 351, 376,
+                330, 241, 329, 201,
+                330, 241, 373, 250
             ],
             [B_CONVEYER, 92, 625, 143, 49, 3.1416, 500, 160, 8],
             [B_FLIPPER_LEFT, 116, 531],
@@ -2303,19 +2254,19 @@ let SECTIONS = [
             [B_WALL_RESTI, 0, 47, 47, 0, 1.5],
             [B_CONVEYER, 52, 625, 40, 48, -2.55, 400, 160, 6],
             [B_LAUNCHER, 19, 612, 0, -1, 1250, 50, 600, 50],
-            [B_PORTAL, 60, 136, 265, 25, 18, 0],
-            [B_PORTAL, 59, 86, 342, 267, 18, 1],
-            [B_WALL_RESTI, 328, 283, 400, 294, 0.5],
+            [B_PORTAL, 60, 189, 276, 28, 0],
+            [B_PORTAL, 59, 80, 342, 267, 1],
+            [B_WALL_RESTI, 328, 283, 400, 294, 0.15],
             [B_LAUNCHER, 362, 275, -1, 0, 1050, 36, 100],
             [B_FAN, 219, 150, 4, 0.25, 40, 1],
             [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25],
             [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25],
-            [B_CONVEYER, 333, 125, 25, 67, 1.5708, 400, 160, 6],
+            [B_CONVEYER, 332, 116, 26, 82, 1.5708, 400, 160, 6],
             [B_DECORATION, 89, 191, 1, -2.0554, DEC_BLINKING_LIGHT, 1],
             [B_DECORATION, 21, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
-            [B_DECORATION, 190, 426, 18, 0, DEC_ICON, 4, 0.33],
+            [B_DECORATION, 196, 440, 18, 0, DEC_ICON, 4, 0.33],
             [B_DECORATION, 377, 431, 1.4, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
-            [B_TRIANGLE, 365, 177, 47, -44, 0.8292, 1, 0.5, 0.5, 1],
+            [B_TRIANGLE, 365, 177, 47, -44, 0.8292, 1],
         ],
     ],
     [
@@ -2343,24 +2294,24 @@ let SECTIONS = [
                 317, 512, 397, 487,
                 393, 324, 416, 310
             ],
-            [B_TRIANGLE, 147, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8, 2],
-            [B_TRIANGLE, 221, 127, 60, 60, 0.7854, 0.8, 0.8, 0.8, 5],
-            [B_TRIANGLE, 296, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8, 4],
-            [B_CONVEYER, 99, 27, 30, 98, -1.5708, 700, 700, 60],
+            [B_TRIANGLE, 147, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_TRIANGLE, 221, 127, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_TRIANGLE, 296, 192, 60, 60, 0.7854, 0.8, 0.8, 0.8],
+            [B_CONVEYER, 99, 27, 31, 107, -1.5708, 1100, 900, 60],
             [B_FLIPPER_LEFT, 163, 43, 0.45, -0.6, 0, 22],
             [B_CIRCLE, 39, 193, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 2],
             [B_CIRCLE, 369, 170, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND, 5],
             [B_CIRCLE, 304, 139, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
-            [B_CIRCLE, 108, 151, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 1],
+            [B_CIRCLE, 110, 165, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 1],
             [B_CIRCLE, 382, 262, 3, 1, 8, 0, 0, -4, CIRCLE_DIAMOND],
             [B_CIRCLE, 170, 280, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
             [B_CIRCLE, 89, 277, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND],
             [B_CIRCLE, 311, 282, 3, 1, 8, 0, 0, 4, CIRCLE_DIAMOND, 5],
             [B_CONVEYER, 90, 6, 44, 20, 0, 400, 200, 10],
             [B_CONVEYER, 4, 54, 83, 27, 0.0047, 400, 400, 40],
-            [B_PORTAL, 14, 21, 129, 475, 18, 0],
-            [B_PORTAL, 20, 335, 234, 491, 18, 1],
-            [B_PORTAL, 57, 21, 340, 468, 18, 2],
+            [B_PORTAL, 14, 21, 129, 475, 0],
+            [B_PORTAL, 20, 335, 234, 491, 1],
+            [B_PORTAL, 57, 21, 340, 468, 2],
             [B_CONVEYER, 138, 370, 27, 72, 1.5708, 400, 160, 6],
             [B_CONVEYER, 217, 371, 27, 72, 1.5708, 400, 160, 6],
             [B_CONVEYER, 307, 367, 27, 72, 1.5708, 400, 160, 6],
@@ -2379,8 +2330,8 @@ let SECTIONS = [
             [B_CONVEYER, 71, 204, 34, 136, 0, 3000, 1400, 60],
             [B_CONVEYER, 135, 205, 32, 136, 3.1416, 3000, 1400, 60],
             [B_CONVEYER, 111, 45, 18, 308, -1.5708, 1400, 1400, 60],
-            [B_PORTAL, 119, 22, 18, 475, 18, 0],
-            [B_PORTAL, 20, 23, 229, 474, 18, 1],
+            [B_PORTAL, 119, 22, 18, 475, 0],
+            [B_PORTAL, 20, 23, 229, 474, 1],
             [B_CONVEYER, 9, 54, 17, 395, -1.5708, 1400, 1400, 60],
             [B_CONVEYER, 221, 53, 17, 394, -1.5708, 1400, 1400, 60],
             [B_DECORATION, 191, 464, 1, -1.5708, DEC_BLINKING_LIGHT_LINE, TEX_PALETTE, 400, SHAPE_CIRCLE, 20, 191, 28, 50],
@@ -2416,7 +2367,7 @@ let SECTIONS = [
             [B_CONVEYER, 34, 6, 104, 31, -3.1416, 400, 160, 6],
             [B_CONVEYER, 4, 46, 21, 76, 1.6344, 400, 160, 20],
             [B_CONVEYER, 3, 291, 23, 80, 1.5708, 400, 160, 6],
-            [B_PORTAL, 166, 503, 51, 70, 18, 0],
+            [B_PORTAL, 166, 503, 51, 70, 0],
             [B_FLIPPER_LEFT, 238, 333, 0.45, -0.6, 1, 35],
             [B_FLIPPER_LEFT, 83, 236, 0.45, -0.5, 0, 35],
             [B_CIRCLE, 242, 98, 10, 1, 20, 0, 0, 0, CIRCLE_DIAMOND, 4],
@@ -2470,7 +2421,7 @@ let SECTIONS = [
         100,
         [
             [B_WALLS, 101, 5, 115, 16, 80, 96, 80, 65],
-            [B_DECORATION, 2, 2, 1, 0, DEC_RAINBOW, 0, 113, 96],
+            [B_DECORATION, 1, 1, 1, 0, DEC_RAINBOW, 0, 113, 96],
             [B_FIELD, 85, 65, 29, 32, TRIGGER_PLAY_SOUND, SOUND_GAME_WIN],
         ],
     ],
@@ -2514,10 +2465,10 @@ let LINKS = [
     [14, SECTION_SIDE_TOP, 0, 98],
     [12, SECTION_SIDE_TOP, 77, 98],
     [14, SECTION_SIDE_BOTTOM, 0, 98],
-    [8, SECTION_SIDE_LEFT, 52, 35],
-    [14, SECTION_SIDE_RIGHT, 52, 35],
-    [9, SECTION_SIDE_RIGHT, 42, 32],
-    [14, SECTION_SIDE_LEFT, 42, 32],
+    [8, SECTION_SIDE_LEFT, 54, 35],
+    [14, SECTION_SIDE_RIGHT, 54, 35],
+    [9, SECTION_SIDE_RIGHT, 55, 32],
+    [14, SECTION_SIDE_LEFT, 55, 32],
     [10, SECTION_SIDE_TOP, 213, 32],
     [15, SECTION_SIDE_BOTTOM, 84, 32],
     [13, SECTION_SIDE_BOTTOM, 0, 79],
@@ -2528,7 +2479,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [54, 396];
+let START = [38, 396];
 let state;
 let getState = () => {
     return state;
@@ -2594,9 +2545,8 @@ let finishPlay = () => {
 };
 let createState = () => {
     let sections = buildLevel(SECTIONS, LINKS);
-    let spawn = idleBallPos(sections);
     return {
-        balls: [ballCreate(spawn.x, spawn.y)],
+        balls: [],
         sections,
         walls: flattenSectionWalls(sections),
         input: [false, false, false],
@@ -4135,9 +4085,37 @@ class Board extends UiElement {
         super.render(dt);
     }
 }
+let mobileWrap = {
+    position: 'absolute',
+    left: '0',
+    right: '0',
+    bottom: '16px',
+    display: 'none',
+    'justify-content': 'space-between',
+    padding: '0 16px',
+    [POINTER_EVENTS]: 'none',
+};
+let addMobileBtn = (wrap, label, control) => {
+    let btn = createElement('button');
+    btn.className = 'mb';
+    btn[INNER_HTML] = label;
+    domAddEventListener(btn, 'touchstart', e => {
+        e.preventDefault();
+        btn.className = 'mb a';
+        getState().input[control] = true;
+    });
+    let up = () => {
+        btn.className = 'mb';
+        getState().input[control] = false;
+    };
+    domAddEventListener(btn, 'touchend', up);
+    domAddEventListener(btn, 'touchcancel', up);
+    appendChild(wrap, btn);
+};
 class PlayHud extends UiElement {
     timeEl = null;
     btnEl = null;
+    mobileEl = null;
     visible = false;
     hide() {
         this.visible = false;
@@ -4151,7 +4129,7 @@ class PlayHud extends UiElement {
             setStyle(this.el, { display: 'block' });
         }
     }
-    layout() {
+    layout(width = 0, height = 0) {
         let bw = 120;
         let bh = 36;
         this.width = bw;
@@ -4169,9 +4147,14 @@ class PlayHud extends UiElement {
         if (this.timeEl) {
             setStyle(this.timeEl, { top: px(12) });
         }
+        if (this.mobileEl) {
+            setStyle(this.mobileEl, {
+                display: height > width ? 'flex' : 'none',
+            });
+        }
     }
     checkResizeEvent(width, height) {
-        this.layout();
+        this.layout(width, height);
         super.checkResizeEvent(width, height);
     }
     build() {
@@ -4197,10 +4180,17 @@ class PlayHud extends UiElement {
             playSound(SOUND_START_GAME);
         });
         appendChild(overlay, btn);
+        let mobile = createElement(DIV);
+        setStyle(mobile, mobileWrap);
+        addMobileBtn(mobile, '&lt;', CONTROL_LEFT);
+        addMobileBtn(mobile, '^', CONTROL_START);
+        addMobileBtn(mobile, '&gt;', CONTROL_RIGHT);
+        appendChild(overlay, mobile);
         appendChild(root, overlay);
         this.el = overlay;
         this.timeEl = timeEl;
         this.btnEl = btn;
+        this.mobileEl = mobile;
         this.layout();
     }
     render(_dt) {

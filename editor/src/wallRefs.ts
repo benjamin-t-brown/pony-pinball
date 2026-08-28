@@ -6,6 +6,7 @@ import {
   B_WALL_RESTI,
   B_WALLS,
 } from '@game/model/builders';
+import { TRIGGER_GATE_SECTION_4 } from '@game/model/Trigger';
 import { triggerDefFor } from './schema';
 import type { SectionData, Selection } from './types';
 
@@ -146,7 +147,7 @@ const forEachWallRefInSection = (
       continue;
     }
     if (call[0] === B_COLLECTABLE) {
-      const trig = triggerDefFor(call[5] ?? 0);
+      const trig = triggerDefFor(TRIGGER_GATE_SECTION_4);
       let targetSection = sectionIndex;
       let hasSection = false;
       for (let a = 0; a < trig.args.length; a++) {
@@ -210,7 +211,9 @@ const forEachPartRefInSection = (
     if (call[0] !== B_FIELD && call[0] !== B_COLLECTABLE) {
       continue;
     }
-    const trig = triggerDefFor(call[5] ?? 0);
+    const trig = triggerDefFor(
+      call[0] === B_COLLECTABLE ? TRIGGER_GATE_SECTION_4 : (call[5] ?? 0)
+    );
     let targetSection = sectionIndex;
     let hasSection = false;
     for (let a = 0; a < trig.args.length; a++) {

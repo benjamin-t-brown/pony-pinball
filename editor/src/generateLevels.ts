@@ -4,8 +4,6 @@ import {
   TRIGGER_ACTIVATE_LIGHT,
   TRIGGER_DEACTIVATE_WALL,
   TRIGGER_GATE_SECTION_4,
-  TRIGGER_MOVE_BALL,
-  TRIGGER_MOVE_DOOR,
   TRIGGER_PLAY_SOUND,
 } from '@game/model/Trigger';
 import {
@@ -61,10 +59,8 @@ const CIRCLE_ICON_NAMES: Record<number, string> = {
 
 const TRIGGER_NAMES: Record<number, string> = {
   [TRIGGER_DEACTIVATE_WALL]: 'TRIGGER_DEACTIVATE_WALL',
-  [TRIGGER_MOVE_DOOR]: 'TRIGGER_MOVE_DOOR',
   [TRIGGER_GATE_SECTION_4]: 'TRIGGER_GATE_SECTION_4',
   [TRIGGER_ACTIVATE_LIGHT]: 'TRIGGER_ACTIVATE_LIGHT',
-  [TRIGGER_MOVE_BALL]: 'TRIGGER_MOVE_BALL',
   [TRIGGER_PLAY_SOUND]: 'TRIGGER_PLAY_SOUND',
 };
 
@@ -102,7 +98,7 @@ const formatCall = (call: number[], indent: string) => {
     lines.push(`${indent}]`);
     return lines.join('\n');
   }
-  if (id === 4 || id === 8) {
+  if (id === 4) {
     const trig = TRIGGER_NAMES[args[4]] || formatNum(args[4]);
     const extra = args.slice(5).map((n, i) => {
       if (args[4] === TRIGGER_PLAY_SOUND && i === 0) {
@@ -199,14 +195,8 @@ const roundCall = (call: number[]) => {
     return next;
   }
   if (next[0] === 10) {
-    for (let i = 1; i <= 4 && i < next.length; i++) {
+    for (let i = 1; i <= 5 && i < next.length; i++) {
       next[i] = Math.round(next[i]);
-    }
-    if (next.length > 5) {
-      next[5] = Math.round(next[5]);
-    }
-    if (next.length > 6) {
-      next[6] = Math.round(next[6]);
     }
     return next;
   }
@@ -373,14 +363,10 @@ const trimCall = (call: number[]) => {
     defs[8] = 0;
     defs[9] = 0;
     defs[10] = 0;
-  } else if (next[0] === 9) {
-    defs[7] = 0;
-    defs[8] = 0;
   } else if (next[0] === 11) {
     defs[6] = 0.5;
     defs[7] = 0.5;
     defs[8] = 0.5;
-    defs[9] = 0;
   } else if (next[0] === 12) {
     const type = next[5] | 0;
     if (type === DEC_BLINKING_LIGHT) {
@@ -433,7 +419,7 @@ export const generateLevelsTs = (
       if (name) {
         builderNames.add(name);
       }
-      if (call[0] === 4 || call[0] === 8) {
+      if (call[0] === 4) {
         const trig = TRIGGER_NAMES[call[5]];
         if (trig) {
           triggerNames.add(trig);

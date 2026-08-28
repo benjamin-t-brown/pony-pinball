@@ -27,8 +27,6 @@ import {
   TRIGGER_ACTIVATE_LIGHT,
   TRIGGER_DEACTIVATE_WALL,
   TRIGGER_GATE_SECTION_4,
-  TRIGGER_MOVE_BALL,
-  TRIGGER_MOVE_DOOR,
   TRIGGER_PLAY_SOUND,
 } from '@game/model/Trigger';
 import {
@@ -167,21 +165,13 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'restitution', step: 0.05 },
       { name: 'radius' },
       { name: 'omega', step: 0.05 },
-      { name: 'dx' },
-      { name: 'dy' },
     ],
   },
   {
     id: B_COLLECTABLE,
     name: 'Collectable',
     place: 'point',
-    params: [
-      { name: 'x' },
-      { name: 'y' },
-      { name: 'radius' },
-      { name: 'groupType', step: 1 },
-      { name: 'trigger', step: 1 },
-    ],
+    params: [{ name: 'x' }, { name: 'y' }],
   },
   {
     id: B_PORTAL,
@@ -192,7 +182,6 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'y0' },
       { name: 'x1' },
       { name: 'y1' },
-      { name: 'radius' },
       { name: 'color', step: 1 },
     ],
   },
@@ -209,7 +198,6 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'resti0', step: 0.05 },
       { name: 'resti1', step: 0.05 },
       { name: 'resti2', step: 0.05 },
-      { name: 'color', step: 1 },
     ],
   },
   {
@@ -318,11 +306,6 @@ export const TRIGGER_DEFS = [
     args: ['wall', 'onDelay', 'offDelay'],
   },
   {
-    id: TRIGGER_MOVE_DOOR,
-    name: 'TRIGGER_MOVE_DOOR',
-    args: ['wall', 'dx', 'dy'],
-  },
-  {
     id: TRIGGER_GATE_SECTION_4,
     name: 'TRIGGER_GATE_SECTION_4',
     args: [],
@@ -333,11 +316,6 @@ export const TRIGGER_DEFS = [
     args: ['part', 'onDelay', 'offDelay'],
   },
   {
-    id: TRIGGER_MOVE_BALL,
-    name: 'TRIGGER_MOVE_BALL',
-    args: ['destX', 'destY', 'destW', 'destH'],
-  },
-  {
     id: TRIGGER_PLAY_SOUND,
     name: 'TRIGGER_PLAY_SOUND',
     args: ['sound'],
@@ -345,26 +323,20 @@ export const TRIGGER_DEFS = [
 ];
 
 export const SOUND_DEFS = [
-  { id: 0, name: 'gate closed', key: 'SOUND_GATE_CLOSED' },
-  { id: 1, name: 'hit small circle', key: 'SOUND_HIT_SMALL_CIRCLE' },
-  { id: 2, name: 'launch', key: 'SOUND_LAUNCH' },
-  { id: 3, name: 'launch pull back', key: 'SOUND_LAUNCH_PULL_BACK' },
-  { id: 4, name: 'start game', key: 'SOUND_START_GAME' },
-  { id: 5, name: 'ball traveling', key: 'SOUND_BALL_TRAVELING' },
-  { id: 6, name: 'get coin', key: 'SOUND_GET_COIN' },
-  { id: 7, name: 'secret', key: 'SOUND_SECRET' },
-  { id: 8, name: 'gate open', key: 'SOUND_GATE_OPEN' },
-  { id: 9, name: 'paddle flipper', key: 'SOUND_PADDLE_FLIPPER' },
-  { id: 10, name: 'paddle flipper down', key: 'SOUND_PADDLE_FLIPPER_DOWN' },
-  { id: 11, name: 'portal in', key: 'SOUND_PORTAL_IN' },
-  { id: 12, name: 'portal out', key: 'SOUND_PORTAL_OUT' },
-  { id: 13, name: 'hit fan', key: 'SOUND_HIT_FAN' },
-  { id: 14, name: 'game win', key: 'SOUND_GAME_WIN' },
+  { id: 0, name: 'hit small circle', key: 'SOUND_HIT_SMALL_CIRCLE' },
+  { id: 1, name: 'launch', key: 'SOUND_LAUNCH' },
+  { id: 2, name: 'launch pull back', key: 'SOUND_LAUNCH_PULL_BACK' },
+  { id: 3, name: 'start game', key: 'SOUND_START_GAME' },
+  { id: 4, name: 'ball traveling', key: 'SOUND_BALL_TRAVELING' },
+  { id: 5, name: 'get coin', key: 'SOUND_GET_COIN' },
+  { id: 6, name: 'secret', key: 'SOUND_SECRET' },
+  { id: 7, name: 'paddle flipper', key: 'SOUND_PADDLE_FLIPPER' },
+  { id: 8, name: 'paddle flipper down', key: 'SOUND_PADDLE_FLIPPER_DOWN' },
+  { id: 9, name: 'portal in', key: 'SOUND_PORTAL_IN' },
+  { id: 10, name: 'portal out', key: 'SOUND_PORTAL_OUT' },
+  { id: 11, name: 'hit fan', key: 'SOUND_HIT_FAN' },
+  { id: 12, name: 'game win', key: 'SOUND_GAME_WIN' },
 ];
-
-export const isMoveBallField = (call: number[]) => {
-  return call[0] === B_FIELD && (call[5] | 0) === TRIGGER_MOVE_BALL;
-};
 
 export const triggerArgDefault = (name: string, call: number[]) => {
   if (name === 'destX') {
@@ -412,7 +384,7 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
     return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0, 0, 0];
   }
   if (id === B_FAN) {
-    return [B_FAN, x, y, 4, 1, 40, 1, 0, 0];
+    return [B_FAN, x, y, 4, 1, 40, 1];
   }
   if (id === B_FIELD) {
     const trig = triggerDefFor(TRIGGER_DEACTIVATE_WALL);
@@ -432,13 +404,13 @@ export const placeDefaults = (id: number, x: number, y: number): number[] => {
     return [B_WALL_GATE, x, y, x + 40, y, 0];
   }
   if (id === B_COLLECTABLE) {
-    return [B_COLLECTABLE, x, y, 14, 0, TRIGGER_GATE_SECTION_4];
+    return [B_COLLECTABLE, x, y];
   }
   if (id === B_PORTAL) {
-    return [B_PORTAL, x, y, x + 80, y, 18, 0];
+    return [B_PORTAL, x, y, x + 80, y, 0];
   }
   if (id === B_TRIANGLE) {
-    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5, 0];
+    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5];
   }
   if (id === B_DECORATION) {
     const dec = decorationDefFor(DEC_BLINKING_LIGHT);
@@ -469,16 +441,16 @@ export const ensureCallArgs = (call: number[]) => {
     next.length = n;
   }
   if (call[0] === B_COLLECTABLE) {
-    next.length = 6;
+    next.length = 3;
   }
   if (call[0] === B_WALL_RESTI || call[0] === B_WALL_GATE) {
     next.length = 6;
   }
   if (call[0] === B_PORTAL) {
-    next.length = 7;
+    next.length = 6;
   }
   if (call[0] === B_TRIANGLE) {
-    next.length = 10;
+    next.length = 9;
   }
   if (call[0] === B_DECORATION) {
     const dec = decorationDefFor(next[5]);

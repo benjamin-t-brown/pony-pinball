@@ -4,13 +4,10 @@ import { type Ball } from './Ball';
 import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../zzfx';
 
 export const TRIGGER_DEACTIVATE_WALL = 0;
-export const TRIGGER_MOVE_DOOR = 1;
 /** Collectable: 5 coins of group 0 open all gates in section 4. */
 export const TRIGGER_GATE_SECTION_4 = 2;
 /** Field: turn a decoration light on while occupied, off when left. */
 export const TRIGGER_ACTIVATE_LIGHT = 3;
-/** Field: warp the ball to a random point in a dest rect (section-local). */
-export const TRIGGER_MOVE_BALL = 4;
 /** Field: play a zzfx sound when the ball enters. */
 export const TRIGGER_PLAY_SOUND = 5;
 
@@ -100,7 +97,7 @@ export class DeactivateWallTrigger extends Trigger {
 
 const GATE4_SECTION = 4;
 const GATE4_WALL = 31;
-const GATE4_LIGHT = 22;
+const GATE4_LIGHT = 21;
 const GATE4_NEEDED = 6;
 
 /**
@@ -207,31 +204,6 @@ export class ActivateLightTrigger extends Trigger {
   }
 }
 
-export class MoveBallTrigger extends Trigger {
-  onActivated(section: Section, ball?: Ball) {
-    if (!ball) {
-      return;
-    }
-    const x = this.args[0] || 0;
-    const y = this.args[1] || 0;
-    const w = this.args[2] > 0 ? this.args[2] : 0;
-    const h = this.args[3] > 0 ? this.args[3] : 0;
-    const r = ball.r;
-    const rw = w - 2 * r;
-    const rh = h - 2 * r;
-    const tx =
-      rw > 0
-        ? section.x + x + r + Math.random() * rw
-        : section.x + x + w * 0.5;
-    const ty =
-      rh > 0
-        ? section.y + y + r + Math.random() * rh
-        : section.y + y + h * 0.5;
-    ball.pos.x = tx;
-    ball.pos.y = ty;
-  }
-}
-
 export class PlaySoundTrigger extends Trigger {
   onActivated() {
     const id = this.args[0] | 0;
@@ -246,5 +218,4 @@ export const TRIGGERS: (typeof Trigger)[] = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
 TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
 TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
-TRIGGERS[TRIGGER_MOVE_BALL] = MoveBallTrigger;
 TRIGGERS[TRIGGER_PLAY_SOUND] = PlaySoundTrigger;

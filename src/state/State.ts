@@ -100,9 +100,8 @@ export const finishPlay = () => {
 
 export const createState = (): State => {
   const sections = buildLevel(SECTIONS, LINKS);
-  const spawn = idleBallPos(sections);
   return {
-    balls: [ballCreate(spawn.x, spawn.y)],
+    balls: [],
     sections,
     walls: flattenSectionWalls(sections),
     input: [false, false, false],

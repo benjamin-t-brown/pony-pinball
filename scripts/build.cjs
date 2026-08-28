@@ -21,6 +21,7 @@ const MINIFIER = 'terser';
 // Unquoted CSS / SVG / HTML keys passed to setProperty / setAttribute.
 // Terser already skips DOM builtins when properties.builtins is false.
 const MANGLE_PROPS_RESERVED = [
+  'class',
   'background',
   'border',
   'bottom',

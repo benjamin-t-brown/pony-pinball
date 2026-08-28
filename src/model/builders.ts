@@ -9,7 +9,7 @@ import { makeCircle, makeFan } from './parts/Obstacle';
 import { Paddle } from './parts/Paddle';
 import { Portal } from './parts/Portal';
 import { type Section, sectionCreate } from './Section';
-import { TRIGGERS, Trigger } from './Trigger';
+import { GateSection4Trigger, TRIGGERS, Trigger } from './Trigger';
 import { SOUND_HIT_FAN } from '../zzfx.js';
 
 export { GATE_COLORS };
@@ -134,24 +134,23 @@ BUILDERS[B_CIRCLE] = (
 
 BUILDERS[B_FAN] = (
   section,
-  [x, y, paddles, restitution, radius, omega, dx, dy]
+  [x, y, paddles, restitution, radius, omega]
 ) => {
   section.parts.push(
-    makeFan(x, y, paddles, restitution, radius, dx, dy, omega)
+    makeFan(x, y, paddles, restitution, radius, 0, 0, omega)
   );
 };
 
-BUILDERS[B_COLLECTABLE] = (s, [x, y, r, groupType, id]) => {
-  const Ctor = TRIGGERS[id] || Trigger;
-  const coin = new Collectable(x, y, r, groupType);
-  coin.trigger = new Ctor([]);
+BUILDERS[B_COLLECTABLE] = (s, [x, y]) => {
+  const coin = new Collectable(x, y, 10, 0);
+  coin.trigger = new GateSection4Trigger([]);
   s.parts.push(coin);
 };
 
-BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, r, color]) => {
+BUILDERS[B_PORTAL] = (s, [x0, y0, x1, y1, color]) => {
   const c = color | 0;
   s.parts.push(
-    new Portal(x0, y0, x1, y1, r, c < 0 ? 0 : c % GATE_COLORS.length)
+    new Portal(x0, y0, x1, y1, 18, c < 0 ? 0 : c % GATE_COLORS.length)
   );
 };
 
@@ -178,21 +177,15 @@ export const triangleVerts = (
   };
 };
 
+/** Fixed fill color index for triangle bumpers: orange. */
+const TRIANGLE_COLOR = 1;
+
 BUILDERS[B_TRIANGLE] = (
   s,
-  [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2, color]
+  [x, y, sideLen1, sideLen2, rot, resti0, resti1, resti2]
 ) => {
   const v = triangleVerts(x, y, sideLen1, sideLen2, rot);
-  const c = color == null ? 0 : color | 0;
-  s.fills.push([
-    v.x0,
-    v.y0,
-    v.x1,
-    v.y1,
-    v.x2,
-    v.y2,
-    c < 0 ? 0 : c % GATE_COLORS.length,
-  ]);
+  s.fills.push([v.x0, v.y0, v.x1, v.y1, v.x2, v.y2, TRIANGLE_COLOR]);
   s.walls.push(
     lineCreate(v.x1, v.y1, v.x2, v.y2, resti0, -1, SOUND_HIT_FAN)
   );

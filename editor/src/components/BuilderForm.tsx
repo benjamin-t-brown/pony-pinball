@@ -1,5 +1,4 @@
 import {
-  B_COLLECTABLE,
   B_DECORATION,
   B_FIELD,
   B_WALL_GATE,
@@ -163,7 +162,7 @@ export const BuilderForm = ({
   }
 
   const def = defFor(call[0]);
-  const hasTrigger = call[0] === B_FIELD || call[0] === B_COLLECTABLE;
+  const hasTrigger = call[0] === B_FIELD;
   const trig = hasTrigger ? triggerDefFor(call[5]) : null;
   const hasDecoration = call[0] === B_DECORATION;
   const dec = hasDecoration ? decorationDefFor(call[5]) : null;

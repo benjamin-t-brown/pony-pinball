@@ -1,6 +1,7 @@
 import {
   DIV,
   INNER_HTML,
+  POINTER_EVENTS,
   appendChild,
   createElement,
   domAddEventListener,
@@ -21,9 +22,39 @@ import {
 } from '../model/Part';
 import { Layer } from './Layer';
 
+const mobileWrap: Record<string, string> = {
+  position: 'absolute',
+  left: '0',
+  right: '0',
+  bottom: '16px',
+  display: 'none',
+  'justify-content': 'space-between',
+  padding: '0 16px',
+  [POINTER_EVENTS]: 'none',
+};
+
+const addMobileBtn = (wrap: HTMLElement, label: string, control: number) => {
+  const btn = createElement('button');
+  btn.className = 'mb';
+  btn[INNER_HTML] = label;
+  domAddEventListener(btn, 'touchstart', e => {
+    e.preventDefault();
+    btn.className = 'mb a';
+    getState().input[control] = true;
+  });
+  const up = () => {
+    btn.className = 'mb';
+    getState().input[control] = false;
+  };
+  domAddEventListener(btn, 'touchend', up);
+  domAddEventListener(btn, 'touchcancel', up);
+  appendChild(wrap, btn);
+};
+
 class PlayHud extends UiElement {
   timeEl: HTMLElement | null = null;
   btnEl: HTMLElement | null = null;
+  mobileEl: HTMLElement | null = null;
   visible = false;
 
   hide() {
@@ -40,7 +71,7 @@ class PlayHud extends UiElement {
     }
   }
 
-  layout() {
+  layout(width = 0, height = 0) {
     const bw = 120;
     const bh = 36;
     this.width = bw;
@@ -58,10 +89,15 @@ class PlayHud extends UiElement {
     if (this.timeEl) {
       setStyle(this.timeEl, { top: px(12) });
     }
+    if (this.mobileEl) {
+      setStyle(this.mobileEl, {
+        display: height > width ? 'flex' : 'none',
+      });
+    }
   }
 
   checkResizeEvent(width: number, height: number) {
-    this.layout();
+    this.layout(width, height);
     super.checkResizeEvent(width, height);
   }
 
@@ -91,10 +127,18 @@ class PlayHud extends UiElement {
     });
     appendChild(overlay, btn);
 
+    const mobile = createElement(DIV);
+    setStyle(mobile, mobileWrap);
+    addMobileBtn(mobile, '&lt;', CONTROL_LEFT);
+    addMobileBtn(mobile, '^', CONTROL_START);
+    addMobileBtn(mobile, '&gt;', CONTROL_RIGHT);
+    appendChild(overlay, mobile);
+
     appendChild(root, overlay);
     this.el = overlay;
     this.timeEl = timeEl;
     this.btnEl = btn;
+    this.mobileEl = mobile;
     this.layout();
   }
 

@@ -28,7 +28,6 @@ import {
   type Decoration,
 } from '@game/model/parts/Decoration';
 import type { Field } from '@game/model/parts/Field';
-import { MoveBallTrigger } from '@game/model/Trigger';
 import type { Launcher } from '@game/model/parts/Launcher';
 import {
   CIRCLE_DIAMOND,
@@ -71,7 +70,8 @@ import {
   openingSpan,
   openingsToLinks,
 } from '../openings';
-import { isDecLightLine, isDecRainbow, isMoveBallField, placeDefaults, triggerDefFor } from '../schema';
+import { isDecLightLine, isDecRainbow, placeDefaults, triggerDefFor } from '../schema';
+import { TRIGGER_GATE_SECTION_4 } from '@game/model/Trigger';
 import { collectPlayEls, syncPlayVisuals } from '../playVisuals';
 import type { Cam, Opening, SectionData, Selection, Tool } from '../types';
 import { isSegmentWallCall, restiWallIndices } from '../wallRefs';
@@ -403,7 +403,7 @@ const hitsCall = (
   const origin = callOrigin(section, call);
   const fat = Math.max(slop, 8);
   if (call[0] === B_PORTAL && call.length >= 5) {
-    const r = (call[5] ?? 18) + slop;
+    const r = 18 + slop;
     const x1 = section[0] + call[3];
     const y1 = section[1] + call[4];
     return (
@@ -431,8 +431,7 @@ const hitsCall = (
     return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
   }
   if (call[0] === B_COLLECTABLE) {
-    const r = call[3] ?? 14;
-    return Math.hypot(wx - origin.x, wy - origin.y) < r + slop;
+    return Math.hypot(wx - origin.x, wy - origin.y) < 10 + slop;
   }
   if (call[0] === B_DECORATION) {
     if (isDecLightLine(call) && call.length >= 12) {
@@ -1822,7 +1821,9 @@ export const WorldCanvas = ({
   if (selection && selection.kind === 'call') {
     const call = viewSections[selection.section]?.[4][selection.call];
     if (call && (call[0] === B_FIELD || call[0] === B_COLLECTABLE)) {
-      const trig = triggerDefFor(call[5] ?? 0);
+      const trig = triggerDefFor(
+        call[0] === B_COLLECTABLE ? TRIGGER_GATE_SECTION_4 : (call[5] ?? 0)
+      );
       const walls = new Set<number>();
       const parts = new Set<number>();
       let wallSection = selection.section;
@@ -2178,29 +2179,6 @@ const callMarker = (
           stroke="#fc8"
           strokeWidth={2 / scale}
         />
-      ) : null}
-      {isMoveBallField(call) && call.length >= 10 ? (
-        <g>
-          <rect
-            x={s[0] + (call[6] || 0)}
-            y={s[1] + (call[7] || 0)}
-            width={call[8] > 0 ? call[8] : 0}
-            height={call[9] > 0 ? call[9] : 0}
-            fill="none"
-            stroke="#c8f"
-            strokeWidth={2 / scale}
-            strokeDasharray={`${6 / scale} ${4 / scale}`}
-          />
-          <line
-            x1={origin.x + call[3] * 0.5}
-            y1={origin.y + call[4] * 0.5}
-            x2={s[0] + (call[6] || 0) + (call[8] > 0 ? call[8] : 0) * 0.5}
-            y2={s[1] + (call[7] || 0) + (call[9] > 0 ? call[9] : 0) * 0.5}
-            stroke="#c8f"
-            strokeWidth={2 / scale}
-            strokeDasharray={`${4 / scale} ${4 / scale}`}
-          />
-        </g>
       ) : null}
       {call[0] === B_CONVEYER
         ? (() => {
@@ -2742,44 +2720,17 @@ const PartPreview = ({
     const fill = field.inside
       ? 'rgba(120,200,255,0.35)'
       : 'rgba(70,140,220,0.18)';
-    const dest =
-      field.trigger instanceof MoveBallTrigger ? field.trigger.args : null;
     return (
-      <g>
-        <rect
-          data-live="field"
-          data-s={sectionId}
-          data-i={index}
-          x={field.x}
-          y={field.y}
-          width={field.w}
-          height={field.h}
-          fill={fill}
-        />
-        {dest ? (
-          <>
-            <rect
-              x={dest[0] || 0}
-              y={dest[1] || 0}
-              width={dest[2] > 0 ? dest[2] : 0}
-              height={dest[3] > 0 ? dest[3] : 0}
-              fill="rgba(200,128,255,0.12)"
-              stroke="#c8f"
-              strokeWidth={2}
-              strokeDasharray="6 4"
-            />
-            <line
-              x1={field.x + field.w * 0.5}
-              y1={field.y + field.h * 0.5}
-              x2={(dest[0] || 0) + (dest[2] > 0 ? dest[2] : 0) * 0.5}
-              y2={(dest[1] || 0) + (dest[3] > 0 ? dest[3] : 0) * 0.5}
-              stroke="#c8f"
-              strokeWidth={2}
-              strokeDasharray="4 4"
-            />
-          </>
-        ) : null}
-      </g>
+      <rect
+        data-live="field"
+        data-s={sectionId}
+        data-i={index}
+        x={field.x}
+        y={field.y}
+        width={field.w}
+        height={field.h}
+        fill={fill}
+      />
     );
   }
   if (part.type === PART_PADDLE) {
