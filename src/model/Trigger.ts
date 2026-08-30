@@ -1,7 +1,7 @@
 import { PART_DECORATION } from './Part';
 import type { Section } from './Section';
 import { type Ball } from './Ball';
-import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../zzfx';
+import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../zzfx.js';
 
 export const TRIGGER_DEACTIVATE_WALL = 0;
 /** Collectable: 5 coins of group 0 open all gates in section 4. */
