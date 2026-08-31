@@ -4,15 +4,36 @@ Design notes captured before implementation. The runtime half (builder table,
 levels data, perimeter generation) is being built first; this file describes
 the editor that will eventually generate that data.
 
+STATUS (2026-08): The js13k size budget is lifted. The product goal is an
+engine that can author and export different pinball / pachinko machines as
+self-contained games. See README.md for direction and refactor flags.
+
+What in this file still holds: sections as nodes / openings as edges, snap to
+edges not a grid, explicit links, generated perimeters, prefabs expanding at
+runtime, editor previewing the real sim, validation catching broken structure.
+
+What was a 13k constraint and should change: "the editor must never enter the
+game bundle" as a concat-build rule; flat number arrays and integer action
+tags as the authoring format; omitting JSON because repeated keys cost bytes.
+The editor/runtime split is still right (preview must stay in sync), but it
+is a package boundary, not a zip-size rule. Packed opcodes can remain an
+export encoding later; they should not be the format humans and the editor
+edit.
+
 
 THE ONE RULE
 ------------
 The editor must never enter the game bundle.
 
-scripts/build.cjs calls getAllFilePaths(src) and sweeps up every .js it finds,
-so a src/editor/ directory would ship inside the 13k budget. The editor lives
-as a sibling of src/ (next to scratch/ and scripts/, which already work this
-way) and is built separately by Vite with no size limit.
+(13k-era) scripts/build.cjs calls getAllFilePaths(src) and sweeps up every
+.js it finds, so a src/editor/ directory would ship inside the 13k budget.
+The editor lives as a sibling of src/ (next to scratch/ and scripts/, which
+already work this way) and is built separately by Vite with no size limit.
+
+Post-13k: keep the one-way dependency (editor -> src, never reverse) so the
+editor can preview with the real updateSimulation. Do not keep the "nothing
+extra in src/" rule as architecture; a future `machines/` or `engine/` split
+is the packaging story, not concat-avoidance.
 
 Dependency direction is one-way:
 
@@ -25,7 +46,7 @@ the real Paddle physics instead of a reimplementation that drifts out of sync.
 
 OUTPUT: A GENERATED .ts FILE, NOT A FETCHED ASSET
 -------------------------------------------------
-The editor writes src/levels.ts as a normal generated-and-committed
+(13k-era) The editor writes src/levels.ts as a normal generated-and-committed
 source file. It then rides the existing build with zero special handling: no
 fetch, no runtime parser, no build-step string replacement.
 
@@ -34,12 +55,22 @@ regex surgery replacing fetch('/events.wpe') with an inlined array, with three
 fallback patterns because the first two did not match. That is the failure mode
 this avoids.
 
+Post-13k: still generate committed machine files (not a runtime fetch of
+opaque blobs). One file named levels.ts is the current table, not the catalog.
+A packaged game inlines *that* machine; the editor should load/save by
+machine id. Named data is fine; the anti-pattern is regex-inlining a fetch.
+
 
 DATA FORMAT
 -----------
-Flat number arrays. Not JSON (repeated keys are pure overhead). Not a
-char-packed string yet either - the decoder costs bytes and only pays off once
-there is a lot of data. Revisit packing if the level count grows.
+(13k-era) Flat number arrays. Not JSON (repeated keys are pure overhead). Not
+a char-packed string yet either - the decoder costs bytes and only pays off
+once there is a lot of data. Revisit packing if the level count grows.
+
+Post-13k: named objects (or the editor schema already in editor/src/schema.ts)
+are the authoring format. Multiple machines need readable fields, stable ids
+for walls/parts in triggers, and a manifest (spawn, complete condition, theme).
+If an export ever wants a compact encoding, compile down at package time.
 
     SECTIONS: [x, y, w, h, bg, edges, [builder calls]]
     LINKS:    [aIndex, bIndex, offset, width]
@@ -131,6 +162,10 @@ bumper stored as raw geometry is 12 walls x 5 numbers = 60 numbers; stored as a
 builder call it is 5. That ~12x is the entire reason this format exists, and it
 generalizes to every prefab.
 
+Post-13k: the retune-in-one-place argument still wins. The byte-count argument
+does not. Keep runtime expansion; drop positional opcode packing as the thing
+the editor writes.
+
 Shared constants (LEFT_REST_ANGLE, RIGHT_UP, PADDLE_LEN...) stay in constants.ts as
 the defaults the prefabs read. The data only carries what differs per section.
 
@@ -150,6 +185,11 @@ mangled single letter. Nothing calls it today, so it is harmless dead code -
 but do not let the editor key action selection off class names. Integer tags
 survive minification; names do not.
 
+Post-13k: names are fine. Prefer stable string ids in machine data. The parked
+StateManager in scratch/state-actions/ can come back for sequenced events
+without the mangling hazard. Triggers still should not key off class names
+(refactor-brittle); they should key off ids in the machine file.
+
 
 ROUND-TRIPPING (undecided)
 --------------------------
@@ -158,4 +198,8 @@ Two options, not yet chosen:
      small Vite dev-server POST handler. Simple, always in sync.
   b) Editor keeps its own working file and exports on demand.
 
-(a) is probably right, but it means the editor needs a dev-server plugin.
+(a) is what shipped: editor/vite-plugin-levels.ts GET/POSTs /api/levels and
+rewrites src/levels.ts. That is the right sync model for *one* table.
+
+Post-13k: keep a POST round-trip, but to a machine file (or catalog), and add
+an export path that emits a self-contained playable without the editor.

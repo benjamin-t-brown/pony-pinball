@@ -1,5 +1,5 @@
-import type { Circle } from '../sim/physics';
-import type { Section } from './Section';
+import type { Circle } from '../sim/PhysicsFuncs';
+import type { Section } from './SectionFuncs';
 
 export const CONTROL_LEFT = 0;
 export const CONTROL_RIGHT = 1;
@@ -7,31 +7,24 @@ export const CONTROL_START = 2;
 /** Not player-driven. The input gate in updateParts skips these. */
 export const CONTROL_NONE = -1;
 
-export const PART_PADDLE = 0;
-export const PART_LAUNCHER = 1;
-export const PART_OBSTACLE = 2;
-export const PART_FIELD = 3;
-export const PART_COLLECTABLE = 4;
-export const PART_PORTAL = 5;
-export const PART_DECORATION = 6;
-
 /**
- * Everything that lives in a Section and can touch the ball: paddles,
- * launchers, bumpers, fields. One list, one loop, one UI element — adding a
- * kind costs a `type` constant and the phases it actually cares about, not a
- * new array, foreach, update pass and element class.
+ * Something in a section that can tick, overlap the ball, or draw.
+ * A new kind is a subclass (and a view class under `src/ui/parts/`), not a
+ * `type` integer and another switch in PartElement.
  */
 export class Part {
   x = 0;
   y = 0;
-  type = PART_PADDLE;
   control = CONTROL_NONE;
   active = false;
+  /** Stable id for trigger / collect-goal refs. 0 = none. */
+  id = 0;
+  /** 0..1. Default 1. Shared by every part kind. */
+  opacity = 1;
 
-  constructor(x: number, y: number, type: number, control = CONTROL_NONE) {
+  constructor(x: number, y: number, control = CONTROL_NONE) {
     this.x = x;
     this.y = y;
-    this.type = type;
     this.control = control;
   }
 
@@ -42,6 +35,12 @@ export class Part {
   unactivate() {
     this.active = false;
   }
+
+  /** Player input just turned this on (edge). */
+  onControlOn() {}
+
+  /** Player input just turned this off (edge). */
+  onControlOff() {}
 
   /** Pre-physics tick: move under your own power. */
   update(_dt: number, _section: Section) {}
@@ -62,6 +61,6 @@ export class Part {
     return g;
   }
 
-  /** Post-integration: resolve contact. */
+  /** After the physics step: launchers apply a pending fire. */
   affectBall(_ball: Circle, _ox: number, _oy: number) {}
 }

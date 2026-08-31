@@ -1,4 +1,4 @@
-import { domAddEventListener } from '../dom';
+import { domAddEventListener } from '../DomFuncs';
 import type { UiElement } from '../ui/UiElement';
 
 export const LAYER_ON = 0;
@@ -9,7 +9,7 @@ export abstract class Layer {
   layerState = LAYER_ON;
   uiElements: UiElement[] = [];
 
-  constructor(window: HTMLElement | null = null) {
+  constructor(window: HTMLElement | null = null, listenKeys = true) {
     this.window = window;
     if (this.window) {
       const host = this.window;
@@ -36,12 +36,14 @@ export abstract class Layer {
         const p = pos(e);
         this.onMouseHover(p.x, p.y);
       });
-      addEventListener('keydown', e => {
-        this.onKeyDown(e.code, e.keyCode);
-      });
-      addEventListener('keyup', e => {
-        this.onKeyUp(e.code, e.keyCode);
-      });
+      if (listenKeys) {
+        addEventListener('keydown', e => {
+          this.onKeyDown(e.code, e.keyCode);
+        });
+        addEventListener('keyup', e => {
+          this.onKeyUp(e.code, e.keyCode);
+        });
+      }
       addEventListener('resize', () => {
         this.onResize(
           host.clientWidth || innerWidth,
@@ -122,12 +124,14 @@ export abstract class Layer {
     element.build();
   }
 
+  /** Sim tick. Do not write CSS here. */
   update(dt: number) {
     for (const elem of this.uiElements) {
       elem.update(dt);
     }
   }
 
+  /** Paint from model state. Once per frame. */
   render(dt: number) {
     for (const elem of this.uiElements) {
       elem.render(dt);

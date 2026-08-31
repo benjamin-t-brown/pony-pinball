@@ -17,5 +17,5 @@
       "@game/*": ["../src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "vite-plugin-levels.ts"]
+  "include": ["src", "vite.config.ts", "vite-plugin-machines.ts"]
 }

@@ -1,9 +1,11 @@
+import type { MachineCall } from '@game/machine/MachineCalls';
+
 export type SectionData = [
   number,
   number,
   number,
   number,
-  number[][],
+  MachineCall[],
 ];
 
 export type Opening = {

@@ -1,5 +1,5 @@
-import { updateSimulation } from '../sim/updateSimulation';
-import { getState } from '../state/State';
+import { updateSimulation } from '../sim/SimUpdate';
+import { getState } from '../state/StateFuncs';
 import { Layer } from './Layer';
 
 export class SimLayer extends Layer {

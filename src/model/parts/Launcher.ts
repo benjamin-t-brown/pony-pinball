@@ -4,15 +4,15 @@ import {
   vecCreate,
   vecMul,
   vecNorm,
-} from '../../sim/physics';
-import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE } from '../constants';
-import { PART_LAUNCHER, Part } from '../Part';
-import type { Section } from '../Section';
+} from '../../sim/PhysicsFuncs';
+import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE } from '../Constants';
+import { Part } from '../Part';
+import type { Section } from '../SectionFuncs';
 import {
   playSound,
   SOUND_LAUNCH,
   SOUND_LAUNCH_PULL_BACK,
-} from '../../zzfx.js';
+} from '../../audio/SoundFuncs';
 
 export class Launcher extends Part {
   dir: Vec;
@@ -34,7 +34,7 @@ export class Launcher extends Part {
     chargeMs = LAUNCHER_CHARGE_MS,
     len = LAUNCHER_LEN
   ) {
-    super(x, y, PART_LAUNCHER, control);
+    super(x, y, control);
     this.dir = vecNorm(vecCreate(dx, dy));
     this.force = force;
     this.range = range;

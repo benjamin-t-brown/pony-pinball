@@ -7,12 +7,12 @@ import {
   getGameRoot,
   px,
   setStyle,
-} from '../dom';
-import { ACCENT } from '../model/constants';
-import { formatTime, getState, startPlay } from '../state/State';
-import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
+} from '../DomFuncs';
+import { accent, palette } from '../machine/MachineLook';
+import { formatTime, getState, startPlay } from '../state/StateFuncs';
+import { hudBtn, hudLabel, hudOverlay } from '../ui/HudStyles';
 import { UiElement } from '../ui/UiElement';
-import { playSound, SOUND_START_GAME } from '../zzfx.js';
+import { playSound, SOUND_START_GAME } from '../audio/SoundFuncs';
 import { LAYER_OFF, Layer } from './Layer';
 
 class MenuHud extends UiElement {
@@ -70,18 +70,18 @@ class MenuHud extends UiElement {
 
     const btn = createElement('button');
     btn[INNER_HTML] = 'Start Game';
-    setStyle(btn, hudBtn);
+    setStyle(btn, hudBtn());
     domAddEventListener(btn, 'click', () => {
       this.onStart();
     });
     appendChild(overlay, btn);
 
     const lastEl = createElement(DIV);
-    setStyle(lastEl, { ...hudLabel, color: ACCENT });
+    setStyle(lastEl, { ...hudLabel, color: accent() });
     appendChild(overlay, lastEl);
 
     const bestEl = createElement(DIV);
-    setStyle(bestEl, { ...hudLabel, color: '#8cf' });
+    setStyle(bestEl, { ...hudLabel, color: palette()[4] || accent() });
     appendChild(overlay, bestEl);
 
     appendChild(root, overlay);
@@ -110,8 +110,8 @@ class MenuHud extends UiElement {
 export class MenuUiLayer extends Layer {
   hud: MenuHud;
 
-  constructor(host: HTMLElement) {
-    super(host);
+  constructor(host: HTMLElement, listenKeys = true) {
+    super(host, listenKeys);
     this.hud = new MenuHud(() => {
       this.onStart();
     });

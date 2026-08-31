@@ -1,49 +1,71 @@
-import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE, LAUNCHER_X, LAUNCHER_Y, LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from '@game/model/constants';
-import { roundAngle } from './geometry';
 import {
+  B_CIRCLE,
+  B_COLLECTABLE,
+  B_CONVEYER,
+  B_DECORATION,
+  B_FAN,
+  B_FIELD,
+  B_FLIPPER_LEFT,
+  B_LAUNCHER,
+  B_PORTAL,
+  B_TRIANGLE,
+  B_WALL_GATE,
+  B_WALL_RESTI,
+  B_WALLS,
   TRIGGER_ACTIVATE_LIGHT,
   TRIGGER_DEACTIVATE_WALL,
-  TRIGGER_GATE_SECTION_4,
   TRIGGER_PLAY_SOUND,
-} from '@game/model/Trigger';
-import {
   DEC_BLINKING_LIGHT,
   DEC_BLINKING_LIGHT_LINE,
   DEC_ICON,
   DEC_RAINBOW,
+  cloneCall,
+  type MachineCall,
+  type WallSegment,
+} from '@game/machine/MachineCalls';
+import {
+  LAUNCHER_CHARGE_MS,
+  LAUNCHER_FORCE,
+  LAUNCHER_LEN,
+  LAUNCHER_RANGE,
+  LAUNCHER_X,
+  LAUNCHER_Y,
+  LEFT_REST_ANGLE,
+  LEFT_UP,
+  PADDLE_LEN,
+} from '@game/model/Constants';
+import { roundAngle } from './geometry';
+import {
+  assembleMachine,
+  linksToTuples,
+  PONY_MACHINE_META,
+  sectionsToTuples,
+} from '@game/machine/MachineFormats';
+import type { Machine } from '@game/machine/MachineTypes';
+import {
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
   SHAPE_SQUARE,
   TEX_PALETTE,
 } from '@game/model/parts/Decoration';
-import {
-  CIRCLE_DIAMOND,
-  CIRCLE_SMILE,
-} from '@game/model/parts/Obstacle';
+import { CIRCLE_DIAMOND, CIRCLE_SMILE } from '@game/model/parts/Obstacle';
 import { SOUND_DEFS } from './schema';
 import type { SectionData } from './types';
 
-const BUILDER_NAMES: Record<number, string> = {
-  0: 'B_WALLS',
-  1: 'B_WALL_RESTI',
-  2: 'B_LAUNCHER',
-  3: 'B_WALL_GATE',
-  4: 'B_FIELD',
-  5: 'B_FLIPPER_LEFT',
-  6: 'B_CIRCLE',
-  7: 'B_CONVEYER',
-  8: 'B_COLLECTABLE',
-  9: 'B_FAN',
-  10: 'B_PORTAL',
-  11: 'B_TRIANGLE',
-  12: 'B_DECORATION',
-};
-
-const DEC_NAMES: Record<number, string> = {
-  [DEC_BLINKING_LIGHT]: 'DEC_BLINKING_LIGHT',
-  [DEC_BLINKING_LIGHT_LINE]: 'DEC_BLINKING_LIGHT_LINE',
-  [DEC_ICON]: 'DEC_ICON',
-  [DEC_RAINBOW]: 'DEC_RAINBOW',
+const KIND_NAMES: Record<number, string> = {
+  [B_WALLS]: 'B_WALLS',
+  [B_WALL_RESTI]: 'B_WALL_RESTI',
+  [B_LAUNCHER]: 'B_LAUNCHER',
+  [B_WALL_GATE]: 'B_WALL_GATE',
+  [B_FIELD]: 'B_FIELD',
+  [B_FLIPPER_LEFT]: 'B_FLIPPER_LEFT',
+  [B_CIRCLE]: 'B_CIRCLE',
+  [B_CONVEYER]: 'B_CONVEYER',
+  [B_COLLECTABLE]: 'B_COLLECTABLE',
+  [B_FAN]: 'B_FAN',
+  [B_PORTAL]: 'B_PORTAL',
+  [B_TRIANGLE]: 'B_TRIANGLE',
+  [B_DECORATION]: 'B_DECORATION',
 };
 
 const SHAPE_NAMES: Record<number, string> = {
@@ -59,9 +81,15 @@ const CIRCLE_ICON_NAMES: Record<number, string> = {
 
 const TRIGGER_NAMES: Record<number, string> = {
   [TRIGGER_DEACTIVATE_WALL]: 'TRIGGER_DEACTIVATE_WALL',
-  [TRIGGER_GATE_SECTION_4]: 'TRIGGER_GATE_SECTION_4',
   [TRIGGER_ACTIVATE_LIGHT]: 'TRIGGER_ACTIVATE_LIGHT',
   [TRIGGER_PLAY_SOUND]: 'TRIGGER_PLAY_SOUND',
+};
+
+const DEC_NAMES: Record<number, string> = {
+  [DEC_BLINKING_LIGHT]: 'DEC_BLINKING_LIGHT',
+  [DEC_BLINKING_LIGHT_LINE]: 'DEC_BLINKING_LIGHT_LINE',
+  [DEC_ICON]: 'DEC_ICON',
+  [DEC_RAINBOW]: 'DEC_RAINBOW',
 };
 
 const SOUND_NAMES: Record<number, string> = {};
@@ -84,234 +112,275 @@ const formatNum = (n: number) => {
   return s;
 };
 
-const formatCall = (call: number[], indent: string) => {
-  const id = call[0];
-  const name = BUILDER_NAMES[id] || String(id);
-  const args = call.slice(1);
-  if (id === 0 && args.length > 8) {
-    const lines = [`${indent}[`, `${indent}  ${name},`];
-    for (let i = 0; i < args.length; i += 4) {
-      const chunk = args.slice(i, i + 4).map(formatNum).join(', ');
-      const comma = i + 4 < args.length ? ',' : '';
-      lines.push(`${indent}  ${chunk}${comma}`);
+const roundIntKeys = (call: MachineCall, keys: string[]) => {
+  const rec = call as unknown as Record<string, unknown>;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (typeof rec[k] === 'number') {
+      rec[k] = Math.round(rec[k] as number);
     }
-    lines.push(`${indent}]`);
-    return lines.join('\n');
   }
-  if (id === 4) {
-    const trig = TRIGGER_NAMES[args[4]] || formatNum(args[4]);
-    const extra = args.slice(5).map((n, i) => {
-      if (args[4] === TRIGGER_PLAY_SOUND && i === 0) {
-        return SOUND_NAMES[n] || formatNum(n);
-      }
-      return formatNum(n);
-    });
-    const nums = [
-      ...args.slice(0, 4).map(formatNum),
-      trig,
-      ...extra,
-    ];
-    return `${indent}[${[name, ...nums].join(', ')}]`;
-  }
-  if (id === 6 && args.length > 8) {
-    const icon = CIRCLE_ICON_NAMES[args[8]] || formatNum(args[8]);
-    const nums = [
-      ...args.slice(0, 8).map(formatNum),
-      icon,
-      ...args.slice(9).map(formatNum),
-    ];
-    return `${indent}[${[name, ...nums].join(', ')}]`;
-  }
-  if (id === 12) {
-    const dec = DEC_NAMES[args[4]] || formatNum(args[4]);
-    const tex =
-      args[5] === TEX_PALETTE ? 'TEX_PALETTE' : formatNum(args[5]);
-    if (args[4] === DEC_ICON) {
-      const nums = [
-        ...args.slice(0, 4).map(formatNum),
-        dec,
-        tex,
-        ...args.slice(6).map(formatNum),
-      ];
-      return `${indent}[${[name, ...nums].join(', ')}]`;
-    }
-    if (args[4] === DEC_RAINBOW) {
-      const nums = [
-        ...args.slice(0, 4).map(formatNum),
-        dec,
-        formatNum(args[5]),
-        ...args.slice(6).map(formatNum),
-      ];
-      return `${indent}[${[name, ...nums].join(', ')}]`;
-    }
-    if (args[4] === DEC_BLINKING_LIGHT) {
-      const nums = [
-        ...args.slice(0, 4).map(formatNum),
-        dec,
-        tex,
-      ];
-      if (args.length > 6) {
-        nums.push(SHAPE_NAMES[args[6]] || formatNum(args[6]));
-        for (let i = 7; i < args.length; i++) {
-          nums.push(formatNum(args[i]));
-        }
-      }
-      return `${indent}[${[name, ...nums].join(', ')}]`;
-    }
-    const nums = [
-      ...args.slice(0, 4).map(formatNum),
-      dec,
-      tex,
-    ];
-    if (args.length > 6) {
-      nums.push(formatNum(args[6]));
-    }
-    if (args.length > 7) {
-      nums.push(SHAPE_NAMES[args[7]] || formatNum(args[7]));
-      for (let i = 8; i < args.length; i++) {
-        nums.push(formatNum(args[i]));
-      }
-    }
-    return `${indent}[${[name, ...nums].join(', ')}]`;
-  }
-  return `${indent}[${[name, ...args.map(formatNum)].join(', ')}]`;
 };
 
-const roundCall = (call: number[]) => {
-  const next = call.slice();
-  if (next[0] === 0) {
-    for (let i = 1; i < next.length; i++) {
-      next[i] = Math.round(next[i]);
+const roundAngleKeys = (call: MachineCall, keys: string[]) => {
+  const rec = call as unknown as Record<string, unknown>;
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    if (typeof rec[k] === 'number') {
+      rec[k] = roundAngle(rec[k] as number);
+    }
+  }
+};
+
+const roundCall = (call: MachineCall): MachineCall => {
+  const next = cloneCall(call);
+  if (next.kind === B_WALLS) {
+    for (let i = 0; i < next.segments.length; i++) {
+      const s = next.segments[i];
+      s.x0 = Math.round(s.x0);
+      s.y0 = Math.round(s.y0);
+      s.x1 = Math.round(s.x1);
+      s.y1 = Math.round(s.y1);
+      if (s.id != null) {
+        s.id = Math.round(s.id);
+      }
     }
     return next;
   }
-  if (next[0] === 1 || next[0] === 3) {
-    for (let i = 1; i <= 4 && i < next.length; i++) {
-      next[i] = Math.round(next[i]);
-    }
-    if (next[0] === 3 && next.length > 5) {
-      next[5] = Math.round(next[5]);
-    }
+  if (next.kind === B_WALL_RESTI || next.kind === B_WALL_GATE || next.kind === B_PORTAL) {
+    roundIntKeys(next, ['x0', 'y0', 'x1', 'y1', 'id', 'color']);
     return next;
   }
-  if (next[0] === 10) {
-    for (let i = 1; i <= 5 && i < next.length; i++) {
-      next[i] = Math.round(next[i]);
-    }
+  if (next.kind === B_FIELD || next.kind === B_COLLECTABLE) {
+    roundIntKeys(next, [
+      'x',
+      'y',
+      'w',
+      'h',
+      'id',
+      'wall',
+      'part',
+      'sound',
+      'onDelay',
+      'offDelay',
+    ]);
     return next;
   }
-  if (next[0] === 11) {
-    if (next.length > 1) {
-      next[1] = Math.round(next[1]);
-    }
-    if (next.length > 2) {
-      next[2] = Math.round(next[2]);
-    }
-    if (next.length > 3) {
-      next[3] = Math.round(next[3]);
-    }
-    if (next.length > 4) {
-      next[4] = Math.round(next[4]);
-    }
-    if (next.length > 5) {
-      next[5] = roundAngle(next[5]);
-    }
-    if (next.length > 9) {
-      next[9] = Math.round(next[9]);
-    }
+  if (next.kind === B_CONVEYER) {
+    roundIntKeys(next, ['x', 'y', 'w', 'h', 'id']);
+    roundAngleKeys(next, ['angle']);
     return next;
   }
-  if (next[0] === 12) {
-    if (next.length > 1) {
-      next[1] = Math.round(next[1]);
-    }
-    if (next.length > 2) {
-      next[2] = Math.round(next[2]);
-    }
-    if (next.length > 4) {
-      next[4] = roundAngle(next[4]);
-    }
-    if (next.length > 5) {
-      next[5] = Math.round(next[5]);
-    }
-    if (next.length > 6) {
-      next[6] = Math.round(next[6]);
-    }
-    if ((next[5] | 0) !== DEC_ICON && next.length > 7) {
-      next[7] = Math.round(next[7]);
-    }
-    if ((next[5] | 0) !== DEC_ICON && next.length > 8) {
-      next[8] = Math.round(next[8]);
-    }
-    if (next.length > 9) {
-      next[9] = Math.round(next[9]);
-    }
-    if (next.length > 10) {
-      next[10] = Math.round(next[10]);
-    }
-    if (next.length > 11) {
-      next[11] = Math.round(next[11]);
-    }
-    if (next.length > 12) {
-      next[12] = Math.round(next[12]);
-    }
-    if (next.length > 13) {
-      next[13] = Math.round(next[13]);
-    }
+  if (next.kind === B_FLIPPER_LEFT) {
+    roundIntKeys(next, ['x', 'y', 'id']);
+    roundAngleKeys(next, ['restAngle', 'upAngle']);
     return next;
   }
-  if (next[0] === 4 || next[0] === 8) {
-    for (let i = 1; i < next.length; i++) {
-      next[i] = Math.round(next[i]);
-    }
+  if (next.kind === B_LAUNCHER) {
+    roundIntKeys(next, ['x', 'y', 'id']);
+    roundAngleKeys(next, ['dx', 'dy']);
     return next;
   }
-  if (next[0] === 7) {
-    for (let i = 1; i <= 4 && i < next.length; i++) {
-      next[i] = Math.round(next[i]);
-    }
-    if (next.length > 5) {
-      next[5] = roundAngle(next[5]);
-    }
+  if (next.kind === B_TRIANGLE) {
+    roundIntKeys(next, ['x', 'y', 'sideLen1', 'sideLen2', 'id0', 'id1', 'id2']);
+    roundAngleKeys(next, ['rot']);
     return next;
   }
-  if (next[0] === 5) {
-    if (next.length > 1) {
-      next[1] = Math.round(next[1]);
-    }
-    if (next.length > 2) {
-      next[2] = Math.round(next[2]);
-    }
-    if (next.length > 3) {
-      next[3] = roundAngle(next[3]);
-    }
-    if (next.length > 4) {
-      next[4] = roundAngle(next[4]);
-    }
+  if (next.kind === B_DECORATION) {
+    roundIntKeys(next, [
+      'x',
+      'y',
+      'id',
+      'texture',
+      'shape',
+      'startOn',
+      'count',
+      'delay',
+      'interval',
+      'x1',
+      'y1',
+      'w',
+      'h',
+    ]);
+    roundAngleKeys(next, ['rot']);
     return next;
   }
-  if (next[0] === 2) {
-    if (next.length > 1) {
-      next[1] = Math.round(next[1]);
-    }
-    if (next.length > 2) {
-      next[2] = Math.round(next[2]);
-    }
-    if (next.length > 3) {
-      next[3] = roundAngle(next[3]);
-    }
-    if (next.length > 4) {
-      next[4] = roundAngle(next[4]);
-    }
-    return next;
+  roundIntKeys(next, ['x', 'y', 'id']);
+  return next;
+};
+
+const omitIf = (obj: Record<string, unknown>, key: string, value: unknown) => {
+  if (obj[key] === value || obj[key] === undefined) {
+    delete obj[key];
   }
-  if (next.length > 1) {
-    next[1] = Math.round(next[1]);
+};
+
+const trimCall = (call: MachineCall): MachineCall => {
+  const next = cloneCall(call);
+  const rec = next as unknown as Record<string, unknown>;
+  omitIf(rec, 'opacity', 1);
+  omitIf(rec, 'id', 0);
+  if (next.kind === B_FLIPPER_LEFT) {
+    omitIf(rec, 'restAngle', LEFT_REST_ANGLE);
+    omitIf(rec, 'upAngle', LEFT_UP);
+    omitIf(rec, 'flipped', false);
+    omitIf(rec, 'length', PADDLE_LEN);
   }
-  if (next.length > 2) {
-    next[2] = Math.round(next[2]);
+  if (next.kind === B_LAUNCHER) {
+    omitIf(rec, 'dx', 0);
+    omitIf(rec, 'dy', -1);
+    omitIf(rec, 'force', LAUNCHER_FORCE);
+    omitIf(rec, 'range', LAUNCHER_RANGE);
+    omitIf(rec, 'chargeMs', LAUNCHER_CHARGE_MS);
+    omitIf(rec, 'length', LAUNCHER_LEN);
+  }
+  if (next.kind === B_CIRCLE) {
+    omitIf(rec, 'dx', 0);
+    omitIf(rec, 'dy', 0);
+    omitIf(rec, 'omega', 0);
+    omitIf(rec, 'icon', 0);
+    omitIf(rec, 'color', 0);
+  }
+  if (next.kind === B_TRIANGLE) {
+    omitIf(rec, 'resti0', 0.5);
+    omitIf(rec, 'resti1', 0.5);
+    omitIf(rec, 'resti2', 0.5);
+  }
+  if (next.kind === B_DECORATION) {
+    omitIf(rec, 'scale', 1);
+    omitIf(rec, 'rot', 0);
+    omitIf(rec, 'texture', 0);
+    if (next.decoration === DEC_BLINKING_LIGHT) {
+      omitIf(rec, 'shape', SHAPE_CHEVRON);
+      omitIf(rec, 'startOn', 1);
+      omitIf(rec, 'interval', 1000);
+    }
+    if (next.decoration === DEC_BLINKING_LIGHT_LINE) {
+      omitIf(rec, 'interval', 400);
+      omitIf(rec, 'shape', SHAPE_CHEVRON);
+      omitIf(rec, 'delay', 0);
+      omitIf(rec, 'startOn', 1);
+    }
+    if (next.decoration === DEC_ICON) {
+      omitIf(rec, 'opacity', 1);
+    }
+  }
+  if (next.kind === B_WALLS) {
+    for (let i = 0; i < next.segments.length; i++) {
+      if (next.segments[i].id === 0) {
+        delete next.segments[i].id;
+      }
+    }
   }
   return next;
+};
+
+const formatSeg = (s: WallSegment) => {
+  const id = s.id ? `, id: ${formatNum(s.id)}` : '';
+  return `{ x0: ${formatNum(s.x0)}, y0: ${formatNum(s.y0)}, x1: ${formatNum(s.x1)}, y1: ${formatNum(s.y1)}${id} }`;
+};
+
+const formatValue = (
+  key: string,
+  value: unknown,
+  call: MachineCall,
+  used: {
+    kinds: Set<string>;
+    triggers: Set<string>;
+    decs: Set<string>;
+    shapes: Set<string>;
+    icons: Set<string>;
+    sounds: Set<string>;
+    tex: boolean;
+  }
+): string => {
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  if (typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+  if (typeof value !== 'number') {
+    return String(value);
+  }
+  if (key === 'trigger') {
+    const name = TRIGGER_NAMES[value];
+    if (name) {
+      used.triggers.add(name);
+      return name;
+    }
+  }
+  if (key === 'decoration') {
+    const name = DEC_NAMES[value];
+    if (name) {
+      used.decs.add(name);
+      return name;
+    }
+  }
+  if (key === 'shape') {
+    const name = SHAPE_NAMES[value];
+    if (name) {
+      used.shapes.add(name);
+      return name;
+    }
+  }
+  if (key === 'icon' && call.kind === B_CIRCLE) {
+    const name = CIRCLE_ICON_NAMES[value];
+    if (name) {
+      used.icons.add(name);
+      return name;
+    }
+  }
+  if (key === 'texture' && value === TEX_PALETTE) {
+    used.tex = true;
+    return 'TEX_PALETTE';
+  }
+  if (key === 'sound') {
+    const name = SOUND_NAMES[value];
+    if (name) {
+      used.sounds.add(name);
+      return name;
+    }
+  }
+  return formatNum(value);
+};
+
+const formatCall = (
+  call: MachineCall,
+  indent: string,
+  used: {
+    kinds: Set<string>;
+    triggers: Set<string>;
+    decs: Set<string>;
+    shapes: Set<string>;
+    icons: Set<string>;
+    sounds: Set<string>;
+    tex: boolean;
+  }
+) => {
+  if (call.kind === B_WALLS) {
+    used.kinds.add('B_WALLS');
+    if (call.segments.length === 0) {
+      return `${indent}{ kind: B_WALLS, segments: [] }`;
+    }
+    const lines = [`${indent}{`, `${indent}  kind: B_WALLS,`, `${indent}  segments: [`];
+    for (let i = 0; i < call.segments.length; i++) {
+      const comma = i + 1 < call.segments.length ? ',' : '';
+      lines.push(`${indent}    ${formatSeg(call.segments[i])}${comma}`);
+    }
+    lines.push(`${indent}  ],`, `${indent}}`);
+    return lines.join('\n');
+  }
+  const rec = call as unknown as Record<string, unknown>;
+  const keys = Object.keys(rec).filter(k => rec[k] !== undefined && k !== 'kind');
+  const kindName = KIND_NAMES[call.kind] || String(call.kind);
+  used.kinds.add(kindName);
+  const parts = [`kind: ${kindName}`];
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    parts.push(`${k}: ${formatValue(k, rec[k], call, used)}`);
+  }
+  return `${indent}{ ${parts.join(', ')} }`;
 };
 
 const roundStart = (start?: number[] | { x: number; y: number } | null) => {
@@ -342,119 +411,34 @@ export const roundLevel = (
   };
 };
 
-const trimCall = (call: number[]) => {
-  const next = call.slice();
-  const defs: (number | undefined)[] = [];
-  if (next[0] === 5) {
-    defs[3] = LEFT_REST_ANGLE;
-    defs[4] = LEFT_UP;
-    defs[5] = 0;
-    defs[6] = PADDLE_LEN;
-  } else if (next[0] === 2) {
-    defs[3] = 0;
-    defs[4] = -1;
-    defs[5] = LAUNCHER_FORCE;
-    defs[6] = LAUNCHER_RANGE;
-    defs[7] = LAUNCHER_CHARGE_MS;
-    defs[8] = LAUNCHER_LEN;
-  } else if (next[0] === 6) {
-    defs[6] = 0;
-    defs[7] = 0;
-    defs[8] = 0;
-    defs[9] = 0;
-    defs[10] = 0;
-  } else if (next[0] === 11) {
-    defs[6] = 0.5;
-    defs[7] = 0.5;
-    defs[8] = 0.5;
-  } else if (next[0] === 12) {
-    const type = next[5] | 0;
-    if (type === DEC_BLINKING_LIGHT) {
-      defs[7] = SHAPE_CHEVRON;
-      defs[8] = 1;
-      defs[9] = 1000;
-    } else if (type === DEC_BLINKING_LIGHT_LINE) {
-      defs[7] = 400;
-      defs[8] = SHAPE_CHEVRON;
-      defs[12] = 0;
-      defs[13] = 1;
-    } else if (type === DEC_ICON) {
-      defs[7] = 1;
-    }
-  }
-  while (
-    next.length > 3 &&
-    defs[next.length - 1] !== undefined &&
-    next[next.length - 1] === defs[next.length - 1]
-  ) {
-    next.pop();
-  }
-  return next;
-};
-
-export const generateLevelsTs = (
-  sections: SectionData[],
-  links: number[][],
-  start?: number[] | { x: number; y: number } | null
-): string => {
-  const rounded = roundLevel(sections, links, start);
-  sections = rounded.sections.map(s => [
+export const generateMachineTs = (machine: Machine): string => {
+  const rounded = roundLevel(
+    sectionsToTuples(machine.sections),
+    linksToTuples(machine.links),
+    [machine.start.x, machine.start.y]
+  );
+  const sections = rounded.sections.map(s => [
     s[0],
     s[1],
     s[2],
     s[3],
     s[4].map(trimCall),
   ]) as SectionData[];
-  links = rounded.links;
+  const links = rounded.links;
   const spawn = rounded.start;
-  const builderNames = new Set<string>();
+  const used = {
+    kinds: new Set<string>(),
+    triggers: new Set<string>(),
+    decs: new Set<string>(),
+    shapes: new Set<string>(),
+    icons: new Set<string>(),
+    sounds: new Set<string>(),
+    tex: false,
+  };
   const sideNames = new Set<string>();
-  const triggerNames = new Set<string>();
-  const soundNames = new Set<string>();
-  const decNames = new Set<string>();
-  const circleIconNames = new Set<string>();
+  const callStrs: string[][] = [];
   for (const section of sections) {
-    for (const call of section[4]) {
-      const name = BUILDER_NAMES[call[0]];
-      if (name) {
-        builderNames.add(name);
-      }
-      if (call[0] === 4) {
-        const trig = TRIGGER_NAMES[call[5]];
-        if (trig) {
-          triggerNames.add(trig);
-        }
-        if (call[5] === TRIGGER_PLAY_SOUND) {
-          const sound = SOUND_NAMES[call[6]];
-          if (sound) {
-            soundNames.add(sound);
-          }
-        }
-      }
-      if (call[0] === 6 && call.length > 9) {
-        const icon = CIRCLE_ICON_NAMES[call[9]];
-        if (icon) {
-          circleIconNames.add(icon);
-        }
-      }
-      if (call[0] === 12) {
-        const dec = DEC_NAMES[call[5]];
-        if (dec) {
-          decNames.add(dec);
-        }
-        if ((call[5] | 0) !== DEC_ICON && (call[5] | 0) !== DEC_RAINBOW) {
-          const shapeIdx =
-            (call[5] | 0) === DEC_BLINKING_LIGHT ? 7 : 8;
-          const shape = SHAPE_NAMES[call[shapeIdx]];
-          if (shape) {
-            decNames.add(shape);
-          }
-          if (call[6] === TEX_PALETTE) {
-            decNames.add('TEX_PALETTE');
-          }
-        }
-      }
-    }
+    callStrs.push(section[4].map(c => formatCall(c, '        ', used)));
   }
   for (const link of links) {
     const name = SIDE_NAMES[link[1]];
@@ -463,75 +447,120 @@ export const generateLevelsTs = (
     }
   }
 
-  const imports = [...builderNames, ...sideNames].sort();
+  const builderImports = [...used.kinds, ...used.triggers, ...used.decs, ...sideNames].sort();
+  const decImports = [...used.shapes].sort();
+  if (used.tex) {
+    decImports.push('TEX_PALETTE');
+  }
   const importBlock =
-    (imports.length > 0
-      ? `import {\n  ${imports.join(',\n  ')},\n} from './model/builders';\n`
-      : `import {} from './model/builders';\n`) +
-    (triggerNames.size > 0
-      ? `import {\n  ${[...triggerNames].sort().join(',\n  ')},\n} from './model/Trigger';\n`
+    `import type { Machine } from '../machine/MachineTypes';\n` +
+    (builderImports.length > 0
+      ? `import {\n  ${builderImports.join(',\n  ')},\n} from '../model/Builders';\n`
       : '') +
-    (decNames.size > 0
-      ? `import {\n  ${[...decNames].sort().join(',\n  ')},\n} from './model/parts/Decoration';\n`
+    (decImports.length > 0
+      ? `import {\n  ${decImports.sort().join(',\n  ')},\n} from '../model/parts/Decoration';\n`
       : '') +
-    (circleIconNames.size > 0
-      ? `import {\n  ${[...circleIconNames].sort().join(',\n  ')},\n} from './model/parts/Obstacle';\n`
+    (used.icons.size > 0
+      ? `import {\n  ${[...used.icons].sort().join(',\n  ')},\n} from '../model/parts/Obstacle';\n`
       : '') +
-    (soundNames.size > 0
-      ? `import {\n  ${[...soundNames].sort().join(',\n  ')},\n} from './zzfx.js';\n`
+    (used.sounds.size > 0
+      ? `import {\n  ${[...used.sounds].sort().join(',\n  ')},\n} from '../Zzfx.js';\n`
       : '');
 
   const sectionLines: string[] = [];
-  for (const s of sections) {
-    const calls = s[4];
+  for (let i = 0; i < sections.length; i++) {
+    const s = sections[i];
+    const calls = callStrs[i];
     if (calls.length === 0) {
       sectionLines.push(
-        `  [${formatNum(s[0])}, ${formatNum(s[1])}, ${formatNum(s[2])}, ${formatNum(s[3])}, []],`
+        `    { x: ${formatNum(s[0])}, y: ${formatNum(s[1])}, w: ${formatNum(s[2])}, h: ${formatNum(s[3])}, calls: [] },`
       );
       continue;
     }
-    const callStr = calls.map(c => formatCall(c, '      ')).join(',\n');
     sectionLines.push(
-      `  [
-    ${formatNum(s[0])},
-    ${formatNum(s[1])},
-    ${formatNum(s[2])},
-    ${formatNum(s[3])},
-    [
-${callStr},
-    ],
-  ],`
+      `    {
+      x: ${formatNum(s[0])},
+      y: ${formatNum(s[1])},
+      w: ${formatNum(s[2])},
+      h: ${formatNum(s[3])},
+      calls: [
+${calls.join(',\n')},
+      ],
+    },`
     );
   }
 
   const linkLines = links.map(l => {
     const side = SIDE_NAMES[l[1]] || String(l[1]);
-    return `  [${l[0]}, ${side}, ${formatNum(l[2])}, ${formatNum(l[3])}],`;
+    return `    { section: ${l[0]}, side: ${side}, offset: ${formatNum(l[2])}, width: ${formatNum(l[3])} },`;
+  });
+
+  const tour = machine.menuTour.map(n => String(n)).join(', ');
+  const goalLines = machine.collectGoals.map(g => {
+    const fields = [`group: ${g.group}`, `needed: ${g.needed}`];
+    if (g.disableWall) {
+      fields.push(
+        `disableWall: { section: ${g.disableWall.section}, wall: ${g.disableWall.wall} }`
+      );
+    }
+    if (g.activatePart) {
+      fields.push(
+        `activatePart: { section: ${g.activatePart.section}, part: ${g.activatePart.part} }`
+      );
+    }
+    return `    { ${fields.join(', ')} },`;
   });
 
   return `${importBlock}
-export type SectionData = [
-  number,
-  number,
-  number,
-  number,
-  number[][],
-];
-
 /**
- * x, y, w, h, builder calls.
- * Generated by the editor.
+ * Generated by the editor. One file per table under src/tables/.
+ * The game imports src/tables/Current.ts; Vite can point that at this file or another.
  */
-export const SECTIONS: SectionData[] = [
+export const machine: Machine = {
+  id: ${JSON.stringify(machine.id)},
+  name: ${JSON.stringify(machine.name)},
+  start: { x: ${formatNum(spawn[0])}, y: ${formatNum(spawn[1])} },
+  completeSection: ${machine.completeSection | 0},
+  menuTour: [${tour}],
+  menuTourMs: ${machine.menuTourMs | 0},
+  scoreKeys: {
+    last: ${JSON.stringify(machine.scoreKeys.last)},
+    best: ${JSON.stringify(machine.scoreKeys.best)},
+  },
+  theme: {
+    palette: ${JSON.stringify(machine.theme.palette)},
+    sectionBg: ${JSON.stringify(machine.theme.sectionBg)},
+    sectionDot: ${JSON.stringify(machine.theme.sectionDot)},
+    accent: ${JSON.stringify(machine.theme.accent)},
+  },
+  hud: { flippers: ${machine.hud.flippers}, launcher: ${machine.hud.launcher} },
+  audio: { bank: ${JSON.stringify(machine.audio.bank)} },
+  collectGoals: [
+${goalLines.join('\n')}
+  ],
+  entityIdFormat: 1,
+  callFormat: 2,
+  sections: [
 ${sectionLines.join('\n')}
-];
-
-/** section, side, localOffset, width */
-export const LINKS: number[][] = [
+  ],
+  links: [
 ${linkLines.join('\n')}
-];
-
-/** world x, y */
-export const START = [${formatNum(spawn[0])}, ${formatNum(spawn[1])}];
+  ],
+};
 `;
+};
+
+export const generateLevelsTs = (
+  sections: SectionData[],
+  links: number[][],
+  start?: number[] | { x: number; y: number } | null
+): string => {
+  const spawn = Array.isArray(start)
+    ? { x: start[0], y: start[1] }
+    : start
+      ? start
+      : { x: LAUNCHER_X, y: LAUNCHER_Y };
+  return generateMachineTs(
+    assembleMachine(PONY_MACHINE_META, sections, links, spawn)
+  );
 };

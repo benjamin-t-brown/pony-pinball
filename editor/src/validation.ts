@@ -1,4 +1,12 @@
-import { BALL_R } from '@game/model/constants';
+import { BALL_R } from '@game/model/Constants';
+import {
+  B_FIELD,
+  TRIGGER_ACTIVATE_LIGHT,
+  TRIGGER_DEACTIVATE_WALL,
+  num,
+} from '@game/machine/MachineCalls';
+import type { MachineMeta } from '@game/machine/MachineTypes';
+import { partIdsInCalls, wallIdsInCalls } from '@game/machine/EntityIdFuncs';
 import { rectsOverlap, sharedBoundary } from './geometry';
 import type { Opening, SectionData } from './types';
 
@@ -103,3 +111,101 @@ export const validateLevel = (
 
   return issues;
 };
+
+export const validateMachine = (
+  meta: MachineMeta,
+  sections: SectionData[]
+): Issue[] => {
+  const issues: Issue[] = [];
+  const sectionCount = sections.length;
+  if (sectionCount === 0) {
+    return issues;
+  }
+  if (meta.completeSection < 0 || meta.completeSection >= sectionCount) {
+    issues.push({
+      level: 'error',
+      message: `Complete section ${meta.completeSection} is out of range`,
+    });
+  }
+  for (let i = 0; i < meta.menuTour.length; i++) {
+    const id = meta.menuTour[i];
+    if (id < 0 || id >= sectionCount) {
+      issues.push({
+        level: 'warn',
+        message: `Menu tour stop ${i} points at missing section ${id}`,
+      });
+    }
+  }
+  for (let i = 0; i < meta.collectGoals.length; i++) {
+    const g = meta.collectGoals[i];
+    if (g.disableWall) {
+      if (
+        g.disableWall.section < 0 ||
+        g.disableWall.section >= sectionCount
+      ) {
+        issues.push({
+          level: 'error',
+          message: `Collect goal ${i} disable wall section ${g.disableWall.section} is missing`,
+        });
+      } else {
+        const id = g.disableWall.wall;
+        if (!id || !wallIdsInCalls(sections[g.disableWall.section][4]).has(id)) {
+          issues.push({
+            level: 'warn',
+            message: `Collect goal ${i} disable wall id ${id} is missing in section ${g.disableWall.section}`,
+          });
+        }
+      }
+    }
+    if (g.activatePart) {
+      if (
+        g.activatePart.section < 0 ||
+        g.activatePart.section >= sectionCount
+      ) {
+        issues.push({
+          level: 'error',
+          message: `Collect goal ${i} light section ${g.activatePart.section} is missing`,
+        });
+      } else {
+        const id = g.activatePart.part;
+        if (!id || !partIdsInCalls(sections[g.activatePart.section][4]).has(id)) {
+          issues.push({
+            level: 'warn',
+            message: `Collect goal ${i} light part id ${id} is missing in section ${g.activatePart.section}`,
+          });
+        }
+      }
+    }
+  }
+  for (let si = 0; si < sections.length; si++) {
+    const calls = sections[si][4];
+    const walls = wallIdsInCalls(calls);
+    const parts = partIdsInCalls(calls);
+    for (let ci = 0; ci < calls.length; ci++) {
+      const call = calls[ci];
+      if (call.kind !== B_FIELD) {
+        continue;
+      }
+      if (call.trigger === TRIGGER_DEACTIVATE_WALL || call.trigger == null) {
+        const id = num(call.wall);
+        if (id && !walls.has(id)) {
+          issues.push({
+            level: 'warn',
+            message: `Section ${si} field trigger wall id ${id} is missing`,
+          });
+        }
+      }
+      if (call.trigger === TRIGGER_ACTIVATE_LIGHT) {
+        const id = num(call.part);
+        if (id && !parts.has(id)) {
+          issues.push({
+            level: 'warn',
+            message: `Section ${si} field trigger part id ${id} is missing`,
+          });
+        }
+      }
+    }
+  }
+  return issues;
+};
+

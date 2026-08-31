@@ -6,12 +6,11 @@ import {
   getGameRoot,
   removeChild,
   setStyle,
-} from '../dom';
-import { getState } from '../state/State';
-import type { Ball } from '../model/Ball';
-import { COMPLETE_SECTION } from '../model/constants';
-import type { Section } from '../model/Section';
-import { findSectionAt } from '../model/Section';
+} from '../DomFuncs';
+import { getState } from '../state/StateFuncs';
+import type { Ball } from '../model/BallFuncs';
+import type { Section } from '../model/SectionFuncs';
+import { findSectionAt } from '../model/SectionFuncs';
 import { BallElement } from './BallElement';
 import { BoardSection } from './BoardSection';
 import {
@@ -22,7 +21,7 @@ import {
   getCamPan,
   getMenuTourCam,
   lerpCam,
-} from '../model/camera';
+} from '../model/CameraFuncs';
 import { UiElement } from './UiElement';
 
 export class Board extends UiElement {
@@ -132,7 +131,9 @@ export class Board extends UiElement {
       this.menuTourMs,
       getState().sections,
       this.width,
-      this.height
+      this.height,
+      getState().machine.menuTour,
+      getState().machine.menuTourMs
     );
     this.section = look.section;
     this.lookX = look.x;
@@ -269,16 +270,19 @@ export class Board extends UiElement {
     ball.pos.y = wy;
     ball.vel.x = 0;
     ball.vel.y = 0;
+    state.physics.teleportBall(0, ball);
   }
 
-  update(dt: number) {
+  update(_dt: number) {}
+
+  render(dt: number) {
     this.syncBalls();
     const state = getState();
     const ball = state.balls[0];
     if (!state.playing && !state.complete) {
       this.applyMenuTour(dt);
     } else if (!state.playing) {
-      const room = state.sections[COMPLETE_SECTION];
+      const room = state.sections[state.machine.completeSection];
       if (room && this.section !== room) {
         this.section = room;
         this.setCamTarget(room, true);
@@ -304,10 +308,6 @@ export class Board extends UiElement {
     this.camScale = lerpCam(this.camScale, this.targetScale, dt);
     this.applyLook();
     this.applyCamera();
-    super.update(dt);
-  }
-
-  render(dt: number) {
     super.render(dt);
   }
 }

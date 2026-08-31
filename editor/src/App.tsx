@@ -1,19 +1,59 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { B_WALL_GATE, B_WALL_RESTI, B_WALLS, buildLevel } from '@game/model/builders';
+import { B_WALL_GATE, B_WALL_RESTI, B_WALLS, buildLevel } from '@game/model/Builders';
 import {
   CONTROL_LEFT,
   CONTROL_RIGHT,
   CONTROL_START,
 } from '@game/model/Part';
-import { updateSimulation } from '@game/sim/updateSimulation';
-import type { State } from '@game/state/State';
-import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
-import { loadLevels, saveLevels } from './api';
+import { updateSimulation } from '@game/sim/SimUpdate';
+import type { State } from '@game/state/StateFuncs';
+import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/Constants';
+import {
+  assembleMachine,
+  linksToTuples,
+  machineMetaOf,
+  PONY_MACHINE_META,
+  remapMachineMetaAfterDelete,
+  sanitizeMachineId,
+  sectionsToTuples,
+  tuplesToLinks,
+  tuplesToSections,
+} from '@game/machine/MachineFormats';
+import {
+  allocEntityId,
+  clearRefsToPartId,
+  clearRefsToWallId,
+  goalsWithoutPartId,
+  goalsWithoutWallId,
+  migrateMachineEntityIds,
+  partIdOf,
+  reassignCallIds,
+  stampMissingIds,
+  wallIdAt,
+  wallSegmentCount,
+} from '@game/machine/EntityIdFuncs';
+import {
+  cloneCall,
+  isSegmentWallKind,
+  setCallAnchor,
+  type WallsCall,
+  wallSegAt,
+} from '@game/machine/MachineCalls';
+import type { Machine, MachineMeta } from '@game/machine/MachineTypes';
+import { injectTextureCss } from '@game/model/parts/Decoration';
+import { getHud, setActiveLook } from '@game/machine/MachineLook';
+import {
+  createMachine,
+  listMachines,
+  loadMachine,
+  saveMachine,
+  type MachineInfo,
+} from './api';
 import { Sidebar } from './components/Sidebar';
 import { WorldCanvas } from './components/WorldCanvas';
 import { cloneSections, clampDeltaInRect, clampLocal, findSectionAt } from './geometry';
 import { roundLevel } from './generateLevels';
-import { ensureCallArgs, isDecLightLine } from './schema';
+import { ensureCallArgs } from './schema';
 import {
   linksToOpenings,
   openingsToLinks,
@@ -21,8 +61,8 @@ import {
 } from './openings';
 import { createPlayState, dropBall } from './sim';
 import type { Cam, Opening, SectionData, Selection, Tool } from './types';
-import { validateLevel } from './validation';
-import { builtPartIndex, builtWallIndex, isSegmentWallCall, partsAddedByCall, remapTriggerParts, remapTriggerWalls } from './wallRefs';
+import { validateLevel, validateMachine } from './validation';
+import { partsAddedByCall } from './wallRefs';
 
 const PHYSICS_DT_MS = 4;
 
@@ -55,6 +95,8 @@ const fitCam = (sections: SectionData[], viewW: number, viewH: number): Cam => {
 export const App = () => {
   const [sections, setSections] = useState<SectionData[]>([]);
   const [openings, setOpenings] = useState<Opening[]>([]);
+  const [meta, setMeta] = useState<MachineMeta>(PONY_MACHINE_META);
+  const metaRef = useRef<MachineMeta>(PONY_MACHINE_META);
   const [selection, setSelection] = useState<Selection>(null);
   const [tool, setTool] = useState<Tool>({ kind: 'select' });
   const [cam, setCam] = useState<Cam>({ x: -40, y: -40, scale: 0.7 });
@@ -64,6 +106,8 @@ export const App = () => {
   const [statusError, setStatusError] = useState(false);
   const [spawn, setSpawn] = useState<{ x: number; y: number } | null>(null);
   const [sim, setSim] = useState<State | null>(null);
+  const [catalog, setCatalog] = useState<MachineInfo[]>([]);
+  const [fileId, setFileId] = useState('');
   const simRef = useRef<State | null>(null);
   const spawnRef = useRef<{ x: number; y: number } | null>(null);
   const wrapSize = useRef({ w: 800, h: 600 });
@@ -75,19 +119,28 @@ export const App = () => {
   );
 
   const issues = useMemo(
-    () => validateLevel(sections, openings),
-    [sections, openings]
+    () => [
+      ...validateLevel(sections, openings),
+      ...validateMachine(meta, sections),
+    ],
+    [sections, openings, meta]
   );
 
   const built = useMemo(() => {
     try {
-      return buildLevel(sections, links);
+      return buildLevel(tuplesToSections(sections), tuplesToLinks(links));
     } catch {
       return [];
     }
   }, [sections, links]);
 
   const markDirty = useCallback((next: SectionData[]) => {
+    let nextId = allocEntityId(
+      next.map(s => ({ x: s[0], y: s[1], w: s[2], h: s[3], calls: s[4] }))
+    );
+    for (let i = 0; i < next.length; i++) {
+      stampMissingIds(next[i][4], () => nextId++);
+    }
     setSections(next);
     setDirty(true);
   }, []);
@@ -97,24 +150,46 @@ export const App = () => {
     setDirty(true);
   }, []);
 
+  const markMeta = useCallback((next: MachineMeta) => {
+    metaRef.current = next;
+    setMeta(next);
+    setDirty(true);
+  }, []);
+
   const applyLoad = useCallback(
-    (data: { sections: SectionData[]; links: number[][]; start?: number[] }, fitted: boolean) => {
-      const cloned = cloneSections(data.sections);
+    (data: Machine, fitted: boolean, loadedId: string) => {
+      const ready = migrateMachineEntityIds({
+        ...data,
+        sections: data.sections.map(s => ({
+          ...s,
+          calls: s.calls.map(c => cloneCall(c)),
+        })),
+        collectGoals: data.collectGoals.map(g => ({
+          ...g,
+          disableWall: g.disableWall ? { ...g.disableWall } : undefined,
+          activatePart: g.activatePart ? { ...g.activatePart } : undefined,
+        })),
+        links: data.links.map(l => ({ ...l })),
+      });
+      const loaded = machineMetaOf(ready);
+      metaRef.current = loaded;
+      setMeta(loaded);
+      setFileId(loadedId);
+      const cloned = cloneSections(sectionsToTuples(ready.sections));
       for (let i = 0; i < cloned.length; i++) {
         cloned[i][4] = cloned[i][4].map(ensureCallArgs);
       }
       setSections(cloned);
-      setOpenings(linksToOpenings(cloned, data.links));
+      setOpenings(linksToOpenings(cloned, linksToTuples(ready.links)));
       setSelection(null);
-      const at =
-        data.start && data.start.length >= 2
-          ? { x: data.start[0], y: data.start[1] }
-          : { x: LAUNCHER_X, y: LAUNCHER_Y };
+      const at = ready.start
+        ? { x: ready.start.x, y: ready.start.y }
+        : { x: LAUNCHER_X, y: LAUNCHER_Y };
       spawnRef.current = at;
       setSpawn(at);
       setDirty(false);
       setStatusError(false);
-      setStatus('Loaded src/levels.ts');
+      setStatus(`Loaded ${loadedId}`);
       if (fitted) {
         setCam(fitCam(cloned, wrapSize.current.w, wrapSize.current.h));
       }
@@ -122,16 +197,39 @@ export const App = () => {
     []
   );
 
+  const refreshCatalog = useCallback(async () => {
+    const data = await listMachines();
+    setCatalog(data.machines);
+    return data;
+  }, []);
+
   useEffect(() => {
-    loadLevels()
-      .then(data => {
-        applyLoad(data, true);
-      })
-      .catch(err => {
-        setStatusError(true);
-        setStatus(String(err));
-      });
-  }, [applyLoad]);
+    const boot = async () => {
+      const listed = await refreshCatalog();
+      const id =
+        listed.current ||
+        listed.machines.find(m => m.id === 'pony')?.id ||
+        listed.machines[0]?.id;
+      if (!id) {
+        throw new Error('No tables in src/tables');
+      }
+      const data = await loadMachine(id);
+      applyLoad(data, true, id);
+    };
+    boot().catch(err => {
+      setStatusError(true);
+      setStatus(String(err));
+    });
+  }, [applyLoad, refreshCatalog]);
+
+  useEffect(() => {
+    document.title = meta.name ? `${meta.name} — editor` : 'Level editor';
+  }, [meta.name]);
+
+  useEffect(() => {
+    setActiveLook(meta);
+    injectTextureCss();
+  }, [meta]);
 
   useEffect(() => {
     if (!playing) {
@@ -139,7 +237,12 @@ export const App = () => {
       setSim(null);
       return;
     }
-    const state = createPlayState(sections, links, spawnRef.current);
+    const state = createPlayState(
+      sections,
+      links,
+      spawnRef.current,
+      metaRef.current
+    );
     simRef.current = state;
     setSim(state);
     let last = performance.now();
@@ -173,11 +276,12 @@ export const App = () => {
       if (!state) {
         return;
       }
-      if (key === 'KeyZ' || key === 'ArrowLeft') {
+      const hud = getHud();
+      if (hud.flippers && (key === 'KeyZ' || key === 'ArrowLeft')) {
         state.input[CONTROL_LEFT] = down;
-      } else if (key === 'Slash' || key === 'ArrowRight') {
+      } else if (hud.flippers && (key === 'Slash' || key === 'ArrowRight')) {
         state.input[CONTROL_RIGHT] = down;
-      } else if (key === 'Space' || key === 'Enter') {
+      } else if (hud.launcher && (key === 'Space' || key === 'Enter')) {
         state.input[CONTROL_START] = down;
       }
     };
@@ -282,6 +386,7 @@ export const App = () => {
       next.splice(selection.index, 1);
       markDirty(next);
       markOpenings(remapOpeningsAfterDelete(openings, selection.index));
+      markMeta(remapMachineMetaAfterDelete(metaRef.current, selection.index));
       setSelection(null);
       return;
     }
@@ -295,56 +400,46 @@ export const App = () => {
     if (selection.kind === 'call') {
       const next = cloneSections(sections);
       const call = sections[selection.section][4][selection.call];
-      if (call && isSegmentWallCall(call[0])) {
-        const wallIndex = builtWallIndex(
-          sections[selection.section],
-          selection.section,
-          selection.call,
-          0,
-          openingsToLinks(sections, openings)
-        );
-        next[selection.section][4].splice(selection.call, 1);
-        remapTriggerWalls(next[selection.section][4], wallIndex, selection.section);
-      } else {
-        const partIndex = builtPartIndex(
-          sections[selection.section],
-          selection.call
-        );
-        const added = call ? partsAddedByCall(call) : 0;
-        next[selection.section][4].splice(selection.call, 1);
-        if (added) {
-          remapTriggerParts(
-            next[selection.section][4],
-            partIndex,
-            selection.section
-          );
+      const si = selection.section;
+      let goals = metaRef.current.collectGoals;
+      if (call) {
+        const n = wallSegmentCount(call);
+        for (let s = 0; s < n; s++) {
+          const id = wallIdAt(call, s);
+          clearRefsToWallId(next[si][4], id);
+          goals = goalsWithoutWallId(goals, si, id);
+        }
+        if (partsAddedByCall(call)) {
+          const id = partIdOf(call);
+          clearRefsToPartId(next[si][4], id);
+          goals = goalsWithoutPartId(goals, si, id);
         }
       }
+      next[si][4].splice(selection.call, 1);
       markDirty(next);
+      markMeta({ ...metaRef.current, collectGoals: goals });
       setSelection(null);
       return;
     }
     if (selection.kind === 'wall') {
       const next = cloneSections(sections);
       const call = next[selection.section][4][selection.call];
-      const wallIndex = builtWallIndex(
-        sections[selection.section],
-        selection.section,
-        selection.call,
-        selection.segment,
-        openingsToLinks(sections, openings)
-      );
-      if (isSegmentWallCall(call[0])) {
-        next[selection.section][4].splice(selection.call, 1);
-      } else {
-        const k = 1 + selection.segment * 4;
-        call.splice(k, 4);
-        if (call.length <= 1) {
-          next[selection.section][4].splice(selection.call, 1);
+      const si = selection.section;
+      const id = wallIdAt(call, selection.segment);
+      if (isSegmentWallKind(call.kind)) {
+        next[si][4].splice(selection.call, 1);
+      } else if (call.kind === B_WALLS) {
+        call.segments.splice(selection.segment, 1);
+        if (call.segments.length === 0) {
+          next[si][4].splice(selection.call, 1);
         }
       }
-      remapTriggerWalls(next[selection.section][4], wallIndex, selection.section);
+      clearRefsToWallId(next[si][4], id);
       markDirty(next);
+      markMeta({
+        ...metaRef.current,
+        collectGoals: goalsWithoutWallId(metaRef.current.collectGoals, si, id),
+      });
       setSelection(null);
     }
   };
@@ -365,56 +460,56 @@ export const App = () => {
     }
     const local = clampLocal(dest, wx - dest[0], wy - dest[1]);
     const next = cloneSections(sections);
+    let nextId = allocEntityId(
+      next.map(s => ({ x: s[0], y: s[1], w: s[2], h: s[3], calls: s[4] }))
+    );
     if (selection.kind === 'call') {
       const src = sections[selection.section][4][selection.call];
-      if (!src || src[0] === B_WALLS) {
+      if (!src || src.kind === B_WALLS) {
         return;
       }
-      const copy = src.slice();
-      if (src[0] === B_WALL_RESTI || src[0] === B_WALL_GATE) {
-        const dx = src[3] - src[1];
-        const dy = src[4] - src[2];
-        copy[1] = local.x;
-        copy[2] = local.y;
-        copy[3] = local.x + dx;
-        copy[4] = local.y + dy;
-      } else if (isDecLightLine(src) && src.length >= 12) {
-        const dx = src[10] - src[1];
-        const dy = src[11] - src[2];
-        copy[1] = local.x;
-        copy[2] = local.y;
-        copy[10] = local.x + dx;
-        copy[11] = local.y + dy;
-      } else {
-        copy[1] = local.x;
-        copy[2] = local.y;
-      }
+      const copy = cloneCall(src);
+      setCallAnchor(copy, local.x, local.y);
+      reassignCallIds(copy, () => nextId++);
       next[si][4].push(copy);
       markDirty(next);
       setSelection({ kind: 'call', section: si, call: next[si][4].length - 1 });
       return;
     }
     const src = sections[selection.section][4][selection.call];
-    const k = 1 + selection.segment * 4;
-    if (!src || src.length < k + 4) {
+    const seg = src && wallSegAt(src, selection.segment);
+    if (!src || !seg) {
       return;
     }
-    const dx = src[k + 2] - src[k];
-    const dy = src[k + 3] - src[k + 1];
+    const dx = seg.x1 - seg.x0;
+    const dy = seg.y1 - seg.y0;
     const x0 = local.x;
     const y0 = local.y;
     const x1 = local.x + dx;
     const y1 = local.y + dy;
     const shift = clampDeltaInRect(x0, y0, x1, y1, 0, 0, dest[2], dest[3]);
-    if (isSegmentWallCall(src[0])) {
-      next[si][4].push([
-        src[0],
-        x0 + shift.dx,
-        y0 + shift.dy,
-        x1 + shift.dx,
-        y1 + shift.dy,
-        src[5] ?? (src[0] === B_WALL_RESTI ? 0.5 : 0),
-      ]);
+    if (isSegmentWallKind(src.kind)) {
+      if (src.kind === B_WALL_RESTI) {
+        next[si][4].push({
+          kind: B_WALL_RESTI,
+          x0: x0 + shift.dx,
+          y0: y0 + shift.dy,
+          x1: x1 + shift.dx,
+          y1: y1 + shift.dy,
+          rest: src.rest ?? 0.5,
+          id: nextId++,
+        });
+      } else if (src.kind === B_WALL_GATE) {
+        next[si][4].push({
+          kind: B_WALL_GATE,
+          x0: x0 + shift.dx,
+          y0: y0 + shift.dy,
+          x1: x1 + shift.dx,
+          y1: y1 + shift.dy,
+          color: src.color ?? 0,
+          id: nextId++,
+        });
+      }
       markDirty(next);
       setSelection({
         kind: 'wall',
@@ -426,42 +521,58 @@ export const App = () => {
     }
     let ci = -1;
     for (let i = 0; i < next[si][4].length; i++) {
-      if (next[si][4][i][0] === B_WALLS) {
+      if (next[si][4][i].kind === B_WALLS) {
         ci = i;
         break;
       }
     }
     if (ci < 0) {
-      next[si][4].unshift([B_WALLS]);
+      next[si][4].unshift({ kind: B_WALLS, segments: [] });
       ci = 0;
     }
-    next[si][4][ci].push(
-      x0 + shift.dx,
-      y0 + shift.dy,
-      x1 + shift.dx,
-      y1 + shift.dy
-    );
+    (next[si][4][ci] as WallsCall).segments.push({
+      x0: x0 + shift.dx,
+      y0: y0 + shift.dy,
+      x1: x1 + shift.dx,
+      y1: y1 + shift.dy,
+      id: nextId++,
+    });
     markDirty(next);
     setSelection({
       kind: 'wall',
       section: si,
       call: ci,
-      segment: Math.floor((next[si][4][ci].length - 5) / 4),
+      segment: wallSegmentCount(next[si][4][ci]) - 1,
     });
   };
 
   const onSave = async () => {
     try {
       const rounded = roundLevel(sections, links, spawnRef.current);
-      await saveLevels(rounded.sections, rounded.links, rounded.start);
+      const id = sanitizeMachineId(metaRef.current.id);
+      const nextMeta = { ...metaRef.current, id };
+      metaRef.current = nextMeta;
+      setMeta(nextMeta);
+      const machine = {
+        ...assembleMachine(
+          nextMeta,
+          rounded.sections,
+          rounded.links,
+          { x: rounded.start[0], y: rounded.start[1] }
+        ),
+        entityIdFormat: 1 as const,
+      };
+      await saveMachine(machine);
       setSections(rounded.sections);
       setOpenings(linksToOpenings(rounded.sections, rounded.links));
       const at = { x: rounded.start[0], y: rounded.start[1] };
       spawnRef.current = at;
       setSpawn(at);
+      setFileId(id);
       setDirty(false);
       setStatusError(false);
-      setStatus('Saved src/levels.ts');
+      setStatus(`Saved ${id}`);
+      await refreshCatalog();
     } catch (err) {
       setStatusError(true);
       setStatus(String(err));
@@ -482,13 +593,54 @@ export const App = () => {
   }, [onSave]);
 
   const onLoad = async () => {
+    if (!fileId) {
+      return;
+    }
     if (dirty && !confirm('Discard unsaved changes?')) {
       return;
     }
     try {
-      const data = await loadLevels();
-      applyLoad(data, false);
+      const data = await loadMachine(fileId);
+      applyLoad(data, false, fileId);
       setPlaying(false);
+    } catch (err) {
+      setStatusError(true);
+      setStatus(String(err));
+    }
+  };
+
+  const onSelectMachine = async (id: string) => {
+    if (id === fileId) {
+      return;
+    }
+    if (dirty && !confirm('Discard unsaved changes?')) {
+      return;
+    }
+    try {
+      const data = await loadMachine(id);
+      applyLoad(data, true, id);
+      setPlaying(false);
+    } catch (err) {
+      setStatusError(true);
+      setStatus(String(err));
+    }
+  };
+
+  const onNewMachine = async () => {
+    if (dirty && !confirm('Discard unsaved changes?')) {
+      return;
+    }
+    const raw = window.prompt('New machine id', 'untitled');
+    if (raw == null) {
+      return;
+    }
+    const id = sanitizeMachineId(raw);
+    try {
+      const created = await createMachine(id);
+      await refreshCatalog();
+      applyLoad(created, true, id);
+      setPlaying(false);
+      setStatus(`Created ${id}`);
     } catch (err) {
       setStatusError(true);
       setStatus(String(err));
@@ -556,6 +708,16 @@ export const App = () => {
         onDelete={deleteSelection}
         onAddSection={onAddSection}
         onFit={onFit}
+        catalog={catalog}
+        fileId={fileId}
+        onSelectMachine={onSelectMachine}
+        onNewMachine={onNewMachine}
+        meta={meta}
+        spawn={spawn}
+        onMeta={markMeta}
+        onSpawn={at => {
+          onDropBall(at.x, at.y);
+        }}
       />
       <WorldCanvas
         sections={sections}
@@ -565,6 +727,8 @@ export const App = () => {
         cam={cam}
         playing={playing}
         spawn={spawn}
+        completeSection={meta.completeSection}
+        menuTour={meta.menuTour}
         built={built}
         sim={sim}
         onSections={markDirty}

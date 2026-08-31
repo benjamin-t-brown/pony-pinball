@@ -453,18 +453,9 @@ export const SOUND_PORTAL_OUT = 10;
 export const SOUND_HIT_FAN = 11;
 export const SOUND_GAME_WIN = 12;
 
-const soundsPlayedThisTick = {};
-
-export const playSound = i => {
-  if (soundsPlayedThisTick[i]) {
+export const playZzfx = i => {
+  if (i < 0 || i >= SOUNDS.length) {
     return;
   }
   zzfx(...SOUNDS[i]);
-  soundsPlayedThisTick[i] = true;
-};
-
-export const clearSoundsPlayedThisTick = () => {
-  for (const i in soundsPlayedThisTick) {
-    delete soundsPlayedThisTick[i];
-  }
 };

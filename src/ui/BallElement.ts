@@ -2,14 +2,15 @@ import {
   CIRCLE,
   POINTER_EVENTS,
   SVG,
+  TRANSFORM,
   appendChild,
   createSvgElement,
   px,
   setAttribute,
   setStyle,
   stringify,
-} from '../dom';
-import type { Ball } from '../model/Ball';
+} from '../DomFuncs';
+import type { Ball } from '../model/BallFuncs';
 import { UiElement } from './UiElement';
 
 export class BallElement extends UiElement {
@@ -57,11 +58,9 @@ export class BallElement extends UiElement {
     this.syncPos();
   }
 
-  update(_dt: number) {
+  render(_dt: number) {
     this.syncPos();
   }
-
-  render(_dt: number) {}
 
   syncPos() {
     const ball = this.ball;
@@ -76,8 +75,7 @@ export class BallElement extends UiElement {
       setAttribute(this.el, 'height', sizeStr);
       setAttribute(this.el, 'viewBox', '0 0 ' + sizeStr + ' ' + sizeStr);
       setStyle(this.el, {
-        left: px(this.x),
-        top: px(this.y),
+        [TRANSFORM]: 'translate(' + px(this.x) + ',' + px(this.y) + ')',
       });
     }
     if (this.circleEl) {

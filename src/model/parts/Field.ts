@@ -1,9 +1,9 @@
-import { type Circle, vecLen, vecMul } from '../../sim/physics';
-import type { Ball } from '../Ball';
-import { PART_FIELD, Part } from '../Part';
-import type { Section } from '../Section';
+import { type Circle, vecLen, vecMul } from '../../sim/PhysicsFuncs';
+import type { Ball } from '../BallFuncs';
+import { Part } from '../Part';
+import type { Section } from '../SectionFuncs';
 import type { Trigger } from '../Trigger';
-import { playSound, SOUND_BALL_TRAVELING } from '../../zzfx.js';
+import { playSound, SOUND_BALL_TRAVELING } from '../../audio/SoundFuncs';
 
 export class Field extends Part {
   w = 0;
@@ -27,7 +27,7 @@ export class Field extends Part {
     ay = 0,
     maxSpeed = 0
   ) {
-    super(x, y, PART_FIELD);
+    super(x, y);
     this.active = true;
     this.w = w;
     this.h = h;

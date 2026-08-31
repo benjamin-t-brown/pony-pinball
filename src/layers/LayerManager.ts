@@ -1,7 +1,6 @@
 import { LAYER_OFF, LAYER_ON, Layer } from './Layer';
 
-// the smaller this is, the smaller the physics step and
-// less chance the ball phases through walls, but more cpu power used
+// Fixed sim step. Smaller = less tunneling, more CPU.
 const PHYSICS_DT_MS = 4;
 
 export class LayerManager {
@@ -18,6 +17,7 @@ export class LayerManager {
     requestAnimationFrame(this.loop);
   }
 
+  /** Physics and game rules. Runs at PHYSICS_DT_MS. */
   integrate(dt: number) {
     for (const layer of this.layers) {
       if (layer.layerState === LAYER_ON) {
@@ -26,6 +26,7 @@ export class LayerManager {
     }
   }
 
+  /** DOM / CSS. Once per animation frame. */
   updateRender(dt: number) {
     for (const layer of this.layers) {
       if (layer.layerState === LAYER_OFF) {

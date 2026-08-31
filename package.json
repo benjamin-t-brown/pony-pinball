@@ -4,34 +4,24 @@
   "type": "module",
   "scripts": {
     "start": "vite",
-    "build": "rm -rf dist *.zip && npm run tscompile && node scripts/build.cjs && npm run clean:js",
-    "build2": "tsc -b && vite build",
+    "build": "tsc --noEmit && vite build",
     "dist": "http-server dist",
-    "tscompile": "tsc -p ./tsconfig.json",
-    "clean": "npm run clean:js && rm -rf dist *.zip index.concat.js",
-    "clean:js": "node scripts/clean-js.cjs",
     "lint": "eslint --fix .",
-    "editor": "npm --prefix editor start"
+    "editor": "npm --prefix editor start",
+    "copy-lib2": "node scripts/CopyLib2.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
-    "@swc/core": "^1.13.3",
     "@types/node": "^24.3.0",
-    "ect-bin": "^1.4.1",
     "eslint": "^9.33.0",
     "eslint-plugin-unused-imports": "^4.2.0",
-    "google-closure-compiler": "^20250813.0.0",
-    "html-minifier": "^4.0.0",
-    "roadroller": "^2.1.0",
-    "terser": "^5.43.1",
     "tsx": "^4.20.4",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.40.0",
-    "uglify-js": "^3.19.3",
     "vite": "^7.1.2"
   },
   "dependencies": {
-    "advzip-bin": "^2.0.0",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "planck": "^1.5.0"
   }
 }

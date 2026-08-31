@@ -1,9 +1,10 @@
+import { cloneCall } from '@game/machine/MachineCalls';
 import {
   SECTION_SIDE_BOTTOM,
   SECTION_SIDE_LEFT,
   SECTION_SIDE_RIGHT,
   SECTION_SIDE_TOP,
-} from '@game/model/builders';
+} from '@game/model/Builders';
 import type { SectionData } from './types';
 
 export const SNAP_PX = 8;
@@ -23,7 +24,7 @@ export const cloneSections = (sections: SectionData[]): SectionData[] => {
     d[1],
     d[2],
     d[3],
-    d[4].map(c => c.slice()),
+    d[4].map(c => cloneCall(c)),
   ]);
 };
 

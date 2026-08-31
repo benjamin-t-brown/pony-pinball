@@ -5,8 +5,29 @@
  *
  * Run: npx tsx scratch/verify-walls.ts
  */
-import { buildLevel } from '../src/model/builders';
-import { flattenSectionWalls } from '../src/model/Section';
+import { buildLevel } from '../src/model/Builders';
+import type { Line } from '../src/sim/PhysicsFuncs';
+import type { Section } from '../src/model/SectionFuncs';
+
+const flattenSectionWalls = (sections: Section[]): Line[] => {
+  const walls: Line[] = [];
+  for (const s of sections) {
+    for (const wall of s.walls) {
+      if (wall.rest < 0) {
+        continue;
+      }
+      walls.push({
+        a: { x: wall.a.x + s.x, y: wall.a.y + s.y },
+        b: { x: wall.b.x + s.x, y: wall.b.y + s.y },
+        rest: wall.rest,
+        color: wall.color,
+        sound: wall.sound,
+      });
+    }
+  }
+  return walls;
+};
+
 
 // ---- the old hardcoded level, transcribed from git HEAD ----
 const W = 400;

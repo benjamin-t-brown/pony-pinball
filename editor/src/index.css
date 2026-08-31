@@ -41,6 +41,7 @@ button:disabled {
 }
 
 input[type='number'],
+input[type='text'],
 select {
   background: #111;
   border: 1px solid #444;
@@ -76,11 +77,9 @@ select {
   margin: 16px 0 8px;
 }
 
-.row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
+.row select {
+  flex: 1;
+  min-width: 0;
 }
 
 .push-right {
@@ -165,4 +164,75 @@ select {
   color: #888;
   font-size: 11px;
   pointer-events: none;
+}
+
+.machine {
+  margin: 12px 0;
+}
+
+.machine > summary {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.machine h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #999;
+  margin: 12px 0 6px;
+}
+
+.fields-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.fields-2.row {
+  display: grid;
+}
+
+.tour-row {
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.tour-row select {
+  flex: 1;
+}
+
+.tour-row button {
+  padding: 4px 6px;
+}
+
+.hint-inline {
+  color: #888;
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  color: #aaa;
+  font-size: 11px;
+}
+
+.check input {
+  width: auto;
+}
+
+.goal-block {
+  border: 1px solid #333;
+  border-radius: 3px;
+  padding: 8px;
+  margin-bottom: 8px;
 }

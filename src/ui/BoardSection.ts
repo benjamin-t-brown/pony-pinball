@@ -9,11 +9,10 @@ import {
   setAttribute,
   setStyle,
   stringify,
-} from '../dom';
-import type { Section } from '../model/Section';
-import { GATE_COLORS } from '../model/builders';
-import { ACCENT } from '../model/constants';
-import { PartElement } from './PartElement';
+} from '../DomFuncs';
+import type { Section } from '../model/SectionFuncs';
+import { accent, palette } from '../machine/MachineLook';
+import { createPartElement } from './PartViews';
 import { UiElement } from './UiElement';
 
 export class BoardSection extends UiElement {
@@ -68,15 +67,16 @@ export class BoardSection extends UiElement {
             ' ' +
             stringify(f[5]) +
             'Z',
-          fill: GATE_COLORS[(f[6] | 0) % GATE_COLORS.length],
+          fill: palette()[(f[6] | 0) % palette().length],
         })
       );
     }
 
     for (const wall of section.walls) {
       const gate = wall.color >= 0;
+      const colors = palette();
       const stroke = gate
-        ? GATE_COLORS[wall.color % GATE_COLORS.length] || ACCENT
+        ? colors[wall.color % colors.length] || accent()
         : '#888';
       const attrs: Record<string, string> = {
         x1: stringify(wall.a.x),
@@ -103,7 +103,7 @@ export class BoardSection extends UiElement {
     this.el = el;
 
     for (let i = 0; i < section.parts.length; i++) {
-      const child = new PartElement(section.parts[i]);
+      const child = createPartElement(section.parts[i]);
       this.addChild(child);
       child.build();
     }
@@ -114,11 +114,12 @@ export class BoardSection extends UiElement {
     for (let i = 0; i < this.wallEls.length; i++) {
       const wall = walls[i];
       const gate = wall.color >= 0;
+      const colors = palette();
       const stroke =
         wall.rest < 0
           ? 'rgba(136,136,136,0.2)'
           : gate
-            ? GATE_COLORS[wall.color % GATE_COLORS.length] || ACCENT
+            ? colors[wall.color % colors.length] || accent()
             : '#888';
       setAttribute(this.wallEls[i] as unknown as HTMLElement, 'stroke', stroke);
     }

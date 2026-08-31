@@ -1,10 +1,18 @@
-import { PART_DECORATION, Part } from '../Part';
-import { GATE_COLORS, SECTION_BG, SECTION_DOT } from '../constants';
+import { Part } from '../Part';
+import { palette, sectionBg, sectionDot } from '../../machine/MachineLook';
+import {
+  DEC_BLINKING_LIGHT,
+  DEC_BLINKING_LIGHT_LINE,
+  DEC_ICON,
+  DEC_RAINBOW,
+} from '../../machine/MachineCalls';
 
-export const DEC_BLINKING_LIGHT = 0;
-export const DEC_BLINKING_LIGHT_LINE = 1;
-export const DEC_ICON = 2;
-export const DEC_RAINBOW = 3;
+export {
+  DEC_BLINKING_LIGHT,
+  DEC_BLINKING_LIGHT_LINE,
+  DEC_ICON,
+  DEC_RAINBOW,
+};
 
 export const SHAPE_CHEVRON = 0;
 export const SHAPE_CIRCLE = 1;
@@ -12,8 +20,9 @@ export const SHAPE_SQUARE = 2;
 
 export const CHEVRON_D = 'M-6-8L6 0L-6 8';
 
-export const TEX_PALETTE = GATE_COLORS.length;
-export const TEX_ARROWS = GATE_COLORS.length + 1;
+/** Reserved: cycle the machine palette. Not `palette().length`. */
+export const TEX_PALETTE = 7;
+export const TEX_ARROWS = 8;
 
 export const getTextureClass = (texture: number) => {
   const t = texture | 0;
@@ -23,7 +32,7 @@ export const getTextureClass = (texture: number) => {
   if (t === TEX_PALETTE) {
     return 't tc';
   }
-  return 't t' + (t % GATE_COLORS.length);
+  return 't t' + (t % palette().length);
 };
 
 export const lightAnimation = (dec: Decoration) => {
@@ -32,31 +41,34 @@ export const lightAnimation = (dec: Decoration) => {
   }
   if ((dec.texture | 0) === TEX_PALETTE) {
     return (
-      'c ' + dec.interval * GATE_COLORS.length + 'ms step-end infinite'
+      'c ' + dec.interval * palette().length + 'ms step-end infinite'
     );
   }
   return 'k ' + dec.interval + 'ms step-end infinite';
 };
 
 export const injectTextureCss = () => {
-  const rain = GATE_COLORS.join(',') + ',' + GATE_COLORS[0];
+  const colors = palette();
+  const bg = sectionBg();
+  const dot = sectionDot();
+  const rain = colors.join(',') + ',' + colors[0];
   const arrow =
     'url("data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 14 16\'><path fill=\'%23fff\' d=\'M1 1 10 8 1 15 3 15 12 8 3 1z\'/></svg>")';
-  const n = GATE_COLORS.length;
+  const n = colors.length;
   let css =
     '@keyframes k{50%{opacity:0}}' +
     '@keyframes p{to{background-position:var(--s) 0;mask-position:var(--s) 0}}';
   css += '@keyframes c{';
   for (let i = 0; i < n; i++) {
-    css += ((i * 100) / n | 0) + '%{stroke:' + GATE_COLORS[i] + '}';
+    css += ((i * 100) / n | 0) + '%{stroke:' + colors[i] + '}';
   }
-  css += '}.t{fill:none}.tc{stroke:' + GATE_COLORS[0] + '}';
+  css += '}.t{fill:none}.tc{stroke:' + colors[0] + '}';
   for (let i = 0; i < n; i++) {
-    css += '.t' + i + '{stroke:' + GATE_COLORS[i] + '}';
+    css += '.t' + i + '{stroke:' + colors[i] + '}';
   }
   css +=
     '.ta{overflow:hidden;position:relative;--s:20px;--r:0deg;background:' +
-    SECTION_BG +
+    bg +
     '}' +
     '.ta:before{content:"";position:absolute;left:50%;top:50%;width:100vmax;height:100vmax;' +
     'transform:translate(-50.4%,-50%) rotate(var(--r));' +
@@ -72,15 +84,20 @@ export const injectTextureCss = () => {
     rain +
     ');background-size:120px 100%}' +
     '.sb{background:' +
-    SECTION_BG +
+    bg +
     ';background-image:radial-gradient(' +
-    SECTION_DOT +
+    dot +
     ' 1.5px,transparent 1.5px),radial-gradient(' +
-    SECTION_DOT +
+    dot +
     ' 1.5px,' +
-    SECTION_BG +
+    bg +
     ' 1.5px);background-size:20px 20px;background-position:0 0,10px 10px}';
+  const prev = document.getElementById('machine-theme');
+  if (prev) {
+    prev.remove();
+  }
   const el = document.createElement('style');
+  el.id = 'machine-theme';
   el.textContent = css;
   document.head.appendChild(el);
 };
@@ -96,7 +113,6 @@ export class Decoration extends Part {
   delay = 0;
   x1 = 0;
   y1 = 0;
-  opacity = 1;
 
   constructor(
     x: number,
@@ -107,7 +123,7 @@ export class Decoration extends Part {
     texture: number,
     args: number[]
   ) {
-    super(x, y, PART_DECORATION);
+    super(x, y);
     this.scale = scale;
     this.rot = rot;
     this.decorationType = decorationType;
@@ -155,7 +171,8 @@ export class Decoration extends Part {
 }
 
 export const decorationFill = (texture: number) => {
-  return GATE_COLORS[(texture | 0) % GATE_COLORS.length];
+  const colors = palette();
+  return colors[(texture | 0) % colors.length];
 };
 
 export const decorationLightCount = (dec: Decoration) => {

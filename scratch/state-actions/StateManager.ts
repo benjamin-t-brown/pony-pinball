@@ -1,5 +1,5 @@
 import { AbstractAction } from './AbstractAction';
-import { createState, type State } from '../../src/state/State';
+import { createState, type State } from '../../src/state/StateFuncs';
 
 export type AsyncAction = {
   action: AbstractAction;

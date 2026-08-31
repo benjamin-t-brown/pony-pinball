@@ -1,11 +1,22 @@
 import {
+  decorationFromId,
+  decorationStyleId,
+  fieldTriggerId,
+  isPartKind,
+  kindToBuilderId,
+  triggerFromId,
+  type MachineCall,
+  wallSegAt,
+} from '@game/machine/MachineCalls';
+import { partIdOf, setPartId } from '@game/machine/EntityIdFuncs';
+import {
   B_DECORATION,
   B_FIELD,
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
-  GATE_COLORS,
-} from '@game/model/builders';
+} from '@game/model/Builders';
+import { palette } from '@game/machine/MachineLook';
 import { DEC_ICON, DEC_RAINBOW, TEX_PALETTE } from '@game/model/parts/Decoration';
 import type { Opening, SectionData, Selection } from '../types';
 import {
@@ -38,6 +49,10 @@ const WALL_KINDS = [
   { id: B_WALL_GATE, label: 'Wall gate' },
 ];
 
+const num = (v: unknown, fallback = 0) => {
+  return typeof v === 'number' ? v : fallback;
+};
+
 export const BuilderForm = ({
   sections,
   openings,
@@ -45,6 +60,7 @@ export const BuilderForm = ({
   onChange,
   onSelection,
 }: Props) => {
+  const GATE_COLORS = palette();
   if (!selection || (selection.kind !== 'call' && selection.kind !== 'wall')) {
     return null;
   }
@@ -58,22 +74,28 @@ export const BuilderForm = ({
     return null;
   }
 
-  const setArg = (index: number, value: number, round = false) => {
+  const patchCall = (fn: (nextCall: MachineCall) => void) => {
     const next = cloneSections(sections);
-    const nextCall = next[selection.section][4][selection.call];
-    while (nextCall.length <= index) {
-      nextCall.push(0);
-    }
-    nextCall[index] = round ? Math.round(value) : value;
+    fn(next[selection.section][4][selection.call]);
     onChange(next);
   };
 
+  const setKey = (key: string, value: number | boolean | string, round = false) => {
+    patchCall(nextCall => {
+      let v: number | boolean | string = value;
+      if (typeof value === 'number' && round) {
+        v = Math.round(value);
+      }
+      (nextCall as unknown as Record<string, number | boolean | string>)[key] = v;
+    });
+  };
+
   if (selection.kind === 'wall') {
-    const k = 1 + selection.segment * 4;
+    const seg = wallSegAt(call, selection.segment);
     const title =
-      call[0] === B_WALL_RESTI
+      call.kind === B_WALL_RESTI
         ? 'Wall resti'
-        : call[0] === B_WALL_GATE
+        : call.kind === B_WALL_GATE
           ? 'Wall gate'
           : 'Wall segment';
     const convertTo = (kind: number) => {
@@ -89,38 +111,47 @@ export const BuilderForm = ({
     return (
       <div>
         <h2>{title}</h2>
-        {['x0', 'y0', 'x1', 'y1'].map((name, i) => (
+        {(['x0', 'y0', 'x1', 'y1'] as const).map(name => (
           <div className="field" key={name}>
             <label>{name}</label>
             <input
               type="number"
-              value={call[k + i] ?? 0}
+              value={seg ? seg[name] : 0}
               onChange={e => {
-                setArg(k + i, Number(e.target.value), true);
+                const v = Math.round(Number(e.target.value));
+                patchCall(nextCall => {
+                  const s = wallSegAt(nextCall, selection.segment);
+                  if (s) {
+                    s[name] = v;
+                    if (nextCall.kind === B_WALL_RESTI || nextCall.kind === B_WALL_GATE) {
+                      nextCall[name] = v;
+                    }
+                  }
+                });
               }}
             />
           </div>
         ))}
-        {call[0] === B_WALL_RESTI ? (
+        {call.kind === B_WALL_RESTI ? (
           <div className="field">
             <label>restitution</label>
             <input
               type="number"
               step={0.05}
-              value={call[5] ?? 0.5}
+              value={call.rest ?? 0.5}
               onChange={e => {
-                setArg(5, Number(e.target.value));
+                setKey('rest', Number(e.target.value));
               }}
             />
           </div>
         ) : null}
-        {call[0] === B_WALL_GATE ? (
+        {call.kind === B_WALL_GATE ? (
           <div className="field">
             <label>color</label>
             <select
-              value={call[5] ?? 0}
+              value={call.color ?? 0}
               onChange={e => {
-                setArg(5, Number(e.target.value), true);
+                setKey('color', Number(e.target.value), true);
               }}
             >
               {GATE_COLORS.map((c, i) => (
@@ -136,7 +167,7 @@ export const BuilderForm = ({
                 height: 18,
                 marginLeft: 8,
                 verticalAlign: 'middle',
-                background: GATE_COLORS[(call[5] ?? 0) % GATE_COLORS.length],
+                background: GATE_COLORS[(call.color ?? 0) % GATE_COLORS.length],
                 border: '1px solid #000',
               }}
             />
@@ -148,7 +179,7 @@ export const BuilderForm = ({
             <button
               key={kind.id}
               type="button"
-              disabled={call[0] === kind.id}
+              disabled={kindToBuilderId(call.kind) === kind.id}
               onClick={() => {
                 convertTo(kind.id);
               }}
@@ -161,40 +192,63 @@ export const BuilderForm = ({
     );
   }
 
-  const def = defFor(call[0]);
-  const hasTrigger = call[0] === B_FIELD;
-  const trig = hasTrigger ? triggerDefFor(call[5]) : null;
-  const hasDecoration = call[0] === B_DECORATION;
-  const dec = hasDecoration ? decorationDefFor(call[5]) : null;
-  const params = def
-    ? def.params
-    : call.slice(1).map((_n: number, i: number) => ({ name: `arg${i}` }));
+  const def = defFor(kindToBuilderId(call.kind));
+  const hasTrigger = call.kind === B_FIELD;
+  const trig = hasTrigger
+    ? triggerDefFor(fieldTriggerId(call.trigger))
+    : null;
+  const hasDecoration = call.kind === B_DECORATION;
+  const dec = hasDecoration
+    ? decorationDefFor(decorationStyleId(call.decoration))
+    : null;
+  const params = def ? def.params : [];
   const extra = trig
     ? trig.args.map(name => ({ name }))
     : dec
       ? dec.args.map(name => ({ name }))
       : [];
+  const rec = call as unknown as Record<string, number | boolean | string | undefined>;
+
   return (
     <div>
-      <h2>{def ? def.name : `Builder ${call[0]}`}</h2>
-      {[...params, ...extra].map((param: { name: string; step?: number }, i: number) =>
-        param.name === 'texture' && (call[5] | 0) === DEC_RAINBOW ? null : (
-          <div className="field" key={param.name + i}>
-            <label>{param.name}</label>
+      <h2>{def ? def.name : call.kind}</h2>
+      {[...params, ...extra].map((param: { name: string; step?: number }) =>
+        param.name === 'texture' &&
+        call.kind === B_DECORATION &&
+        call.decoration === DEC_RAINBOW ? null : (
+          <div className="field" key={param.name}>
+            <label>
+              {param.name === 'wall'
+                ? 'wall id'
+                : param.name === 'part'
+                  ? 'part id'
+                  : param.name}
+            </label>
             {param.name === 'trigger' ? (
               <select
-                value={call[i + 1] ?? 0}
+                value={fieldTriggerId(call.kind === B_FIELD ? call.trigger : undefined)}
                 onChange={e => {
                   const id = Number(e.target.value);
-                  const next = cloneSections(sections);
-                  const nextCall = next[selection.section][4][selection.call];
-                  nextCall[5] = id;
-                  const names = triggerDefFor(id).args;
-                  nextCall.length = 6;
-                  for (let i = 0; i < names.length; i++) {
-                    nextCall.push(triggerArgDefault(names[i], nextCall));
-                  }
-                  onChange(next);
+                  patchCall(nextCall => {
+                    if (nextCall.kind !== B_FIELD) {
+                      return;
+                    }
+                    const savedId = partIdOf(nextCall);
+                    nextCall.trigger = triggerFromId(id);
+                    delete nextCall.wall;
+                    delete nextCall.part;
+                    delete nextCall.sound;
+                    delete nextCall.onDelay;
+                    delete nextCall.offDelay;
+                    const names = triggerDefFor(id).args;
+                    for (let i = 0; i < names.length; i++) {
+                      (nextCall as unknown as Record<string, number>)[names[i]] =
+                        triggerArgDefault(names[i], nextCall);
+                    }
+                    if (savedId) {
+                      setPartId(nextCall, savedId);
+                    }
+                  });
                 }}
               >
                 {TRIGGER_DEFS.map(t => (
@@ -203,23 +257,43 @@ export const BuilderForm = ({
                   </option>
                 ))}
               </select>
-            ) : param.name === 'decorationType' ? (
+            ) : param.name === 'decoration' ? (
               <select
-                value={call[i + 1] ?? 0}
+                value={decorationStyleId(
+                  call.kind === B_DECORATION ? call.decoration : undefined
+                )}
                 onChange={e => {
                   const id = Number(e.target.value);
-                  const next = cloneSections(sections);
-                  const nextCall = next[selection.section][4][selection.call];
-                  nextCall[5] = id;
-                  if (id === DEC_ICON && nextCall[6] === TEX_PALETTE) {
-                    nextCall[6] = 0;
-                  }
-                  const names = decorationDefFor(id).args;
-                  nextCall.length = 7;
-                  for (let i = 0; i < names.length; i++) {
-                    nextCall.push(decArgDefault(names[i], nextCall));
-                  }
-                  onChange(next);
+                  patchCall(nextCall => {
+                    if (nextCall.kind !== B_DECORATION) {
+                      return;
+                    }
+                    nextCall.decoration = decorationFromId(id);
+                    if (id === DEC_ICON && nextCall.texture === TEX_PALETTE) {
+                      nextCall.texture = 0;
+                    }
+                    delete nextCall.shape;
+                    delete nextCall.startOn;
+                    delete nextCall.interval;
+                    delete nextCall.count;
+                    delete nextCall.x1;
+                    delete nextCall.y1;
+                    delete nextCall.delay;
+                    delete nextCall.w;
+                    delete nextCall.h;
+                    if (id !== DEC_ICON) {
+                      delete nextCall.opacity;
+                    }
+                    const names = decorationDefFor(id).args;
+                    for (let i = 0; i < names.length; i++) {
+                      if (names[i] === 'opacity') {
+                        nextCall.opacity = decArgDefault(names[i], nextCall);
+                        continue;
+                      }
+                      (nextCall as unknown as Record<string, number>)[names[i]] =
+                        decArgDefault(names[i], nextCall);
+                    }
+                  });
                 }}
               >
                 {DECORATION_DEFS.map(t => (
@@ -231,9 +305,9 @@ export const BuilderForm = ({
             ) : param.name === 'texture' ? (
               <>
                 <select
-                  value={call[i + 1] ?? 0}
+                  value={num(rec.texture)}
                   onChange={e => {
-                    setArg(i + 1, Number(e.target.value), true);
+                    setKey('texture', Number(e.target.value), true);
                   }}
                 >
                   {GATE_COLORS.map((c, ti) => (
@@ -241,7 +315,7 @@ export const BuilderForm = ({
                       {ti}: {c}
                     </option>
                   ))}
-                  {(call[5] | 0) !== DEC_ICON ? (
+                  {!(call.kind === B_DECORATION && call.decoration === DEC_ICON) ? (
                     <option value={TEX_PALETTE}>all: palette</option>
                   ) : null}
                 </select>
@@ -253,18 +327,18 @@ export const BuilderForm = ({
                     marginLeft: 8,
                     verticalAlign: 'middle',
                     background:
-                      (call[i + 1] ?? 0) === TEX_PALETTE
+                      num(rec.texture) === TEX_PALETTE
                         ? 'linear-gradient(90deg,' + GATE_COLORS.join(',') + ')'
-                        : GATE_COLORS[(call[i + 1] ?? 0) % GATE_COLORS.length],
+                        : GATE_COLORS[num(rec.texture) % GATE_COLORS.length],
                     border: '1px solid #000',
                   }}
                 />
               </>
             ) : param.name === 'shape' ? (
               <select
-                value={call[i + 1] ?? 0}
+                value={num(rec.shape)}
                 onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
+                  setKey('shape', Number(e.target.value), true);
                 }}
               >
                 {SHAPE_DEFS.map(s => (
@@ -276,9 +350,9 @@ export const BuilderForm = ({
             ) : param.name === 'color' ? (
               <>
                 <select
-                  value={call[i + 1] ?? 0}
+                  value={num(rec.color)}
                   onChange={e => {
-                    setArg(i + 1, Number(e.target.value), true);
+                    setKey('color', Number(e.target.value), true);
                   }}
                 >
                   {GATE_COLORS.map((c, ci) => (
@@ -295,16 +369,16 @@ export const BuilderForm = ({
                     marginLeft: 8,
                     verticalAlign: 'middle',
                     background:
-                      GATE_COLORS[(call[i + 1] ?? 0) % GATE_COLORS.length],
+                      GATE_COLORS[num(rec.color) % GATE_COLORS.length],
                     border: '1px solid #000',
                   }}
                 />
               </>
             ) : param.name === 'icon' ? (
               <select
-                value={call[i + 1] ?? 0}
+                value={num(rec.icon)}
                 onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
+                  setKey('icon', Number(e.target.value), true);
                 }}
               >
                 {CIRCLE_ICON_DEFS.map(s => (
@@ -315,9 +389,9 @@ export const BuilderForm = ({
               </select>
             ) : param.name === 'startOn' ? (
               <select
-                value={call[i + 1] ?? 1}
+                value={num(rec.startOn, 1)}
                 onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
+                  setKey('startOn', Number(e.target.value), true);
                 }}
               >
                 <option value={1}>on</option>
@@ -325,9 +399,9 @@ export const BuilderForm = ({
               </select>
             ) : param.name === 'sound' ? (
               <select
-                value={call[i + 1] ?? 0}
+                value={num(rec.sound)}
                 onChange={e => {
-                  setArg(i + 1, Number(e.target.value), true);
+                  setKey('sound', Number(e.target.value), true);
                 }}
               >
                 {SOUND_DEFS.map(s => (
@@ -336,40 +410,48 @@ export const BuilderForm = ({
                   </option>
                 ))}
               </select>
+            ) : param.name === 'flipped' ? (
+              <select
+                value={rec.flipped ? 1 : 0}
+                onChange={e => {
+                  setKey('flipped', Number(e.target.value) === 1);
+                }}
+              >
+                <option value={0}>left</option>
+                <option value={1}>right</option>
+              </select>
             ) : (
               <input
                 type="number"
                 step={param.name === 'opacity' ? 0.05 : param.step ?? 1}
-                value={call[i + 1] ?? 0}
+                value={
+                  param.name === 'flipped'
+                    ? rec.flipped
+                      ? 1
+                      : 0
+                    : num(rec[param.name])
+                }
                 onChange={e => {
                   const v = Number(e.target.value);
                   if (
                     param.name === 'rot' ||
                     param.name === 'angle' ||
                     param.name === 'restAngle' ||
-                    param.name === 'upAngle' ||
-                    param.name === 'startingRotation'
+                    param.name === 'upAngle'
                   ) {
-                    setArg(i + 1, roundAngle(v));
+                    setKey(param.name, roundAngle(v));
                     return;
                   }
-                  setArg(
-                    i + 1,
+                  setKey(
+                    param.name,
                     v,
                     param.name === 'x' ||
                       param.name === 'y' ||
                       param.name === 'w' ||
                       param.name === 'h' ||
-                      param.name === 'destX' ||
-                      param.name === 'destY' ||
-                      param.name === 'destW' ||
-                      param.name === 'destH' ||
                       param.name === 'wall' ||
                       param.name === 'part' ||
                       param.name === 'startOn' ||
-                      param.name === 'section' ||
-                      param.name === 'needed' ||
-                      param.name === 'groupType' ||
                       param.name === 'onDelay' ||
                       param.name === 'offDelay' ||
                       param.name === 'x0' ||
@@ -377,7 +459,6 @@ export const BuilderForm = ({
                       param.name === 'x1' ||
                       param.name === 'y1' ||
                       param.name === 'interval' ||
-                      param.name === 'decorationType' ||
                       param.name === 'texture' ||
                       param.name === 'shape' ||
                       param.name === 'icon' ||
@@ -391,7 +472,24 @@ export const BuilderForm = ({
           </div>
         )
       )}
-      {call[0] === B_WALLS ? (
+      {isPartKind(call.kind) ? (
+        <div className="field">
+          <label>opacity</label>
+          <input
+            type="number"
+            step={0.05}
+            min={0}
+            max={1}
+            value={
+              'opacity' in call && call.opacity != null ? call.opacity : 1
+            }
+            onChange={e => {
+              setKey('opacity', Number(e.target.value));
+            }}
+          />
+        </div>
+      ) : null}
+      {call.kind === B_WALLS ? (
         <p className="status">Drag on the canvas to add segments.</p>
       ) : null}
     </div>

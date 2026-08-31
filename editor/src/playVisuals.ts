@@ -1,25 +1,16 @@
-import { GATE_COLORS } from '@game/model/builders';
-import {
-  PART_COLLECTABLE,
-  PART_DECORATION,
-  PART_FIELD,
-  PART_LAUNCHER,
-  PART_OBSTACLE,
-  PART_PADDLE,
-  PART_PORTAL,
-} from '@game/model/Part';
-import type { Collectable } from '@game/model/parts/Collectable';
-import { lightAnimation, type Decoration } from '@game/model/parts/Decoration';
-import type { Field } from '@game/model/parts/Field';
-import type { Launcher } from '@game/model/parts/Launcher';
+import { accent, palette } from '@game/machine/MachineLook';
+import { Collectable } from '@game/model/parts/Collectable';
+import { Decoration, lightAnimation } from '@game/model/parts/Decoration';
+import { Field } from '@game/model/parts/Field';
+import { Launcher } from '@game/model/parts/Launcher';
 import {
   circleFill,
   obstacleStroke,
-  type Obstacle,
+  Obstacle,
 } from '@game/model/parts/Obstacle';
-import type { Paddle } from '@game/model/parts/Paddle';
-import type { Portal } from '@game/model/parts/Portal';
-import type { State } from '@game/state/State';
+import { Paddle } from '@game/model/parts/Paddle';
+import { Portal } from '@game/model/parts/Portal';
+import type { State } from '@game/state/StateFuncs';
 
 type LiveEl = {
   el: Element;
@@ -76,7 +67,8 @@ const wallStroke = (rest: number, color: number) => {
     return 'rgba(136,136,136,0.2)';
   }
   if (color >= 0) {
-    return GATE_COLORS[color % GATE_COLORS.length] || '#fc8';
+    const colors = palette();
+    return colors[color % colors.length] || accent();
   }
   return '#888';
 };
@@ -108,10 +100,10 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.paddles.length; i++) {
     const item = cache.paddles[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_PADDLE) {
+    if (!(part instanceof Paddle)) {
       continue;
     }
-    const line = (part as Paddle).getLine();
+    const line = part.getLine();
     set(item.el, 'x1', String(line.a.x));
     set(item.el, 'y1', String(line.a.y));
     set(item.el, 'x2', String(line.b.x));
@@ -121,10 +113,10 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.launchers.length; i++) {
     const item = cache.launchers[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_LAUNCHER) {
+    if (!(part instanceof Launcher)) {
       continue;
     }
-    const launcher = part as Launcher;
+    const launcher = part;
     const t = launcher.getChargeT();
     const len = launcher.len * t;
     set(item.el, 'x2', String(launcher.x - launcher.dir.x * len));
@@ -135,10 +127,10 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.coins.length; i++) {
     const item = cache.coins[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_COLLECTABLE) {
+    if (!(part instanceof Collectable)) {
       continue;
     }
-    (item.el as HTMLElement).style.display = (part as Collectable).taken
+    (item.el as HTMLElement).style.display = part.taken
       ? 'none'
       : '';
   }
@@ -146,10 +138,10 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.fields.length; i++) {
     const item = cache.fields[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_FIELD) {
+    if (!(part instanceof Field)) {
       continue;
     }
-    const field = part as Field;
+    const field = part;
     set(
       item.el,
       'fill',
@@ -160,23 +152,23 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.portals.length; i++) {
     const item = cache.portals[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_PORTAL) {
+    if (!(part instanceof Portal)) {
       continue;
     }
     set(
       item.el,
       'transform',
-      'rotate(' + String(((part as Portal).angle * 180) / Math.PI) + ')'
+      'rotate(' + String((part.angle * 180) / Math.PI) + ')'
     );
   }
 
   for (let i = 0; i < cache.obstacles.length; i++) {
     const item = cache.obstacles[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_OBSTACLE) {
+    if (!(part instanceof Obstacle)) {
       continue;
     }
-    const obstacle = part as Obstacle;
+    const obstacle = part;
     set(
       item.el,
       'transform',
@@ -204,10 +196,10 @@ export const syncPlayVisuals = (cache: PlayCache, sim: State) => {
   for (let i = 0; i < cache.lights.length; i++) {
     const item = cache.lights[i];
     const part = sim.sections[item.s] && sim.sections[item.s].parts[item.i];
-    if (!part || part.type !== PART_DECORATION) {
+    if (!(part instanceof Decoration)) {
       continue;
     }
-    const dec = part as Decoration;
+    const dec = part;
     const on = dec.active;
     const flag = on ? '1' : '0';
     if (item.el.getAttribute('data-on') === flag) {

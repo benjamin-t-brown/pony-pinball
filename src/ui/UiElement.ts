@@ -141,12 +141,14 @@ export abstract class UiElement {
     }
   }
 
+  /** Sim tick. Do not write CSS here. */
   update(_dt: number) {
     for (const child of this.children) {
       child.update(_dt);
     }
   }
 
+  /** Paint from model state. Once per frame. */
   render(dt: number) {
     for (const child of this.children) {
       child.render(dt);

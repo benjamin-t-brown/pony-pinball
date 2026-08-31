@@ -7,10 +7,10 @@ import {
   getGameRoot,
   setStyle,
   stringify,
-} from '../src/dom';
-import { findSectionAt } from '../src/model/Section';
-import { vecLen } from '../src/sim/physics';
-import { getState } from '../src/state/State';
+} from '../src/DomFuncs';
+import { findSectionAt } from '../src/model/SectionFuncs';
+import { vecLen } from '../src/sim/PhysicsFuncs';
+import { getState } from '../src/state/StateFuncs';
 import { Layer } from '../src/layers/Layer';
 
 const DEBUG_N = 60;

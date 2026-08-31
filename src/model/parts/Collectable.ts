@@ -1,8 +1,8 @@
-import type { Circle } from '../../sim/physics';
-import { PART_COLLECTABLE, Part } from '../Part';
-import type { Section } from '../Section';
+import type { Circle } from '../../sim/PhysicsFuncs';
+import { Part } from '../Part';
+import type { Section } from '../SectionFuncs';
 import type { Trigger } from '../Trigger';
-import { playSound, SOUND_GET_COIN } from '../../zzfx.js';
+import { playSound, SOUND_GET_COIN } from '../../audio/SoundFuncs';
 
 export class Collectable extends Part {
   r = 12;
@@ -11,7 +11,7 @@ export class Collectable extends Part {
   trigger: Trigger | null = null;
 
   constructor(x: number, y: number, r: number, groupType: number) {
-    super(x, y, PART_COLLECTABLE);
+    super(x, y);
     this.active = true;
     this.r = r;
     this.groupType = groupType;

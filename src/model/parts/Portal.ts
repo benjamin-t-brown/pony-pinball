@@ -1,7 +1,7 @@
-import type { Circle } from '../../sim/physics';
-import { ballStartWarp, type Ball } from '../Ball';
-import { PART_PORTAL, Part } from '../Part';
-import type { Section } from '../Section';
+import type { Circle } from '../../sim/PhysicsFuncs';
+import { ballStartWarp, type Ball } from '../BallFuncs';
+import { Part } from '../Part';
+import type { Section } from '../SectionFuncs';
 
 /** Pair of linked mouths: hit one, travel to the other, keep velocity. */
 export class Portal extends Part {
@@ -14,7 +14,7 @@ export class Portal extends Part {
   lock = false;
 
   constructor(x: number, y: number, x2: number, y2: number, r: number, color: number) {
-    super(x, y, PART_PORTAL);
+    super(x, y);
     this.x2 = x2;
     this.y2 = y2;
     this.r = r;

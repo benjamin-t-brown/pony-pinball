@@ -8,13 +8,13 @@ import {
   getGameRoot,
   px,
   setStyle,
-} from '../dom';
-import { ACCENT } from '../model/constants';
-import { formatTime, getState, startPlay } from '../state/State';
+} from '../DomFuncs';
+import { accent, getHud } from '../machine/MachineLook';
+import { formatTime, getState, startPlay } from '../state/StateFuncs';
 import { Board } from '../ui/Board';
-import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
+import { hudBtn, hudLabel, hudOverlay } from '../ui/HudStyles';
 import { UiElement } from '../ui/UiElement';
-import { playSound, SOUND_START_GAME } from '../zzfx.js';
+import { playSound, SOUND_START_GAME } from '../audio/SoundFuncs';
 import {
   CONTROL_LEFT,
   CONTROL_RIGHT,
@@ -56,6 +56,7 @@ class PlayHud extends UiElement {
   btnEl: HTMLElement | null = null;
   mobileEl: HTMLElement | null = null;
   visible = false;
+  showMobile = true;
 
   hide() {
     this.visible = false;
@@ -91,7 +92,7 @@ class PlayHud extends UiElement {
     }
     if (this.mobileEl) {
       setStyle(this.mobileEl, {
-        display: height > width ? 'flex' : 'none',
+        display: this.showMobile && height > width ? 'flex' : 'none',
       });
     }
   }
@@ -112,7 +113,7 @@ class PlayHud extends UiElement {
     const timeEl = createElement(DIV);
     setStyle(timeEl, {
       ...hudLabel,
-      color: ACCENT,
+      color: accent(),
       'font-size': '22px',
       'font-weight': 'bold',
     });
@@ -120,7 +121,7 @@ class PlayHud extends UiElement {
 
     const btn = createElement('button');
     btn[INNER_HTML] = 'Restart';
-    setStyle(btn, hudBtn);
+    setStyle(btn, hudBtn());
     domAddEventListener(btn, 'click', () => {
       startPlay();
       playSound(SOUND_START_GAME);
@@ -129,9 +130,16 @@ class PlayHud extends UiElement {
 
     const mobile = createElement(DIV);
     setStyle(mobile, mobileWrap);
-    addMobileBtn(mobile, '&lt;', CONTROL_LEFT);
-    addMobileBtn(mobile, '^', CONTROL_START);
-    addMobileBtn(mobile, '&gt;', CONTROL_RIGHT);
+    const hud = getHud();
+    if (hud.flippers) {
+      addMobileBtn(mobile, '&lt;', CONTROL_LEFT);
+    }
+    if (hud.launcher) {
+      addMobileBtn(mobile, '^', CONTROL_START);
+    }
+    if (hud.flippers) {
+      addMobileBtn(mobile, '&gt;', CONTROL_RIGHT);
+    }
     appendChild(overlay, mobile);
 
     appendChild(root, overlay);
@@ -157,11 +165,18 @@ class PlayHud extends UiElement {
   }
 }
 
+export type SimUiOpts = {
+  listenKeys?: boolean;
+  showMobile?: boolean;
+};
+
 export class SimUiLayer extends Layer {
-  constructor(parent: HTMLElement) {
-    super(parent);
+  constructor(parent: HTMLElement, opts: SimUiOpts = {}) {
+    super(parent, opts.listenKeys !== false);
+    const hud = new PlayHud();
+    hud.showMobile = opts.showMobile !== false;
     this.addUiElement(new Board());
-    this.addUiElement(new PlayHud());
+    this.addUiElement(hud);
     this.onResize(
       parent.clientWidth || innerWidth,
       parent.clientHeight || innerHeight
@@ -173,11 +188,12 @@ export class SimUiLayer extends Layer {
     if (!state.playing) {
       return;
     }
-    if (key === 'KeyZ' || key === 'ArrowLeft') {
+    const hud = getHud();
+    if (hud.flippers && (key === 'KeyZ' || key === 'ArrowLeft')) {
       state.input[CONTROL_LEFT] = down;
-    } else if (key === 'Slash' || key === 'ArrowRight') {
+    } else if (hud.flippers && (key === 'Slash' || key === 'ArrowRight')) {
       state.input[CONTROL_RIGHT] = down;
-    } else if (key === 'Space' || key === 'Enter') {
+    } else if (hud.launcher && (key === 'Space' || key === 'Enter')) {
       state.input[CONTROL_START] = down;
     }
   }

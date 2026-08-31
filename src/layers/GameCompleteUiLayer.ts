@@ -7,18 +7,18 @@ import {
   getGameRoot,
   px,
   setStyle,
-} from '../dom';
-import { ACCENT, COMPLETE_SECTION } from '../model/constants';
-import { findSectionAt } from '../model/Section';
+} from '../DomFuncs';
+import { accent, palette } from '../machine/MachineLook';
+import { findSectionAt } from '../model/SectionFuncs';
 import {
   finishPlay,
   formatTime,
   getState,
   startPlay,
-} from '../state/State';
+} from '../state/StateFuncs';
 import { UiElement } from '../ui/UiElement';
-import { hudBtn, hudLabel, hudOverlay } from '../ui/hud';
-import { playSound, SOUND_START_GAME } from '../zzfx.js';
+import { hudBtn, hudLabel, hudOverlay } from '../ui/HudStyles';
+import { playSound, SOUND_START_GAME } from '../audio/SoundFuncs';
 import { Layer } from './Layer';
 
 class CompleteHud extends UiElement {
@@ -86,24 +86,24 @@ class CompleteHud extends UiElement {
     setStyle(overlay, { ...hudOverlay, display: 'none' });
 
     const timeEl = createElement(DIV);
-    setStyle(timeEl, { ...hudLabel, color: ACCENT });
+    setStyle(timeEl, { ...hudLabel, color: accent() });
     appendChild(overlay, timeEl);
 
     const bestEl = createElement(DIV);
-    setStyle(bestEl, { ...hudLabel, color: '#8cf' });
+    setStyle(bestEl, { ...hudLabel, color: palette()[4] || accent() });
     appendChild(overlay, bestEl);
 
     const newEl = createElement(DIV);
     setStyle(newEl, {
       ...hudLabel,
-      color: '#6c6',
+      color: palette()[3] || accent(),
       'font-weight': 'bold',
     });
     appendChild(overlay, newEl);
 
     const btn = createElement('button');
     btn[INNER_HTML] = 'Restart';
-    setStyle(btn, hudBtn);
+    setStyle(btn, hudBtn());
     domAddEventListener(btn, 'click', () => {
       this.onRestart();
     });
@@ -139,9 +139,14 @@ class CompleteHud extends UiElement {
 
 export class GameCompleteUiLayer extends Layer {
   hud: CompleteHud;
+  onComplete: (() => void) | null;
 
-  constructor(host: HTMLElement) {
-    super(host);
+  constructor(
+    host: HTMLElement,
+    opts: { listenKeys?: boolean; onComplete?: () => void } = {}
+  ) {
+    super(host, opts.listenKeys !== false);
+    this.onComplete = opts.onComplete || null;
     this.hud = new CompleteHud(() => {
       this.onRestart();
     });
@@ -174,11 +179,14 @@ export class GameCompleteUiLayer extends Layer {
       ball.pos.y,
       null
     );
-    if (!section || section.id !== COMPLETE_SECTION) {
+    if (!section || section.id !== state.machine.completeSection) {
       return;
     }
     finishPlay();
     this.hud.show();
+    if (this.onComplete) {
+      this.onComplete();
+    }
     this.onResize(
       this.window ? this.window.clientWidth || innerWidth : innerWidth,
       this.window ? this.window.clientHeight || innerHeight : innerHeight

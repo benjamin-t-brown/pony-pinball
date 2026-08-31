@@ -1,4 +1,15 @@
 import {
+  partIdOf,
+  setPartId,
+  setWallIdAt,
+  wallIdAt,
+} from '@game/machine/EntityIdFuncs';
+import {
+  builderIdToKind,
+  callAnchor,
+  type MachineCall,
+} from '@game/machine/MachineCalls';
+import {
   B_CIRCLE,
   B_COLLECTABLE,
   B_CONVEYER,
@@ -12,8 +23,7 @@ import {
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
-  GATE_COLORS,
-} from '@game/model/builders';
+} from '@game/model/Builders';
 import {
   DEC_BLINKING_LIGHT,
   DEC_BLINKING_LIGHT_LINE,
@@ -37,7 +47,7 @@ import {
   LEFT_REST_ANGLE,
   LEFT_UP,
   PADDLE_LEN,
-} from '@game/model/constants';
+} from '@game/model/Constants';
 
 export type ParamDef = {
   name: string;
@@ -91,8 +101,8 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'y' },
       { name: 'restAngle', step: 0.05 },
       { name: 'upAngle', step: 0.05 },
-      { name: 'isFlipped', step: 1 },
-      { name: 'flipperLength' },
+      { name: 'flipped', step: 1 },
+      { name: 'length' },
     ],
   },
   {
@@ -107,7 +117,7 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'force' },
       { name: 'range' },
       { name: 'chargeMs' },
-      { name: 'launcherLength' },
+      { name: 'length' },
     ],
   },
   {
@@ -194,7 +204,7 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'y' },
       { name: 'sideLen1' },
       { name: 'sideLen2' },
-      { name: 'startingRotation', step: 0.05 },
+      { name: 'rot', step: 0.05 },
       { name: 'resti0', step: 0.05 },
       { name: 'resti1', step: 0.05 },
       { name: 'resti2', step: 0.05 },
@@ -209,13 +219,11 @@ export const BUILDER_DEFS: BuilderDef[] = [
       { name: 'y' },
       { name: 'scale', step: 0.1 },
       { name: 'rot', step: 0.05 },
-      { name: 'decorationType', step: 1 },
+      { name: 'decoration' },
       { name: 'texture', step: 1 },
     ],
   },
 ];
-
-export { GATE_COLORS };
 
 export const DECORATION_DEFS = [
   {
@@ -231,7 +239,7 @@ export const DECORATION_DEFS = [
   {
     id: DEC_ICON,
     name: 'Icon',
-    args: ['opacity'],
+    args: [],
   },
   {
     id: DEC_RAINBOW,
@@ -251,17 +259,19 @@ export const SHAPE_DEFS = [
   { id: SHAPE_SQUARE, name: 'square' },
 ];
 
-export const isDecLightLine = (call: number[]) => {
-  return call[0] === B_DECORATION && (call[5] | 0) === DEC_BLINKING_LIGHT_LINE;
+export const isDecLightLine = (call: MachineCall) => {
+  return call.kind === B_DECORATION && call.decoration === DEC_BLINKING_LIGHT_LINE;
 };
 
-export const isDecRainbow = (call: number[]) => {
-  return call[0] === B_DECORATION && (call[5] | 0) === DEC_RAINBOW;
+export const isDecRainbow = (call: MachineCall) => {
+  return call.kind === B_DECORATION && call.decoration === DEC_RAINBOW;
 };
 
-export const decArgDefault = (name: string, call: number[]) => {
+export const decArgDefault = (name: string, call: MachineCall) => {
   if (name === 'interval') {
-    return (call[5] | 0) === DEC_BLINKING_LIGHT_LINE ? 400 : 1000;
+    return call.kind === B_DECORATION && call.decoration === DEC_BLINKING_LIGHT_LINE
+      ? 400
+      : 1000;
   }
   if (name === 'count') {
     return 5;
@@ -273,10 +283,12 @@ export const decArgDefault = (name: string, call: number[]) => {
     return 1;
   }
   if (name === 'x1') {
-    return (call[1] || 0) + 80;
+    const a = callAnchor(call);
+    return (a ? a.x : 0) + 80;
   }
   if (name === 'y1') {
-    return call[2] || 0;
+    const a = callAnchor(call);
+    return a ? a.y : 0;
   }
   if (name === 'opacity') {
     return 1;
@@ -338,12 +350,14 @@ export const SOUND_DEFS = [
   { id: 12, name: 'game win', key: 'SOUND_GAME_WIN' },
 ];
 
-export const triggerArgDefault = (name: string, call: number[]) => {
+export const triggerArgDefault = (name: string, call: MachineCall) => {
   if (name === 'destX') {
-    return (call[1] || 0) + (call[3] || 80) + 40;
+    const a = callAnchor(call);
+    return (a ? a.x : 0) + 80 + 40;
   }
   if (name === 'destY') {
-    return call[2] || 0;
+    const a = callAnchor(call);
+    return a ? a.y : 0;
   }
   if (name === 'destW' || name === 'destH') {
     return 80;
@@ -363,102 +377,156 @@ export const triggerDefFor = (id: number) => {
   return TRIGGER_DEFS[0];
 };
 
-export const placeDefaults = (id: number, x: number, y: number): number[] => {
-  if (id === B_FLIPPER_LEFT) {
-    return [B_FLIPPER_LEFT, x, y, LEFT_REST_ANGLE, LEFT_UP, 0, PADDLE_LEN];
-  }
-  if (id === B_LAUNCHER) {
-    return [
-      B_LAUNCHER,
+export const placeCall = (
+  kind: MachineCall['kind'],
+  x: number,
+  y: number
+): MachineCall => {
+  if (kind === B_FLIPPER_LEFT) {
+    return {
+      kind,
       x,
       y,
-      0,
-      -1,
-      LAUNCHER_FORCE,
-      LAUNCHER_RANGE,
-      LAUNCHER_CHARGE_MS,
-      LAUNCHER_LEN,
-    ];
+      restAngle: LEFT_REST_ANGLE,
+      upAngle: LEFT_UP,
+      flipped: false,
+      length: PADDLE_LEN,
+    };
   }
-  if (id === B_CIRCLE) {
-    return [B_CIRCLE, x, y, 10, 1, 20, 0, 0, 0, 0, 0];
+  if (kind === B_LAUNCHER) {
+    return {
+      kind,
+      x,
+      y,
+      dx: 0,
+      dy: -1,
+      force: LAUNCHER_FORCE,
+      range: LAUNCHER_RANGE,
+      chargeMs: LAUNCHER_CHARGE_MS,
+      length: LAUNCHER_LEN,
+    };
   }
-  if (id === B_FAN) {
-    return [B_FAN, x, y, 4, 1, 40, 1];
+  if (kind === B_CIRCLE) {
+    return {
+      kind,
+      x,
+      y,
+      resolution: 10,
+      restitution: 1,
+      radius: 20,
+      dx: 0,
+      dy: 0,
+      omega: 0,
+      icon: 0,
+      color: 0,
+    };
   }
-  if (id === B_FIELD) {
-    const trig = triggerDefFor(TRIGGER_DEACTIVATE_WALL);
-    const extra = [];
-    for (let i = 0; i < trig.args.length; i++) {
-      extra.push(0);
-    }
-    return [B_FIELD, x, y, 80, 80, trig.id, ...extra];
+  if (kind === B_FAN) {
+    return {
+      kind,
+      x,
+      y,
+      paddles: 4,
+      restitution: 1,
+      radius: 40,
+      omega: 1,
+    };
   }
-  if (id === B_CONVEYER) {
-    return [B_CONVEYER, x, y, 80, 80, 0, 400, 160, 6];
+  if (kind === B_FIELD) {
+    return {
+      kind,
+      x,
+      y,
+      w: 80,
+      h: 80,
+      trigger: TRIGGER_DEACTIVATE_WALL,
+      wall: 0,
+      onDelay: 0,
+      offDelay: 0,
+    };
   }
-  if (id === B_WALL_RESTI) {
-    return [B_WALL_RESTI, x, y, x + 40, y, 0.5];
+  if (kind === B_CONVEYER) {
+    return {
+      kind,
+      x,
+      y,
+      w: 80,
+      h: 80,
+      angle: 0,
+      power: 400,
+      maxSpeed: 160,
+      drag: 6,
+    };
   }
-  if (id === B_WALL_GATE) {
-    return [B_WALL_GATE, x, y, x + 40, y, 0];
+  if (kind === B_WALL_RESTI) {
+    return { kind, x0: x, y0: y, x1: x + 40, y1: y, rest: 0.5 };
   }
-  if (id === B_COLLECTABLE) {
-    return [B_COLLECTABLE, x, y];
+  if (kind === B_WALL_GATE) {
+    return { kind, x0: x, y0: y, x1: x + 40, y1: y, color: 0 };
   }
-  if (id === B_PORTAL) {
-    return [B_PORTAL, x, y, x + 80, y, 0];
+  if (kind === B_COLLECTABLE) {
+    return { kind, x, y };
   }
-  if (id === B_TRIANGLE) {
-    return [B_TRIANGLE, x, y, 60, 60, 0, 0.5, 0.5, 0.5];
+  if (kind === B_PORTAL) {
+    return { kind, x0: x, y0: y, x1: x + 80, y1: y, color: 0 };
   }
-  if (id === B_DECORATION) {
-    const dec = decorationDefFor(DEC_BLINKING_LIGHT);
-    const extra = [];
-    for (let i = 0; i < dec.args.length; i++) {
-      extra.push(decArgDefault(dec.args[i], [B_DECORATION, x, y]));
-    }
-    return [B_DECORATION, x, y, 1, 0, DEC_BLINKING_LIGHT, 0, ...extra];
+  if (kind === B_TRIANGLE) {
+    return {
+      kind,
+      x,
+      y,
+      sideLen1: 60,
+      sideLen2: 60,
+      rot: 0,
+      resti0: 0.5,
+      resti1: 0.5,
+      resti2: 0.5,
+    };
   }
-  return [id, x, y];
+  if (kind === B_DECORATION) {
+    return {
+      kind,
+      x,
+      y,
+      scale: 1,
+      rot: 0,
+      decoration: DEC_BLINKING_LIGHT,
+      texture: 0,
+      shape: SHAPE_CHEVRON,
+      startOn: 1,
+      interval: 1000,
+    };
+  }
+  if (kind === B_WALLS) {
+    return { kind, segments: [] };
+  }
+  return { kind: B_COLLECTABLE, x, y };
 };
 
-export const ensureCallArgs = (call: number[]) => {
-  if (call[0] === B_WALLS) {
-    return call.slice();
-  }
-  const full = placeDefaults(call[0], call[1] ?? 0, call[2] ?? 0);
-  const next = call.slice();
-  while (next.length < full.length) {
-    next.push(full[next.length]);
-  }
-  if (call[0] === B_FIELD) {
-    const trig = triggerDefFor(next[5]);
-    const n = 6 + trig.args.length;
-    while (next.length < n) {
-      next.push(triggerArgDefault(trig.args[next.length - 6], next));
+export const placeDefaults = (id: number, x: number, y: number): MachineCall => {
+  return placeCall(builderIdToKind(id), x, y);
+};
+
+export const ensureCallArgs = (raw: MachineCall): MachineCall => {
+  const a = callAnchor(raw) || { x: 0, y: 0 };
+  const full = placeCall(raw.kind, a.x, a.y);
+  const next = { ...full, ...raw } as MachineCall;
+  if (next.kind === B_FIELD) {
+    const savedId = partIdOf(next);
+    if (savedId) {
+      setPartId(next, savedId);
     }
-    next.length = n;
   }
-  if (call[0] === B_COLLECTABLE) {
-    next.length = 3;
-  }
-  if (call[0] === B_WALL_RESTI || call[0] === B_WALL_GATE) {
-    next.length = 6;
-  }
-  if (call[0] === B_PORTAL) {
-    next.length = 6;
-  }
-  if (call[0] === B_TRIANGLE) {
-    next.length = 9;
-  }
-  if (call[0] === B_DECORATION) {
-    const dec = decorationDefFor(next[5]);
-    const n = 7 + dec.args.length;
-    while (next.length < n) {
-      next.push(decArgDefault(dec.args[next.length - 7], next));
+  if (next.kind === B_WALL_RESTI || next.kind === B_WALL_GATE) {
+    const saved = wallIdAt(raw, 0);
+    if (saved) {
+      setWallIdAt(next, 0, saved);
     }
-    next.length = n;
+  }
+  if (next.kind === B_TRIANGLE) {
+    setWallIdAt(next, 0, wallIdAt(raw, 0));
+    setWallIdAt(next, 1, wallIdAt(raw, 1));
+    setWallIdAt(next, 2, wallIdAt(raw, 2));
   }
   return next;
 };

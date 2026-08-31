@@ -1,15 +1,24 @@
-import { PART_DECORATION } from './Part';
-import type { Section } from './Section';
-import { type Ball } from './Ball';
-import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../zzfx';
+import { Collectable } from './parts/Collectable';
+import { Decoration } from './parts/Decoration';
+import { type Section, forEachPart } from './SectionFuncs';
+import { type Ball } from './BallFuncs';
+import { playSound, SOUND_GAME_WIN, SOUND_SECRET } from '../audio/SoundFuncs';
+import type { CollectGoal } from '../machine/MachineTypes';
+import { findPartById, findPartRef, findWallById, findWallRef } from '../machine/EntityIdFuncs';
+import {
+  TRIGGER_ACTIVATE_LIGHT,
+  TRIGGER_DEACTIVATE_WALL,
+  TRIGGER_PLAY_SOUND,
+} from '../machine/MachineCalls';
 
-export const TRIGGER_DEACTIVATE_WALL = 0;
-/** Collectable: 5 coins of group 0 open all gates in section 4. */
+export {
+  TRIGGER_ACTIVATE_LIGHT,
+  TRIGGER_DEACTIVATE_WALL,
+  TRIGGER_PLAY_SOUND,
+};
+
+/** @deprecated Collect goals live on the machine; kept so the editor schema still resolves. */
 export const TRIGGER_GATE_SECTION_4 = 2;
-/** Field: turn a decoration light on while occupied, off when left. */
-export const TRIGGER_ACTIVATE_LIGHT = 3;
-/** Field: play a zzfx sound when the ball enters. */
-export const TRIGGER_PLAY_SOUND = 5;
 
 export type CollectState = {
   collected: number[];
@@ -43,7 +52,7 @@ export class DeactivateWallTrigger extends Trigger {
   enableIn = -1;
 
   disableWall(section: Section) {
-    const wall = section.walls[this.args[0]];
+    const wall = findWallById(section, this.args[0] | 0);
     if (!wall || wall.rest < 0) {
       return;
     }
@@ -52,7 +61,7 @@ export class DeactivateWallTrigger extends Trigger {
   }
 
   enableWall(section: Section) {
-    const wall = section.walls[this.args[0]];
+    const wall = findWallById(section, this.args[0] | 0);
     if (!wall) {
       return;
     }
@@ -95,50 +104,82 @@ export class DeactivateWallTrigger extends Trigger {
   }
 }
 
-const GATE4_SECTION = 4;
-const GATE4_WALL = 31;
-const GATE4_LIGHT = 21;
-const GATE4_NEEDED = 6;
-
 /**
- * Hardcoded collectable goal: after 6 group-0 coins, disable a wall and
- * turn on a light in section 4.
+ * Machine collect goal: after `needed` coins of `group`, disable a wall
+ * and/or turn on a decoration.
  */
-export class GateSection4Trigger extends Trigger {
+export class CollectGoalTrigger extends Trigger {
+  goal: CollectGoal;
+
+  constructor(goal: CollectGoal) {
+    super([]);
+    this.goal = goal;
+  }
+
   onCollect(_section: Section, state: CollectState, groupType: number) {
-    if (groupType !== 0) {
+    const goal = this.goal;
+    if (groupType !== goal.group) {
       return;
     }
-    if ((state.collected[0] || 0) < GATE4_NEEDED) {
+    if ((state.collected[goal.group] || 0) < goal.needed) {
       return;
     }
-    const target = state.sections[GATE4_SECTION];
-    if (!target) {
-      return;
+    const wallRef = goal.disableWall;
+    if (wallRef) {
+      const wall = findWallRef(state.sections, wallRef.section, wallRef.wall);
+      if (wall && wall.rest !== -1) {
+        wall.rest = -1;
+        playSound(SOUND_SECRET);
+      }
     }
-    if (target.walls[GATE4_WALL].rest !== -1) {
-      target.walls[GATE4_WALL].rest = -1;
-      playSound(SOUND_SECRET);
-    }
-    const light = target.parts[GATE4_LIGHT];
-    if (light && light.type === PART_DECORATION) {
-      light.activate();
+    const partRef = goal.activatePart;
+    if (partRef) {
+      const light = findPartRef(state.sections, partRef.section, partRef.part);
+      if (light instanceof Decoration) {
+        light.activate();
+      }
     }
   }
 }
 
-export const resetGateSection4 = (sections: Section[]) => {
-  const target = sections[GATE4_SECTION];
-  if (!target) {
-    return;
+export const wireCollectGoals = (
+  sections: Section[],
+  goals: CollectGoal[]
+) => {
+  for (let i = 0; i < goals.length; i++) {
+    const trigger = new CollectGoalTrigger(goals[i]);
+    forEachPart(sections, part => {
+      if (!(part instanceof Collectable)) {
+        return;
+      }
+      const coin = part;
+      if (coin.groupType === trigger.goal.group) {
+        coin.trigger = trigger;
+      }
+    });
   }
-  const wall = target.walls[GATE4_WALL];
-  if (wall && wall.rest < 0) {
-    wall.rest = 0.5;
-  }
-  const light = target.parts[GATE4_LIGHT];
-  if (light && light.type === PART_DECORATION) {
-    light.unactivate();
+};
+
+export const resetCollectGoals = (
+  sections: Section[],
+  goals: CollectGoal[]
+) => {
+  for (let i = 0; i < goals.length; i++) {
+    const goal = goals[i];
+    const wallRef = goal.disableWall;
+    if (wallRef) {
+      const wall = findWallRef(sections, wallRef.section, wallRef.wall);
+      if (wall && wall.rest < 0) {
+        wall.rest = 0.5;
+      }
+    }
+    const partRef = goal.activatePart;
+    if (partRef) {
+      const light = findPartRef(sections, partRef.section, partRef.part);
+      if (light instanceof Decoration) {
+        light.unactivate();
+      }
+    }
   }
 };
 
@@ -147,8 +188,8 @@ export class ActivateLightTrigger extends Trigger {
   enableIn = -1;
 
   lightPart(section: Section) {
-    const part = section.parts[this.args[0]];
-    if (!part || part.type !== PART_DECORATION) {
+    const part = findPartById(section, this.args[0] | 0);
+    if (!(part instanceof Decoration)) {
       return null;
     }
     return part;
@@ -216,6 +257,5 @@ export class PlaySoundTrigger extends Trigger {
 
 export const TRIGGERS: (typeof Trigger)[] = [];
 TRIGGERS[TRIGGER_DEACTIVATE_WALL] = DeactivateWallTrigger;
-TRIGGERS[TRIGGER_GATE_SECTION_4] = GateSection4Trigger;
 TRIGGERS[TRIGGER_ACTIVATE_LIGHT] = ActivateLightTrigger;
 TRIGGERS[TRIGGER_PLAY_SOUND] = PlaySoundTrigger;

@@ -1,15 +1,8 @@
-import {
-  type Circle,
-  type Line,
-  lineCreate,
-  lineSet,
-  resolveBallWalls,
-  vecCreate,
-} from '../../sim/physics';
-import type { Section } from '../Section';
-import { ACCENT, GATE_COLORS } from '../constants';
-import { PART_OBSTACLE, Part } from '../Part';
-import { playSound, SOUND_HIT_FAN, SOUND_HIT_SMALL_CIRCLE } from '../../zzfx.js';
+import { type Line, lineCreate } from '../../sim/PhysicsFuncs';
+import type { Section } from '../SectionFuncs';
+import { accent, palette } from '../../machine/MachineLook';
+import { Part } from '../Part';
+import { playSound, SOUND_HIT_FAN, SOUND_HIT_SMALL_CIRCLE } from '../../audio/SoundFuncs';
 
 const FLASH_MS = 120;
 
@@ -20,9 +13,7 @@ export class Obstacle extends Part {
   omega = 0;
   r = 0;
   walls: Line[] = [];
-  worldWalls: Line[] = [];
   alwaysSolid = true;
-  touching = false;
   flash = 0;
   /** Closed n-gon circle (not fan spokes). */
   isCircle = false;
@@ -33,20 +24,16 @@ export class Obstacle extends Part {
   constructor(
     x: number,
     y: number,
-    type: number,
     walls: Line[],
     vx = 0,
     vy = 0,
     omega = 0
   ) {
-    super(x, y, type);
+    super(x, y);
     this.vx = vx;
     this.vy = vy;
     this.omega = omega;
     this.walls = walls;
-    for (let i = 0; i < walls.length; i++) {
-      this.worldWalls.push(lineCreate(0, 0, 0, 0, walls[i].rest));
-    }
   }
 
   onHit() {
@@ -95,39 +82,6 @@ export class Obstacle extends Part {
       }
     }
   }
-
-  affectBall(ball: Circle, ox: number, oy: number) {
-    if (!this.active && !this.alwaysSolid) {
-      this.touching = false;
-      return;
-    }
-    const wx = this.x + ox;
-    const wy = this.y + oy;
-    const ca = Math.cos(this.angle);
-    const sa = Math.sin(this.angle);
-    for (let i = 0; i < this.walls.length; i++) {
-      const w = this.walls[i];
-      lineSet(
-        this.worldWalls[i],
-        w.a.x * ca - w.a.y * sa + wx,
-        w.a.x * sa + w.a.y * ca + wy,
-        w.b.x * ca - w.b.y * sa + wx,
-        w.b.x * sa + w.b.y * ca + wy
-      );
-    }
-    const hit = resolveBallWalls(
-      ball,
-      this.worldWalls,
-      vecCreate(
-        this.vx - this.omega * (ball.pos.y - wy),
-        this.vy + this.omega * (ball.pos.x - wx)
-      )
-    );
-    if (hit && !this.touching) {
-      this.onHit();
-    }
-    this.touching = hit;
-  }
 }
 
 export const makeCircleWalls = (r: number, n: number, rest: number): Line[] => {
@@ -167,24 +121,26 @@ export const STAR_D =
 export const DIAMOND_D = 'M0-1L1 0 0 1-1 0Z';
 
 export const circleFill = (active: boolean, color = 0) => {
+  const colors = palette();
   if (active) {
-    return ACCENT;
+    return accent();
   }
-  return GATE_COLORS[(color | 0) % GATE_COLORS.length];
+  return colors[(color | 0) % colors.length];
 };
 
 export const circleStroke = (active: boolean) => {
-  return active ? ACCENT : '#fff';
+  return active ? accent() : '#fff';
 };
 
 export const obstacleStroke = (o: Obstacle) => {
+  const colors = palette();
   if (o.isCircle) {
     return circleStroke(o.active);
   }
   if (o.isFan) {
-    return o.active ? ACCENT : GATE_COLORS[1];
+    return o.active ? accent() : colors[1] || colors[0];
   }
-  return o.active ? ACCENT : '#888';
+  return o.active ? accent() : '#888';
 };
 
 export const makeCircle = (
@@ -202,7 +158,6 @@ export const makeCircle = (
   const o = new Obstacle(
     x,
     y,
-    PART_OBSTACLE,
     makeCircleWalls(radius, resolution, restitution),
     vx,
     vy,
@@ -210,8 +165,8 @@ export const makeCircle = (
   );
   o.r = radius;
   o.isCircle = true;
-  o.icon = icon | 0;
-  o.color = color | 0;
+  o.icon = icon ?? 0;
+  o.color = color ?? 0;
   return o;
 };
 
@@ -228,7 +183,6 @@ export const makeFan = (
   const o = new Obstacle(
     x,
     y,
-    PART_OBSTACLE,
     makeFanWalls(radius, paddles, restitution),
     vx,
     vy,

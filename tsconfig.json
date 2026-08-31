@@ -17,7 +17,8 @@
     "noUnusedParameters": false,
     "erasableSyntaxOnly": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "src/zzfx.js", "src/zzfx.js"]
+  "include": ["src/**/*.ts", "src/Zzfx.js"]
 }
