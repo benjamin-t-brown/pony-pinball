@@ -426,7 +426,7 @@ export const SECTIONS: SectionData[] = [
         27, 42, 139, 42,
         0, 374, 26, 389,
         0, 440, 233, 484,
-        177, 528, 319, 497,
+        177, 528, 337, 495,
         273, 257, 295, 289,
         337, 255, 317, 289,
         295, 313, 241, 328,
@@ -447,7 +447,7 @@ export const SECTIONS: SectionData[] = [
       [B_PORTAL, 166, 503, 51, 70, 0],
       [B_FLIPPER_LEFT, 238, 333, 0.45, -0.6, 1, 35],
       [B_FLIPPER_LEFT, 83, 236, 0.45, -0.5, 0, 35],
-      [B_CIRCLE, 242, 98, 10, 1, 20, 0, 0, 0, CIRCLE_DIAMOND, 4],
+      [B_CIRCLE, 242, 98, 10, 1, 20, 0, 0, 2, CIRCLE_DIAMOND, 4],
       [B_FAN, 140, 397, 3, 1, 22, 1],
       [B_DECORATION, 108, 314, 1, -0.7854, DEC_BLINKING_LIGHT, 3],
       [B_DECORATION, 233, 196, 1, -2.3562, DEC_BLINKING_LIGHT, 4],
@@ -558,4 +558,4 @@ export const LINKS: number[][] = [
 ];
 
 /** world x, y */
-export const START = [38, 396];
+export const START = [-34, -1611];
