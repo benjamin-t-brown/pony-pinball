@@ -77,6 +77,13 @@ select {
   margin: 16px 0 8px;
 }
 
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .row select {
   flex: 1;
   min-width: 0;
@@ -166,57 +173,6 @@ select {
   pointer-events: none;
 }
 
-.machine {
-  margin: 12px 0;
-}
-
-.machine > summary {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #999;
-  cursor: pointer;
-  margin-bottom: 8px;
-}
-
-.machine h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #999;
-  margin: 12px 0 6px;
-}
-
-.fields-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.fields-2.row {
-  display: grid;
-}
-
-.tour-row {
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.tour-row select {
-  flex: 1;
-}
-
-.tour-row button {
-  padding: 4px 6px;
-}
-
-.hint-inline {
-  color: #888;
-  font-size: 11px;
-  margin: 0 0 8px;
-}
-
 .check {
   display: flex;
   align-items: center;
@@ -228,11 +184,4 @@ select {
 
 .check input {
   width: auto;
-}
-
-.goal-block {
-  border: 1px solid #333;
-  border-radius: 3px;
-  padding: 8px;
-  margin-bottom: 8px;
 }

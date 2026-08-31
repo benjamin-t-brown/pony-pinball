@@ -74,7 +74,7 @@ type FormatMod = {
   RESERVED_MACHINE_IDS: Set<string>;
   withMachineDefaults: (partial: unknown) => unknown;
   machineFromModule: (mod: unknown) => { id: string; name: string };
-  blankMachine: (id: string, name?: string) => unknown;
+  blankMachine: (id: string, name?: string, goalKind?: number) => unknown;
 };
 
 type GenMod = {
@@ -208,6 +208,7 @@ export const machinesApiPlugin = (repoRoot: string): Plugin => {
               const data = JSON.parse(raw || '{}') as {
                 id?: string;
                 name?: string;
+                goalKind?: number;
               };
               const format = await loadFormat(server);
               const id = assertId(data.id || '', format);
@@ -217,7 +218,7 @@ export const machinesApiPlugin = (repoRoot: string): Plugin => {
                 return;
               }
               const gen = await loadGen(server);
-              const machine = format.blankMachine(id, data.name);
+              const machine = format.blankMachine(id, data.name, data.goalKind);
               fs.mkdirSync(tablesDir, { recursive: true });
               fs.writeFileSync(dest, gen.generateMachineTs(machine));
               writeCurrent(id, format);

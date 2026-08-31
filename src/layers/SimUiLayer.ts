@@ -10,7 +10,12 @@ import {
   setStyle,
 } from '../DomFuncs';
 import { accent, getHud } from '../machine/MachineLook';
-import { formatTime, getState, startPlay } from '../state/StateFuncs';
+import {
+  formatPlayValue,
+  formatTime,
+  getState,
+  startPlay,
+} from '../state/StateFuncs';
 import { Board } from '../ui/Board';
 import { hudBtn, hudLabel, hudOverlay } from '../ui/HudStyles';
 import { UiElement } from '../ui/UiElement';
@@ -20,6 +25,12 @@ import {
   CONTROL_RIGHT,
   CONTROL_START,
 } from '../model/Part';
+import {
+  GOAL_SECTION,
+  goalOf,
+  goalUsesBalls,
+  playLabel,
+} from '../machine/MachineGoals';
 import { Layer } from './Layer';
 
 const mobileWrap: Record<string, string> = {
@@ -157,7 +168,17 @@ class PlayHud extends UiElement {
         this.show();
       }
       if (this.timeEl) {
-        this.timeEl[INNER_HTML] = formatTime(state.playMs);
+        const goal = goalOf(state.machine);
+        if (goal.kind === GOAL_SECTION) {
+          this.timeEl[INNER_HTML] = formatTime(state.playMs);
+        } else {
+          let text =
+            playLabel(goal) + ': ' + formatPlayValue(state.score, state.machine);
+          if (goalUsesBalls(goal)) {
+            text += '   ' + state.ballsLeft + ' left';
+          }
+          this.timeEl[INNER_HTML] = text;
+        }
       }
     } else if (this.visible) {
       this.hide();

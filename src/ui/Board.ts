@@ -8,6 +8,7 @@ import {
   setStyle,
 } from '../DomFuncs';
 import { getState } from '../state/StateFuncs';
+import { completeSectionOf } from '../machine/MachineGoals';
 import type { Ball } from '../model/BallFuncs';
 import type { Section } from '../model/SectionFuncs';
 import { findSectionAt } from '../model/SectionFuncs';
@@ -282,7 +283,7 @@ export class Board extends UiElement {
     if (!state.playing && !state.complete) {
       this.applyMenuTour(dt);
     } else if (!state.playing) {
-      const room = state.sections[state.machine.completeSection];
+      const room = state.sections[completeSectionOf(state.machine)];
       if (room && this.section !== room) {
         this.section = room;
         this.setCamTarget(room, true);

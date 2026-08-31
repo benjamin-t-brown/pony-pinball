@@ -33,7 +33,7 @@ import {
   LEFT_REST_ANGLE,
   LEFT_UP,
   PADDLE_LEN,
-} from '@game/model/Constants';
+} from '@game/model/constants';
 import { roundAngle } from './geometry';
 import {
   assembleMachine,
@@ -42,6 +42,12 @@ import {
   sectionsToTuples,
 } from '@game/machine/MachineFormats';
 import type { Machine } from '@game/machine/MachineTypes';
+import {
+  GOAL_PACHINKO,
+  GOAL_PINBALL,
+  GOAL_SECTION,
+  goalOf,
+} from '@game/machine/MachineGoals';
 import {
   SHAPE_CHEVRON,
   SHAPE_CIRCLE,
@@ -447,6 +453,17 @@ export const generateMachineTs = (machine: Machine): string => {
     }
   }
 
+  const goal = goalOf(machine);
+  let goalImport = 'GOAL_SECTION';
+  let goalLiteral = `{ kind: GOAL_SECTION, section: ${goal.kind === GOAL_SECTION ? goal.section | 0 : 0} }`;
+  if (goal.kind === GOAL_PINBALL) {
+    goalImport = 'GOAL_PINBALL';
+    goalLiteral = `{ kind: GOAL_PINBALL, balls: ${goal.balls | 0} }`;
+  } else if (goal.kind === GOAL_PACHINKO) {
+    goalImport = 'GOAL_PACHINKO';
+    goalLiteral = `{ kind: GOAL_PACHINKO, balls: ${goal.balls | 0} }`;
+  }
+
   const builderImports = [...used.kinds, ...used.triggers, ...used.decs, ...sideNames].sort();
   const decImports = [...used.shapes].sort();
   if (used.tex) {
@@ -454,8 +471,9 @@ export const generateMachineTs = (machine: Machine): string => {
   }
   const importBlock =
     `import type { Machine } from '../machine/MachineTypes';\n` +
+    `import { ${goalImport} } from '../machine/MachineGoals';\n` +
     (builderImports.length > 0
-      ? `import {\n  ${builderImports.join(',\n  ')},\n} from '../model/Builders';\n`
+      ? `import {\n  ${builderImports.join(',\n  ')},\n} from '../model/builders';\n`
       : '') +
     (decImports.length > 0
       ? `import {\n  ${decImports.sort().join(',\n  ')},\n} from '../model/parts/Decoration';\n`
@@ -464,7 +482,7 @@ export const generateMachineTs = (machine: Machine): string => {
       ? `import {\n  ${[...used.icons].sort().join(',\n  ')},\n} from '../model/parts/Obstacle';\n`
       : '') +
     (used.sounds.size > 0
-      ? `import {\n  ${[...used.sounds].sort().join(',\n  ')},\n} from '../Zzfx.js';\n`
+      ? `import {\n  ${[...used.sounds].sort().join(',\n  ')},\n} from '../zzfx.js';\n`
       : '');
 
   const sectionLines: string[] = [];
@@ -520,7 +538,7 @@ export const machine: Machine = {
   id: ${JSON.stringify(machine.id)},
   name: ${JSON.stringify(machine.name)},
   start: { x: ${formatNum(spawn[0])}, y: ${formatNum(spawn[1])} },
-  completeSection: ${machine.completeSection | 0},
+  goal: ${goalLiteral},
   menuTour: [${tour}],
   menuTourMs: ${machine.menuTourMs | 0},
   scoreKeys: {

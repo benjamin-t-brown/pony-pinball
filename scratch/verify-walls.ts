@@ -5,7 +5,7 @@
  *
  * Run: npx tsx scratch/verify-walls.ts
  */
-import { buildLevel } from '../src/model/Builders';
+import { buildLevel } from '../src/model/builders';
 import type { Line } from '../src/sim/PhysicsFuncs';
 import type { Section } from '../src/model/SectionFuncs';
 

@@ -2,6 +2,7 @@ export type {
   CollectGoal,
   Machine,
   MachineAudio,
+  MachineGoal,
   MachineHud,
   MachineLink,
   MachineMeta,
@@ -13,6 +14,26 @@ export type {
   Vec2,
   WallRef,
 } from './MachineTypes';
+export {
+  GOAL_PACHINKO,
+  GOAL_PINBALL,
+  GOAL_SECTION,
+} from './MachineTypes';
+export {
+  DEFAULT_BALLS,
+  GOAL_DEFS,
+  ballsOf,
+  cloneGoal,
+  collectPoints,
+  completeSectionOf,
+  goalForKind,
+  goalHigherIsBetter,
+  goalOf,
+  goalUsesBalls,
+  hitPoints,
+  hudForGoal,
+  playLabel,
+} from './MachineGoals';
 export type {
   CircleCall,
   CollectableCall,

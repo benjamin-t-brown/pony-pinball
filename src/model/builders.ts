@@ -1,6 +1,6 @@
 import { lineCreate } from '../sim/PhysicsFuncs';
 import { CONTROL_LEFT, CONTROL_RIGHT, CONTROL_START, type Part } from './Part';
-import { LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from './Constants';
+import { LEFT_REST_ANGLE, LEFT_UP, PADDLE_LEN } from './constants';
 import { palette } from '../machine/MachineLook';
 import { Collectable } from './parts/Collectable';
 import { Decoration } from './parts/Decoration';
@@ -11,7 +11,7 @@ import { Paddle } from './parts/Paddle';
 import { Portal } from './parts/Portal';
 import { type Section, sectionCreate } from './SectionFuncs';
 import { TRIGGERS, Trigger } from './Trigger';
-import { SOUND_HIT_FAN } from '../Zzfx.js';
+import { SOUND_HIT_FAN } from '../zzfx.js';
 import {
   B_CIRCLE,
   B_COLLECTABLE,

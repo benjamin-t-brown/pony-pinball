@@ -42,12 +42,13 @@ export const saveMachine = async (machine: Machine) => {
 
 export const createMachine = async (
   id: string,
-  name?: string
+  name?: string,
+  goalKind?: number
 ): Promise<Machine> => {
   const res = await fetch('/api/machines', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id, name }),
+    body: JSON.stringify({ id, name, goalKind }),
   });
   await throwIfNotOk(res, 'Failed to create machine');
   const body = (await res.json()) as { machine: Machine };

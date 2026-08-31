@@ -1,5 +1,5 @@
 import { Line, lineCreate, lineSet } from '../../sim/PhysicsFuncs';
-import { PADDLE_LEN, PADDLE_RETURN, PADDLE_SPEED } from '../Constants';
+import { PADDLE_LEN, PADDLE_RETURN, PADDLE_SPEED } from '../constants';
 import { Part } from '../Part';
 import { playSound, SOUND_PADDLE_FLIPPER, SOUND_PADDLE_FLIPPER_DOWN } from '../../audio/SoundFuncs';
 

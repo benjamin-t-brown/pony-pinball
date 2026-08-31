@@ -5,7 +5,7 @@ import {
   vecMul,
   vecNorm,
 } from '../../sim/PhysicsFuncs';
-import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE } from '../Constants';
+import { LAUNCHER_CHARGE_MS, LAUNCHER_FORCE, LAUNCHER_LEN, LAUNCHER_RANGE } from '../constants';
 import { Part } from '../Part';
 import type { Section } from '../SectionFuncs';
 import {

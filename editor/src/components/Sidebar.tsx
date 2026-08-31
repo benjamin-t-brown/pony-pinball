@@ -1,10 +1,16 @@
 import type { Opening, SectionData, Selection, Tool } from '../types';
-import type { MachineMeta } from '@game/machine/MachineTypes';
 import type { MachineInfo } from '../api';
+import type { MachineMeta } from '@game/machine/MachineTypes';
+import {
+  ballsOf,
+  completeSectionOf,
+  GOAL_DEFS,
+  goalOf,
+  goalUsesBalls,
+} from '@game/machine/MachineGoals';
 import type { Issue } from '../validation';
 import { BuilderForm } from './BuilderForm';
 import { BuilderPalette } from './BuilderPalette';
-import { MachineForm } from './MachineForm';
 import { OpeningForm } from './OpeningForm';
 import { SectionForm } from './SectionForm';
 import { ValidationList } from './ValidationList';
@@ -34,9 +40,9 @@ type Props = {
   onSelectMachine: (id: string) => void;
   onNewMachine: () => void;
   meta: MachineMeta;
-  spawn: { x: number; y: number } | null;
-  onMeta: (meta: MachineMeta) => void;
-  onSpawn: (spawn: { x: number; y: number }) => void;
+  onGoalKind: (kind: number) => void;
+  onGoalSection: (section: number) => void;
+  onGoalBalls: (balls: number) => void;
 };
 
 export const Sidebar = ({
@@ -64,37 +70,74 @@ export const Sidebar = ({
   onSelectMachine,
   onNewMachine,
   meta,
-  spawn,
-  onMeta,
-  onSpawn,
+  onGoalKind,
+  onGoalSection,
+  onGoalBalls,
 }: Props) => {
+  const selected = catalog.find(m => m.id === fileId);
+  const label = (selected && selected.name) || fileId;
+
   return (
     <aside className="sidebar">
-      <h1>{meta.name || 'Level editor'}</h1>
-      <div className="row">
+      <h1>Level editor</h1>
+      <div className="field">
+        <label>Machine</label>
+        <div className="row">
+          <select
+            value={fileId}
+            disabled={playing || catalog.length === 0}
+            onChange={e => {
+              onSelectMachine(e.target.value);
+            }}
+          >
+            {catalog.length === 0 ? (
+              <option value="">No tables</option>
+            ) : null}
+            {fileId && !selected ? (
+              <option value={fileId}>{label}</option>
+            ) : null}
+            {catalog.map(m => (
+              <option key={m.id} value={m.id}>
+                {m.name || m.id}
+              </option>
+            ))}
+          </select>
+          <button onClick={onNewMachine} disabled={playing}>
+            New
+          </button>
+        </div>
+      </div>
+      <div className="field">
+        <label>Type</label>
         <select
-          value={fileId}
-          disabled={playing || catalog.length === 0}
+          value={goalOf(meta).kind}
+          disabled={playing}
           onChange={e => {
-            onSelectMachine(e.target.value);
+            onGoalKind(Number(e.target.value));
           }}
         >
-          {catalog.length === 0 ? (
-            <option value="">No tables</option>
-          ) : null}
-          {fileId && !catalog.some(m => m.id === fileId) ? (
-            <option value={fileId}>{meta.name || fileId}</option>
-          ) : null}
-          {catalog.map(m => (
-            <option key={m.id} value={m.id}>
-              {m.name || m.id}
+          {GOAL_DEFS.map(def => (
+            <option key={def.kind} value={def.kind}>
+              {def.label}
             </option>
           ))}
         </select>
-        <button onClick={onNewMachine} disabled={playing}>
-          New
-        </button>
       </div>
+      {goalUsesBalls(goalOf(meta)) ? (
+        <div className="field">
+          <label>Balls</label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={ballsOf(goalOf(meta))}
+            disabled={playing}
+            onChange={e => {
+              onGoalBalls(Number(e.target.value));
+            }}
+          />
+        </div>
+      ) : null}
       <div className="row">
         <button onClick={onSave}>
           Save{dirty ? ' *' : ''}
@@ -124,19 +167,13 @@ export const Sidebar = ({
       <p className="status">
         {sections.length} sections, {openings.length} openings.
       </p>
-      <MachineForm
-        meta={meta}
-        spawn={spawn}
-        sectionCount={sections.length}
-        playing={playing}
-        onMeta={onMeta}
-        onSpawn={onSpawn}
-      />
       <BuilderPalette tool={tool} onTool={onTool} />
       <SectionForm
         sections={sections}
         selection={selection}
         onChange={onSections}
+        goalSection={completeSectionOf(meta)}
+        onGoalSection={onGoalSection}
       />
       <BuilderForm
         sections={sections}

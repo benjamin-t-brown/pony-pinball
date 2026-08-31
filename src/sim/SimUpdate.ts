@@ -4,11 +4,12 @@ import {
   ballUpdateWarp,
   type Ball,
 } from '../model/BallFuncs';
-import { MAX_BALL_SPEED } from '../model/Constants';
+import { MAX_BALL_SPEED } from '../model/constants';
 import { forEachPart, sectionContains } from '../model/SectionFuncs';
 import { GRAVITY, vecLen, vecMul } from './PhysicsFuncs';
-import { idleBallPos, type State } from '../state/StateFuncs';
+import { idleBallPos, type State, finishPlay } from '../state/StateFuncs';
 import { clearSoundsPlayedThisTick } from '../audio/SoundFuncs';
+import { goalUsesBalls, goalOf } from '../machine/MachineGoals';
 
 export const clampBallSpeed = (ball: Ball, maxSpeed = MAX_BALL_SPEED) => {
   const speed = vecLen(ball.vel);
@@ -93,6 +94,16 @@ export const updateSimulation = (state: State, dt: number) => {
     physics.applyBallVel(i, ball);
 
     if (ballIsOutOfBounds(ball, state.sections)) {
+      if (state.playing && goalUsesBalls(goalOf(state.machine))) {
+        state.ballsLeft -= 1;
+        if (state.ballsLeft <= 0) {
+          finishPlay(state);
+          const spawn = idleBallPos(state);
+          state.balls[i] = ballCreate(spawn.x, spawn.y);
+          physics.teleportBall(i, state.balls[i]);
+          continue;
+        }
+      }
       if (state.playing) {
         state.balls[i] = ballCreate(state.startX, state.startY);
       } else {

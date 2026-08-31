@@ -2,7 +2,7 @@ import {
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
-} from '@game/model/Builders';
+} from '@game/model/builders';
 import {
   isPartCall,
   wallIdAt,

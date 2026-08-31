@@ -1,9 +1,18 @@
 import { cloneCall, normalizeCall } from './MachineCalls';
 import { migrateMachineEntityIds } from './EntityIdFuncs';
 import {
+  cloneGoal,
+  DEFAULT_BALLS,
+  goalForKind,
+  goalOf,
+  hudForGoal,
+  GOAL_PACHINKO,
+  GOAL_PINBALL,
+  GOAL_SECTION,
+} from './MachineGoals';
+import {
   audioOf,
   DEFAULT_AUDIO,
-  DEFAULT_HUD,
   DEFAULT_THEME,
   hudOf,
   themeOf,
@@ -38,23 +47,36 @@ export const machineFileStem = (id: string) => {
 export const defaultMachineMeta = (): MachineMeta => ({
   id: 'untitled',
   name: 'Untitled',
-  completeSection: 0,
+  goal: { kind: GOAL_SECTION, section: 0 },
   menuTour: [],
   menuTourMs: DEFAULT_MENU_TOUR_MS,
   scoreKeys: { last: 'untitled:lt', best: 'untitled:bt' },
   collectGoals: [],
   theme: themeOf({ theme: DEFAULT_THEME }),
-  hud: { ...DEFAULT_HUD },
+  hud: hudForGoal(GOAL_SECTION),
   audio: { ...DEFAULT_AUDIO },
 });
 
-export const blankMachine = (id: string, name?: string): Machine => {
+export const blankMachine = (
+  id: string,
+  name?: string,
+  goalKind = GOAL_SECTION
+): Machine => {
   const safe = sanitizeMachineId(id);
+  const goal = goalForKind(goalKind, {
+    kind: GOAL_SECTION,
+    section: 0,
+  });
+  if (goal.kind === GOAL_PINBALL || goal.kind === GOAL_PACHINKO) {
+    goal.balls = DEFAULT_BALLS;
+  }
   return {
     ...defaultMachineMeta(),
     id: safe,
     name: (name && name.trim()) || 'Untitled',
+    goal,
     scoreKeys: { last: `${safe}:lt`, best: `${safe}:bt` },
+    hud: hudForGoal(goal.kind),
     start: { x: 200, y: 350 },
     sections: [{ x: 0, y: 0, w: 400, h: 400, calls: [] }],
     links: [],
@@ -74,7 +96,7 @@ export const defaultMachine = (): Machine => ({
 export const PONY_MACHINE_META: MachineMeta = {
   id: 'pony',
   name: 'Pony Pinball',
-  completeSection: 15,
+  goal: { kind: GOAL_SECTION, section: 15 },
   menuTour: [2, 12, 8],
   menuTourMs: DEFAULT_MENU_TOUR_MS,
   scoreKeys: { last: 'pony:lt', best: 'pony:bt' },
@@ -87,14 +109,14 @@ export const PONY_MACHINE_META: MachineMeta = {
     },
   ],
   theme: themeOf({ theme: DEFAULT_THEME }),
-  hud: { ...DEFAULT_HUD },
+  hud: hudForGoal(GOAL_SECTION),
   audio: { ...DEFAULT_AUDIO },
 };
 
 export const machineMetaOf = (machine: Machine): MachineMeta => ({
   id: machine.id,
   name: machine.name,
-  completeSection: machine.completeSection,
+  goal: goalOf(machine),
   menuTour: machine.menuTour.slice(),
   menuTourMs: machine.menuTourMs,
   scoreKeys: { ...machine.scoreKeys },
@@ -115,6 +137,7 @@ export const withMachineDefaults = (partial: Partial<Machine>): Machine => {
     ...base,
     ...partial,
     start: partial.start ? { ...partial.start } : base.start,
+    goal: goalOf(partial),
     scoreKeys: { ...base.scoreKeys, ...partial.scoreKeys },
     collectGoals: partial.collectGoals
       ? partial.collectGoals.map(g => ({
@@ -165,7 +188,7 @@ export const assembleMachine = (
 ): Machine => ({
   id: meta.id,
   name: meta.name,
-  completeSection: meta.completeSection,
+  goal: cloneGoal(goalOf(meta)),
   menuTour: meta.menuTour.slice(),
   menuTourMs: meta.menuTourMs,
   scoreKeys: { ...meta.scoreKeys },
@@ -193,15 +216,17 @@ export const remapMachineMetaAfterDelete = (
     }
     return i > deleted ? i - 1 : i;
   };
-  let completeSection = meta.completeSection;
-  if (completeSection === deleted) {
-    completeSection = 0;
-  } else if (completeSection > deleted) {
-    completeSection -= 1;
+  const goal = cloneGoal(goalOf(meta));
+  if (goal.kind === GOAL_SECTION) {
+    if (goal.section === deleted) {
+      goal.section = 0;
+    } else if (goal.section > deleted) {
+      goal.section -= 1;
+    }
   }
   return {
     ...meta,
-    completeSection,
+    goal,
     menuTour: meta.menuTour
       .filter(i => i !== deleted)
       .map(i => (i > deleted ? i - 1 : i)),

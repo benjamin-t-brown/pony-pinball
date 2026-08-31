@@ -8,7 +8,7 @@ import {
   type Fixture,
 } from 'planck';
 import { GRAVITY, type Line } from './PhysicsFuncs';
-import { PADDLE_FRICTION, PADDLE_HALF_WIDTH, PADDLE_REST } from '../model/Constants';
+import { PADDLE_FRICTION, PADDLE_HALF_WIDTH, PADDLE_REST } from '../model/constants';
 import { Obstacle } from '../model/parts/Obstacle';
 import { Paddle } from '../model/parts/Paddle';
 import type { Section } from '../model/SectionFuncs';
@@ -87,6 +87,7 @@ export class PhysicsWorld {
   paddles: PaddleBody[] = [];
   obstacles: ObstacleBody[] = [];
   ballBodies: Body[] = [];
+  onHitScore: ((circle: boolean, fan: boolean) => void) | null = null;
 
   constructor(sections: Section[]) {
     this.world = new World({ gravity: { x: 0, y: GRAVITY * M_PER_PX } });
@@ -112,6 +113,9 @@ export class PhysicsWorld {
     }
     if (obstacle) {
       obstacle.obstacle.onHit();
+      if (this.onHitScore) {
+        this.onHitScore(obstacle.obstacle.isCircle, obstacle.obstacle.isFan);
+      }
     }
   };
 

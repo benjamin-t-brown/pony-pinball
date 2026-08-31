@@ -23,7 +23,7 @@ import {
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
-} from '@game/model/Builders';
+} from '@game/model/builders';
 import {
   DEC_BLINKING_LIGHT,
   DEC_BLINKING_LIGHT_LINE,
@@ -47,7 +47,7 @@ import {
   LEFT_REST_ANGLE,
   LEFT_UP,
   PADDLE_LEN,
-} from '@game/model/Constants';
+} from '@game/model/constants';
 
 export type ParamDef = {
   name: string;

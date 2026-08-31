@@ -26,12 +26,12 @@ import {
   B_WALLS,
   buildLevel,
   triangleVerts,
-} from '@game/model/Builders';
+} from '@game/model/builders';
 import { accent, palette } from '@game/machine/MachineLook';
 import {
   PADDLE_LEN,
   LAUNCHER_LEN,
-} from '@game/model/Constants';
+} from '@game/model/constants';
 import { Collectable } from '@game/model/parts/Collectable';
 import {
   CHEVRON_D,

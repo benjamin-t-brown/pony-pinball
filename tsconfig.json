@@ -20,5 +20,5 @@
     "noUncheckedSideEffectImports": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/Zzfx.js"]
+  "include": ["src/**/*.ts", "src/zzfx.js", "lib2/lib2.types.ts", "lib2/lib2/lib.d.ts"]
 }

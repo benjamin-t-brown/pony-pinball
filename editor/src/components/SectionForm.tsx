@@ -5,12 +5,16 @@ type Props = {
   sections: SectionData[];
   selection: Selection;
   onChange: (sections: SectionData[]) => void;
+  goalSection: number;
+  onGoalSection: (section: number) => void;
 };
 
 export const SectionForm = ({
   sections,
   selection,
   onChange,
+  goalSection,
+  onGoalSection,
 }: Props) => {
   const index = selection && selection.kind === 'section' ? selection.index : -1;
   const section = index >= 0 ? sections[index] : null;
@@ -43,6 +47,18 @@ export const SectionForm = ({
           />
         </div>
       ))}
+      {goalSection >= 0 ? (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={goalSection === index}
+            onChange={() => {
+              onGoalSection(index);
+            }}
+          />
+          win room
+        </label>
+      ) : null}
     </div>
   );
 };

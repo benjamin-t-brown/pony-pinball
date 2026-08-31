@@ -1,4 +1,4 @@
-import { B_WALLS } from '@game/model/Builders';
+import { B_WALLS } from '@game/model/builders';
 import { BUILDER_DEFS } from '../schema';
 import type { Tool } from '../types';
 

@@ -4,7 +4,7 @@ import {
   SECTION_SIDE_LEFT,
   SECTION_SIDE_RIGHT,
   SECTION_SIDE_TOP,
-} from '@game/model/Builders';
+} from '@game/model/builders';
 import type { SectionData } from './types';
 
 export const SNAP_PX = 8;

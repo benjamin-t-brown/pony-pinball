@@ -1,11 +1,19 @@
 import { Ball, ballCreate } from '../model/BallFuncs';
-import { buildLevel } from '../model/Builders';
+import { buildLevel } from '../model/builders';
 import { Collectable } from '../model/parts/Collectable';
 import { Section, forEachPart } from '../model/SectionFuncs';
 import { resetCollectGoals, wireCollectGoals } from '../model/Trigger';
 import { createPhysics, type PhysicsWorld } from '../sim/PhysicsWorld';
 import { cloneCall, normalizeCall } from '../machine/MachineCalls';
 import { migrateMachineEntityIds } from '../machine/EntityIdFuncs';
+import {
+  ballsOf,
+  completeSectionOf,
+  GOAL_SECTION,
+  goalHigherIsBetter,
+  goalOf,
+  hitPoints,
+} from '../machine/MachineGoals';
 import { setActiveLook } from '../machine/MachineLook';
 import type { Machine } from '../machine/MachineTypes';
 
@@ -19,6 +27,8 @@ export type State = {
   startY: number;
   /** Counts of collected items keyed by groupType. */
   collected: number[];
+  score: number;
+  ballsLeft: number;
   playing: boolean;
   complete: boolean;
   playMs: number;
@@ -50,6 +60,21 @@ export const formatTime = (ms: number) => {
   return (ms / 1000).toFixed(1);
 };
 
+export const formatPlayValue = (value: number, machine: Machine) => {
+  const goal = goalOf(machine);
+  if (goal.kind === GOAL_SECTION) {
+    return formatTime(value);
+  }
+  return String(value | 0);
+};
+
+export const playValue = (s: State) => {
+  if (goalOf(s.machine).kind === GOAL_SECTION) {
+    return s.playMs;
+  }
+  return s.score;
+};
+
 export const sectionCenter = (
   sections: Section[],
   id: number,
@@ -68,7 +93,7 @@ export const sectionCenter = (
 export const idleBallPos = (s: State) => {
   return sectionCenter(
     s.sections,
-    s.machine.completeSection,
+    completeSectionOf(s.machine),
     { x: s.startX, y: s.startY }
   );
 };
@@ -79,6 +104,8 @@ export const startPlay = () => {
   s.complete = false;
   s.newBest = false;
   s.playMs = 0;
+  s.score = 0;
+  s.ballsLeft = ballsOf(goalOf(s.machine));
   s.input[0] = false;
   s.input[1] = false;
   s.input[2] = false;
@@ -96,18 +123,20 @@ export const startPlay = () => {
   s.physics.teleportBall(0, s.balls[0]);
 };
 
-export const finishPlay = () => {
-  const s = getState();
-  if (!s.playing || s.complete) {
+export const finishPlay = (s = getState()) => {
+  if (!s || !s.playing || s.complete) {
     return;
   }
   s.playing = false;
   s.complete = true;
-  s.lastMs = s.playMs;
+  const value = playValue(s);
+  s.lastMs = value;
   s.prevBestMs = s.bestMs;
-  s.newBest = s.bestMs <= 0 || s.playMs < s.bestMs;
+  s.newBest = goalHigherIsBetter(goalOf(s.machine))
+    ? s.bestMs <= 0 || value > s.bestMs
+    : s.bestMs <= 0 || value < s.bestMs;
   if (s.newBest) {
-    s.bestMs = s.playMs;
+    s.bestMs = value;
   }
   localStorage.setItem(s.machine.scoreKeys.last, '' + s.lastMs);
   localStorage.setItem(s.machine.scoreKeys.best, '' + s.bestMs);
@@ -123,6 +152,7 @@ export const createState = (
 ): State => {
   const ready = migrateMachineEntityIds({
     ...machine,
+    goal: goalOf(machine),
     sections: machine.sections.map(s => ({
       ...s,
       calls: s.calls.map(c => cloneCall(normalizeCall(c))),
@@ -138,15 +168,19 @@ export const createState = (
   const sections = buildLevel(ready.sections, ready.links);
   wireCollectGoals(sections, ready.collectGoals);
   const playing = !!opts.playing;
-  return {
+  const readyGoal = goalOf(ready);
+  const physics = createPhysics(sections);
+  const next: State = {
     machine: ready,
     balls: playing ? [ballCreate(ready.start.x, ready.start.y)] : [],
     sections,
-    physics: createPhysics(sections),
+    physics,
     input: [false, false, false],
     startX: ready.start.x,
     startY: ready.start.y,
     collected: [],
+    score: 0,
+    ballsLeft: ballsOf(readyGoal),
     playing,
     complete: false,
     playMs: 0,
@@ -155,4 +189,11 @@ export const createState = (
     prevBestMs: 0,
     newBest: false,
   };
+  physics.onHitScore = (circle, fan) => {
+    if (!next.playing) {
+      return;
+    }
+    next.score += hitPoints(goalOf(next.machine), circle, fan);
+  };
+  return next;
 };

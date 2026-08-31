@@ -15,7 +15,7 @@ import {
   B_WALL_GATE,
   B_WALL_RESTI,
   B_WALLS,
-} from '@game/model/Builders';
+} from '@game/model/builders';
 import { palette } from '@game/machine/MachineLook';
 import { DEC_ICON, DEC_RAINBOW, TEX_PALETTE } from '@game/model/parts/Decoration';
 import type { Opening, SectionData, Selection } from '../types';

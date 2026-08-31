@@ -1,4 +1,4 @@
-import { BALL_R } from '@game/model/Constants';
+import { BALL_R } from '@game/model/constants';
 import {
   B_FIELD,
   TRIGGER_ACTIVATE_LIGHT,
@@ -6,6 +6,7 @@ import {
   num,
 } from '@game/machine/MachineCalls';
 import type { MachineMeta } from '@game/machine/MachineTypes';
+import { completeSectionOf } from '@game/machine/MachineGoals';
 import { partIdsInCalls, wallIdsInCalls } from '@game/machine/EntityIdFuncs';
 import { rectsOverlap, sharedBoundary } from './geometry';
 import type { Opening, SectionData } from './types';
@@ -121,10 +122,11 @@ export const validateMachine = (
   if (sectionCount === 0) {
     return issues;
   }
-  if (meta.completeSection < 0 || meta.completeSection >= sectionCount) {
+  const win = completeSectionOf(meta);
+  if (win >= 0 && win >= sectionCount) {
     issues.push({
       level: 'error',
-      message: `Complete section ${meta.completeSection} is out of range`,
+      message: `Complete section ${win} is out of range`,
     });
   }
   for (let i = 0; i < meta.menuTour.length; i++) {

@@ -1,6 +1,6 @@
 import { type Circle, circleCreate } from '../sim/PhysicsFuncs';
 import { playSound, SOUND_PORTAL_IN, SOUND_PORTAL_OUT } from '../audio/SoundFuncs';
-import { BALL_R, PORTAL_WARP_MS } from './Constants';
+import { BALL_R, PORTAL_WARP_MS } from './constants';
 import { type Section, isPointInAnySection } from './SectionFuncs';
 
 export interface Ball extends Circle {

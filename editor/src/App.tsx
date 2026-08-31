@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { B_WALL_GATE, B_WALL_RESTI, B_WALLS, buildLevel } from '@game/model/Builders';
+import { B_WALL_GATE, B_WALL_RESTI, B_WALLS, buildLevel } from '@game/model/builders';
 import {
   CONTROL_LEFT,
   CONTROL_RIGHT,
@@ -7,7 +7,7 @@ import {
 } from '@game/model/Part';
 import { updateSimulation } from '@game/sim/SimUpdate';
 import type { State } from '@game/state/StateFuncs';
-import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/Constants';
+import { LAUNCHER_X, LAUNCHER_Y } from '@game/model/constants';
 import {
   assembleMachine,
   linksToTuples,
@@ -19,6 +19,14 @@ import {
   tuplesToLinks,
   tuplesToSections,
 } from '@game/machine/MachineFormats';
+import {
+  completeSectionOf,
+  goalForKind,
+  goalOf,
+  goalUsesBalls,
+  GOAL_SECTION,
+  hudForGoal,
+} from '@game/machine/MachineGoals';
 import {
   allocEntityId,
   clearRefsToPartId,
@@ -160,6 +168,7 @@ export const App = () => {
     (data: Machine, fitted: boolean, loadedId: string) => {
       const ready = migrateMachineEntityIds({
         ...data,
+        goal: goalOf(data),
         sections: data.sections.map(s => ({
           ...s,
           calls: s.calls.map(c => cloneCall(c)),
@@ -636,7 +645,7 @@ export const App = () => {
     }
     const id = sanitizeMachineId(raw);
     try {
-      const created = await createMachine(id);
+      const created = await createMachine(id, id, metaRef.current.goal.kind);
       await refreshCatalog();
       applyLoad(created, true, id);
       setPlaying(false);
@@ -713,10 +722,29 @@ export const App = () => {
         onSelectMachine={onSelectMachine}
         onNewMachine={onNewMachine}
         meta={meta}
-        spawn={spawn}
-        onMeta={markMeta}
-        onSpawn={at => {
-          onDropBall(at.x, at.y);
+        onGoalKind={kind => {
+          const goal = goalForKind(kind, metaRef.current.goal);
+          markMeta({
+            ...metaRef.current,
+            goal,
+            hud: hudForGoal(kind),
+          });
+        }}
+        onGoalSection={section => {
+          markMeta({
+            ...metaRef.current,
+            goal: { kind: GOAL_SECTION, section },
+          });
+        }}
+        onGoalBalls={balls => {
+          const goal = goalOf(metaRef.current);
+          if (!goalUsesBalls(goal)) {
+            return;
+          }
+          markMeta({
+            ...metaRef.current,
+            goal: { ...goal, balls: Math.max(1, balls | 0) },
+          });
         }}
       />
       <WorldCanvas
@@ -727,7 +755,7 @@ export const App = () => {
         cam={cam}
         playing={playing}
         spawn={spawn}
-        completeSection={meta.completeSection}
+        completeSection={completeSectionOf(meta)}
         menuTour={meta.menuTour}
         built={built}
         sim={sim}

@@ -13,7 +13,7 @@ import {
   SOUND_PORTAL_OUT,
   SOUND_SECRET,
   SOUND_START_GAME,
-} from '../Zzfx.js';
+} from '../zzfx.js';
 import { SOUND_DIR } from '../PublicAssets';
 
 export {

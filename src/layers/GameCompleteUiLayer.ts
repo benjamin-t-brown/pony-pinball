@@ -12,13 +12,14 @@ import { accent, palette } from '../machine/MachineLook';
 import { findSectionAt } from '../model/SectionFuncs';
 import {
   finishPlay,
-  formatTime,
+  formatPlayValue,
   getState,
   startPlay,
 } from '../state/StateFuncs';
 import { UiElement } from '../ui/UiElement';
 import { hudBtn, hudLabel, hudOverlay } from '../ui/HudStyles';
 import { playSound, SOUND_START_GAME } from '../audio/SoundFuncs';
+import { completeSectionOf, goalOf, playLabel } from '../machine/MachineGoals';
 import { Layer } from './Layer';
 
 class CompleteHud extends UiElement {
@@ -27,6 +28,7 @@ class CompleteHud extends UiElement {
   newEl: HTMLElement | null = null;
   btnEl: HTMLElement | null = null;
   onRestart: () => void;
+  visible = false;
 
   constructor(onRestart: () => void) {
     super();
@@ -34,6 +36,7 @@ class CompleteHud extends UiElement {
   }
 
   hide() {
+    this.visible = false;
     if (this.el) {
       setStyle(this.el, { display: 'none' });
     }
@@ -41,6 +44,7 @@ class CompleteHud extends UiElement {
 
   show() {
     this.readTimes();
+    this.visible = true;
     if (this.el) {
       setStyle(this.el, { display: 'block' });
     }
@@ -123,16 +127,22 @@ class CompleteHud extends UiElement {
 
   readTimes() {
     const state = getState();
+    const label = playLabel(goalOf(state.machine));
     if (this.timeEl) {
-      this.timeEl[INNER_HTML] = 'time: ' + formatTime(state.lastMs);
+      this.timeEl[INNER_HTML] =
+        label + ': ' + formatPlayValue(state.lastMs, state.machine);
     }
     if (this.bestEl) {
       this.bestEl[INNER_HTML] =
-        'best time: ' +
-        (state.prevBestMs > 0 ? formatTime(state.prevBestMs) : '--');
+        'best ' +
+        label +
+        ': ' +
+        (state.prevBestMs > 0
+          ? formatPlayValue(state.prevBestMs, state.machine)
+          : '--');
     }
     if (this.newEl) {
-      this.newEl[INNER_HTML] = state.newBest ? 'New best time!' : '';
+      this.newEl[INNER_HTML] = state.newBest ? 'New best ' + label + '!' : '';
     }
   }
 }
@@ -166,7 +176,24 @@ export class GameCompleteUiLayer extends Layer {
   update(dt: number) {
     super.update(dt);
     const state = getState();
-    if (!state.playing || state.complete) {
+    if (state.complete) {
+      if (!this.hud.visible) {
+        this.hud.show();
+        if (this.onComplete) {
+          this.onComplete();
+        }
+        this.onResize(
+          this.window ? this.window.clientWidth || innerWidth : innerWidth,
+          this.window ? this.window.clientHeight || innerHeight : innerHeight
+        );
+      }
+      return;
+    }
+    if (!state.playing) {
+      return;
+    }
+    const winSection = completeSectionOf(state.machine);
+    if (winSection < 0) {
       return;
     }
     const ball = state.balls[0];
@@ -179,7 +206,7 @@ export class GameCompleteUiLayer extends Layer {
       ball.pos.y,
       null
     );
-    if (!section || section.id !== state.machine.completeSection) {
+    if (!section || section.id !== winSection) {
       return;
     }
     finishPlay();

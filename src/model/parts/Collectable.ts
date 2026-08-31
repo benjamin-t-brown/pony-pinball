@@ -3,6 +3,8 @@ import { Part } from '../Part';
 import type { Section } from '../SectionFuncs';
 import type { Trigger } from '../Trigger';
 import { playSound, SOUND_GET_COIN } from '../../audio/SoundFuncs';
+import { collectPoints, goalOf } from '../../machine/MachineGoals';
+import type { MachineGoal } from '../../machine/MachineTypes';
 
 export class Collectable extends Part {
   r = 12;
@@ -24,7 +26,12 @@ export class Collectable extends Part {
     _dtSeconds: number,
     g: number,
     section: Section,
-    state?: { collected: number[]; sections: Section[] }
+    state?: {
+      collected: number[];
+      sections: Section[];
+      score?: number;
+      machine?: { goal: MachineGoal };
+    }
   ) {
     if (this.taken || !state) {
       return g;
@@ -43,6 +50,9 @@ export class Collectable extends Part {
       state.collected.push(0);
     }
     state.collected[gt]++;
+    if (state.machine && state.score != null) {
+      state.score = (state.score || 0) + collectPoints(goalOf(state.machine));
+    }
     if (this.trigger) {
       this.trigger.onCollect(section, state, gt);
     }

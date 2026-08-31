@@ -1,4 +1,4 @@
-import { SECTION_SIDE_BOTTOM, SECTION_SIDE_TOP } from '@game/model/Builders';
+import { SECTION_SIDE_BOTTOM, SECTION_SIDE_TOP } from '@game/model/builders';
 import { edgeWorld, oppositeSide, px, sharedBoundary } from './geometry';
 import type { Opening, SectionData } from './types';
 

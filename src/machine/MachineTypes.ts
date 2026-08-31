@@ -61,10 +61,36 @@ export type MachineAudio = {
   bank: 'zzfx' | 'file';
 };
 
+/** Race: reach a room. Lower time wins. */
+export const GOAL_SECTION = 0;
+/** Pinball: N balls, high score. */
+export const GOAL_PINBALL = 1;
+/** Pachinko: N balls, most tickets. */
+export const GOAL_PACHINKO = 2;
+
+export type GoalSection = {
+  kind: typeof GOAL_SECTION;
+  section: number;
+};
+
+export type GoalPinball = {
+  kind: typeof GOAL_PINBALL;
+  balls: number;
+};
+
+export type GoalPachinko = {
+  kind: typeof GOAL_PACHINKO;
+  balls: number;
+};
+
+export type MachineGoal = GoalSection | GoalPinball | GoalPachinko;
+
 export type MachineMeta = {
   id: string;
   name: string;
-  completeSection: number;
+  goal: MachineGoal;
+  /** @deprecated Use `goal`. Kept so old table files still load. */
+  completeSection?: number;
   menuTour: number[];
   menuTourMs: number;
   scoreKeys: ScoreKeys;
