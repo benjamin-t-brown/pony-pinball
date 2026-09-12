@@ -28,4 +28,5 @@ cd editor
 npm run start
 ```
 
-<img width="1348" height="1048" alt="image" src="https://github.com/user-attachments/assets/12115e24-97a6-43bf-8446-868da91f79f3" />
+<img width="1270" height="947" alt="image" src="https://github.com/user-attachments/assets/046aa999-4994-4973-b640-e0fd611333ce" />
+
