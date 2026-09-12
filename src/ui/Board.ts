@@ -251,24 +251,24 @@ export class Board extends UiElement {
   }
 
   onMouseDown(x: number, y: number, _button: number, shift = false) {
-    if (!shift || !getState().playing) {
-      return;
-    }
-    const wx = this.camX + x / this.camScale;
-    const wy = this.camY + y / this.camScale;
-    const state = getState();
-    const section = findSectionAt(state.sections, wx, wy, null);
-    if (!section) {
-      return;
-    }
-    const ball = state.balls[0];
-    if (!ball) {
-      return;
-    }
-    ball.pos.x = wx;
-    ball.pos.y = wy;
-    ball.vel.x = 0;
-    ball.vel.y = 0;
+    // if (!shift || !getState().playing) {
+    //   return;
+    // }
+    // const wx = this.camX + x / this.camScale;
+    // const wy = this.camY + y / this.camScale;
+    // const state = getState();
+    // const section = findSectionAt(state.sections, wx, wy, null);
+    // if (!section) {
+    //   return;
+    // }
+    // const ball = state.balls[0];
+    // if (!ball) {
+    //   return;
+    // }
+    // ball.pos.x = wx;
+    // ball.pos.y = wy;
+    // ball.vel.x = 0;
+    // ball.vel.y = 0;
   }
 
   update(dt: number) {

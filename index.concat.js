@@ -2254,7 +2254,7 @@ let SECTIONS = [
             [B_WALL_RESTI, 0, 47, 47, 0, 1.5],
             [B_CONVEYER, 52, 625, 40, 48, -2.55, 400, 160, 6],
             [B_LAUNCHER, 19, 612, 0, -1, 1250, 50, 600, 50],
-            [B_PORTAL, 60, 189, 276, 28, 0],
+            [B_PORTAL, 60, 187, 258, 23, 0],
             [B_PORTAL, 59, 80, 342, 267, 1],
             [B_WALL_RESTI, 328, 283, 400, 294, 0.15],
             [B_LAUNCHER, 362, 275, -1, 0, 1050, 36, 100],
@@ -2262,7 +2262,7 @@ let SECTIONS = [
             [B_TRIANGLE, 70, 466, 79, 44, -1.5708, 1.25],
             [B_TRIANGLE, 313, 466, 79, -44, -1.5708, 1.25],
             [B_CONVEYER, 332, 116, 26, 82, 1.5708, 400, 160, 6],
-            [B_DECORATION, 89, 191, 1, -2.0554, DEC_BLINKING_LIGHT, 1],
+            [B_DECORATION, 78, 223, 1, -2.0554, DEC_BLINKING_LIGHT, 1],
             [B_DECORATION, 21, 84, 1, -3.1416, DEC_BLINKING_LIGHT, 2],
             [B_DECORATION, 196, 440, 18, 0, DEC_ICON, 4, 0.33],
             [B_DECORATION, 377, 431, 1.4, -0.6751, DEC_BLINKING_LIGHT, 3, SHAPE_CIRCLE],
@@ -2479,7 +2479,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [-34, -1611];
+let START = [1326, -1406];
 let state;
 let getState = () => {
     return state;
@@ -3780,6 +3780,9 @@ let CAM_SCALE_STEP = 1.1;
 let CAM_PAN_MS = 300;
 /** Applied after fitting the section in the viewport. 1 = exact fit; lower = zoomed out. */
 let CAM_ZOOM_FACTOR = 0.85;
+/** Per-section override of CAM_ZOOM_FACTOR. Missing ids use the default. */
+let CAM_SECTION_ZOOM = [];
+CAM_SECTION_ZOOM[12] = 0.6;
 /** Sections smaller than this on both axes skip fit-zoom and use CAM_SMALL_SCALE. */
 let CAM_SMALL_SIZE = 250;
 let CAM_SMALL_SCALE = 3;
@@ -3806,7 +3809,10 @@ let getCamFitScale = (section, viewW, viewH) => {
         return CAM_SMALL_SCALE;
     }
     let fit = Math.min(viewW / section.w, viewH / section.h);
-    return clampCamScale(fit * CAM_ZOOM_FACTOR);
+    let zoom = CAM_SECTION_ZOOM[section.id] != null
+        ? CAM_SECTION_ZOOM[section.id]
+        : CAM_ZOOM_FACTOR;
+    return clampCamScale(fit * zoom);
 };
 let getCamPan = (lookX, lookY, viewW, viewH, scale) => {
     return {
@@ -4032,24 +4038,24 @@ class Board extends UiElement {
         this.applyCamera();
     }
     onMouseDown(x, y, _button, shift = false) {
-        if (!shift || !getState().playing) {
-            return;
-        }
-        let wx = this.camX + x / this.camScale;
-        let wy = this.camY + y / this.camScale;
-        let state = getState();
-        let section = findSectionAt(state.sections, wx, wy, null);
-        if (!section) {
-            return;
-        }
-        let ball = state.balls[0];
-        if (!ball) {
-            return;
-        }
-        ball.pos.x = wx;
-        ball.pos.y = wy;
-        ball.vel.x = 0;
-        ball.vel.y = 0;
+        // if (!shift || !getState().playing) {
+        //   return;
+        // }
+        // let wx = this.camX + x / this.camScale;
+        // let wy = this.camY + y / this.camScale;
+        // let state = getState();
+        // let section = findSectionAt(state.sections, wx, wy, null);
+        // if (!section) {
+        //   return;
+        // }
+        // let ball = state.balls[0];
+        // if (!ball) {
+        //   return;
+        // }
+        // ball.pos.x = wx;
+        // ball.pos.y = wy;
+        // ball.vel.x = 0;
+        // ball.vel.y = 0;
     }
     update(dt) {
         this.syncBalls();

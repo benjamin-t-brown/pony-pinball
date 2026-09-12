@@ -6,6 +6,9 @@ export const CAM_SCALE_STEP = 1.1;
 export const CAM_PAN_MS = 300;
 /** Applied after fitting the section in the viewport. 1 = exact fit; lower = zoomed out. */
 export const CAM_ZOOM_FACTOR = 0.85;
+/** Per-section override of CAM_ZOOM_FACTOR. Missing ids use the default. */
+export const CAM_SECTION_ZOOM: number[] = [];
+CAM_SECTION_ZOOM[12] = 0.6;
 /** Sections smaller than this on both axes skip fit-zoom and use CAM_SMALL_SCALE. */
 export const CAM_SMALL_SIZE = 250;
 export const CAM_SMALL_SCALE = 3;
@@ -39,7 +42,11 @@ export const getCamFitScale = (
     return CAM_SMALL_SCALE;
   }
   const fit = Math.min(viewW / section.w, viewH / section.h);
-  return clampCamScale(fit * CAM_ZOOM_FACTOR);
+  const zoom =
+    CAM_SECTION_ZOOM[section.id] != null
+      ? CAM_SECTION_ZOOM[section.id]
+      : CAM_ZOOM_FACTOR;
+  return clampCamScale(fit * zoom);
 };
 
 export const getCamPan = (
