@@ -85,7 +85,7 @@ let LAUNCHER_LEN = 24;
 /** Section that ends the run. */
 let COMPLETE_SECTION = 15;
 /** Gate wall and decoration texture colors: red, orange, yellow, green, blue, indigo, violet. */
-let GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#a6f', '#c8f'];
+let GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#7f40ff', '#c8f'];
 let SECTION_BG = '#123';
 let SECTION_DOT = '#345';
 /** Gold "active"/highlight accent used across the HUD and active parts. */
@@ -2479,7 +2479,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [46, 398];
+let START = [904, -570];
 let state;
 let getState = () => {
     return state;
