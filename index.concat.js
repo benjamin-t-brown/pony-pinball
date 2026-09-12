@@ -2479,7 +2479,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [904, -570];
+let START = [60, 402];
 let state;
 let getState = () => {
     return state;

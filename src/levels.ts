@@ -558,4 +558,4 @@ export const LINKS: number[][] = [
 ];
 
 /** world x, y */
-export const START = [904, -570];
+export const START = [60, 402];
