@@ -2479,7 +2479,7 @@ let LINKS = [
     [13, SECTION_SIDE_RIGHT, 0, 89],
 ];
 /** world x, y */
-let START = [1326, -1406];
+let START = [46, 398];
 let state;
 let getState = () => {
     return state;
@@ -3805,14 +3805,14 @@ let getCamLook = (section) => {
     };
 };
 let getCamFitScale = (section, viewW, viewH) => {
-    if (section.w < CAM_SMALL_SIZE && section.h < CAM_SMALL_SIZE) {
+    let zoom = CAM_SECTION_ZOOM[section.id];
+    if (zoom == null &&
+        section.w < CAM_SMALL_SIZE &&
+        section.h < CAM_SMALL_SIZE) {
         return CAM_SMALL_SCALE;
     }
     let fit = Math.min(viewW / section.w, viewH / section.h);
-    let zoom = CAM_SECTION_ZOOM[section.id] != null
-        ? CAM_SECTION_ZOOM[section.id]
-        : CAM_ZOOM_FACTOR;
-    return clampCamScale(fit * zoom);
+    return clampCamScale(fit * (zoom != null ? zoom : CAM_ZOOM_FACTOR));
 };
 let getCamPan = (lookX, lookY, viewW, viewH, scale) => {
     return {

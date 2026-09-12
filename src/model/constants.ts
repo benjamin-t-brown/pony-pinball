@@ -23,7 +23,7 @@ export const LAUNCHER_LEN = 24;
 export const COMPLETE_SECTION = 15;
 
 /** Gate wall and decoration texture colors: red, orange, yellow, green, blue, indigo, violet. */
-export const GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#a6f', '#c8f'];
+export const GATE_COLORS = ['#f66', '#fa6', '#fd6', '#6c6', '#8cf', '#7f40ff', '#c8f'];
 export const SECTION_BG = '#123';
 export const SECTION_DOT = '#345';
 /** Gold "active"/highlight accent used across the HUD and active parts. */

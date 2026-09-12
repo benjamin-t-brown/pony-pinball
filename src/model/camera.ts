@@ -38,15 +38,16 @@ export const getCamFitScale = (
   viewW: number,
   viewH: number
 ) => {
-  if (section.w < CAM_SMALL_SIZE && section.h < CAM_SMALL_SIZE) {
+  const zoom = CAM_SECTION_ZOOM[section.id];
+  if (
+    zoom == null &&
+    section.w < CAM_SMALL_SIZE &&
+    section.h < CAM_SMALL_SIZE
+  ) {
     return CAM_SMALL_SCALE;
   }
   const fit = Math.min(viewW / section.w, viewH / section.h);
-  const zoom =
-    CAM_SECTION_ZOOM[section.id] != null
-      ? CAM_SECTION_ZOOM[section.id]
-      : CAM_ZOOM_FACTOR;
-  return clampCamScale(fit * zoom);
+  return clampCamScale(fit * (zoom != null ? zoom : CAM_ZOOM_FACTOR));
 };
 
 export const getCamPan = (
